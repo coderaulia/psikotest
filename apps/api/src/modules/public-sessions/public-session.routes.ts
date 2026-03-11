@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 
+import { HttpError } from '../../lib/http-error.js';
 import { asyncHandler } from '../../lib/async-handler.js';
 import {
   getPublicSession,
@@ -33,6 +34,18 @@ const submitSchema = z.object({
   answers: z.array(answerItemSchema).optional(),
 });
 
+function readSubmissionAccessToken(authorizationHeader: string | undefined, customHeader: string | undefined) {
+  if (customHeader?.trim()) {
+    return customHeader.trim();
+  }
+
+  if (authorizationHeader?.startsWith('Bearer ')) {
+    return authorizationHeader.slice('Bearer '.length).trim();
+  }
+
+  throw new HttpError(401, 'Missing submission access token');
+}
+
 export const publicSessionRoutes = Router();
 
 publicSessionRoutes.get(
@@ -57,8 +70,12 @@ publicSessionRoutes.post(
   asyncHandler(async (request, response) => {
     const payload = answersSchema.parse(request.body);
     const submissionId = Number(request.params.submissionId);
+    const submissionAccessToken = readSubmissionAccessToken(
+      request.header('Authorization') ?? undefined,
+      request.header('X-Submission-Token') ?? undefined,
+    );
 
-    response.json(await saveSubmissionAnswers(submissionId, payload.answers));
+    response.json(await saveSubmissionAnswers(submissionId, submissionAccessToken, payload.answers));
   }),
 );
 
@@ -67,7 +84,11 @@ publicSessionRoutes.post(
   asyncHandler(async (request, response) => {
     const payload = submitSchema.parse(request.body ?? {});
     const submissionId = Number(request.params.submissionId);
+    const submissionAccessToken = readSubmissionAccessToken(
+      request.header('Authorization') ?? undefined,
+      request.header('X-Submission-Token') ?? undefined,
+    );
 
-    response.json(await submitPublicSubmission(submissionId, payload.answers));
+    response.json(await submitPublicSubmission(submissionId, submissionAccessToken, payload.answers));
   }),
 );

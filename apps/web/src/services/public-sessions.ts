@@ -16,6 +16,13 @@ async function readJson<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
+function createSubmissionHeaders(submissionAccessToken: string) {
+  return {
+    'Content-Type': 'application/json',
+    'X-Submission-Token': submissionAccessToken,
+  };
+}
+
 export async function fetchPublicSession(token: string) {
   const response = await fetch(`${apiBaseUrl}/public/session/${token}`);
   return readJson<PublicSessionResponse>(response);
@@ -33,24 +40,28 @@ export async function startPublicSubmission(token: string, payload: ParticipantI
   return readJson<StartSubmissionResponse>(response);
 }
 
-export async function savePublicAnswers(submissionId: number, answers: SubmissionAnswerInput[]) {
+export async function savePublicAnswers(
+  submissionId: number,
+  submissionAccessToken: string,
+  answers: SubmissionAnswerInput[],
+) {
   const response = await fetch(`${apiBaseUrl}/public/submissions/${submissionId}/answers`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: createSubmissionHeaders(submissionAccessToken),
     body: JSON.stringify({ answers }),
   });
 
   return readJson<{ saved: boolean }>(response);
 }
 
-export async function submitPublicSubmission(submissionId: number, answers: SubmissionAnswerInput[]) {
+export async function submitPublicSubmission(
+  submissionId: number,
+  submissionAccessToken: string,
+  answers: SubmissionAnswerInput[],
+) {
   const response = await fetch(`${apiBaseUrl}/public/submissions/${submissionId}/submit`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: createSubmissionHeaders(submissionAccessToken),
     body: JSON.stringify({ answers }),
   });
 

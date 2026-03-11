@@ -1,10 +1,10 @@
 # Hostinger Main App Deployment Guide
 
-Target main app domain: `codeyourcareer.my.id`
+Target main app domain: `https://your-app-domain.com`
 
 ## Deploy source
 
-Deploy the repository root from GitHub. The root is now a standard Vite React app, which is what Hostinger expects during repository import.
+Deploy the repository root from GitHub. The root is a standard Vite React app.
 
 ## Recommended Hostinger settings
 
@@ -19,8 +19,12 @@ Deploy the repository root from GitHub. The root is now a standard Vite React ap
 Set this variable before building:
 
 ```env
-VITE_API_BASE_URL=https://api2.codeyourcareer.my.id/api
+VITE_API_BASE_URL=https://api.your-app-domain.com/api
 ```
+
+## Publishing note
+
+Hostinger serves the website from `public_html`. If build files land beside `public_html` instead of inside it, the domain can return `403 Forbidden` until the files are published into the actual web root.
 
 ## Verification
 
@@ -30,4 +34,4 @@ After deployment, test these URLs on the main domain:
 - `/admin/login`
 - `/t/disc-batch-a`
 
-The backend should remain separate on `https://api2.codeyourcareer.my.id/api`.
+The backend should remain separate on `https://api.your-app-domain.com/api`.

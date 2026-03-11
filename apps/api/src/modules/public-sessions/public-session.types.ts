@@ -50,10 +50,20 @@ export interface SubmissionAnswerInput {
   value?: number;
 }
 
+export interface StartSubmissionResponse {
+  submissionId: number;
+  participantId: number;
+  token: string;
+  submissionAccessToken: string;
+  status: 'in_progress';
+  testType: PublicTestTypeCode;
+}
+
 export interface SubmissionRecord {
   submissionId: number;
   participantId: number;
   token: string;
+  submissionAccessToken: string;
   participant: ParticipantIdentityInput;
   testType: PublicTestTypeCode;
   status: 'in_progress' | 'submitted' | 'scored';

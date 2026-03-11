@@ -1,4 +1,5 @@
 import { HttpError } from '../../lib/http-error.js';
+import { createSubmissionAccessToken, verifySubmissionAccessToken } from '../../lib/signed-token.js';
 import { storeResult } from '../results/result.service.js';
 import { scoreAssessment } from '../scoring/score-assessment.js';
 import {
@@ -11,6 +12,16 @@ import type {
   ParticipantIdentityInput,
   SubmissionAnswerInput,
 } from './public-session.types.js';
+
+function assertSubmissionAccess(submissionId: number, submissionAccessToken: string) {
+  const claims = verifySubmissionAccessToken(submissionAccessToken);
+
+  if (!claims || claims.submissionId !== submissionId) {
+    throw new HttpError(403, 'Invalid or expired submission access token');
+  }
+
+  return claims;
+}
 
 export async function getPublicSession(token: string) {
   const session = await findPublicSessionByToken(token);
@@ -29,14 +40,31 @@ export async function startPublicSubmission(token: string, participant: Particip
     throw new HttpError(404, 'Public session not found');
   }
 
-  return submission;
+  return {
+    ...submission,
+    submissionAccessToken: createSubmissionAccessToken({
+      submissionId: submission.submissionId,
+      participantId: submission.participantId,
+    }),
+  };
 }
 
-export async function saveSubmissionAnswers(submissionId: number, answers: SubmissionAnswerInput[]) {
+export async function saveSubmissionAnswers(
+  submissionId: number,
+  submissionAccessToken: string,
+  answers: SubmissionAnswerInput[],
+) {
+  assertSubmissionAccess(submissionId, submissionAccessToken);
   return replaceSubmissionAnswers(submissionId, answers);
 }
 
-export async function submitPublicSubmission(submissionId: number, answers?: SubmissionAnswerInput[]) {
+export async function submitPublicSubmission(
+  submissionId: number,
+  submissionAccessToken: string,
+  answers?: SubmissionAnswerInput[],
+) {
+  assertSubmissionAccess(submissionId, submissionAccessToken);
+
   if (answers && answers.length > 0) {
     await replaceSubmissionAnswers(submissionId, answers);
   }

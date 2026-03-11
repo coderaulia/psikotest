@@ -9,6 +9,7 @@ export interface StoredParticipantSession {
   submissionId: number;
   participantId: number;
   token: string;
+  submissionAccessToken: string;
   testType: TestTypeCode;
   participant: ParticipantIdentityPayload;
   result: StoredResultRecord | null;
@@ -40,6 +41,7 @@ export function saveParticipantSession(
     submissionId: start.submissionId,
     participantId: start.participantId,
     token: start.token,
+    submissionAccessToken: start.submissionAccessToken,
     testType: start.testType,
     participant,
     result: null,

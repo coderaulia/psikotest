@@ -51,8 +51,21 @@ export interface StartSubmissionResponse {
   submissionId: number;
   participantId: number;
   token: string;
+  submissionAccessToken: string;
   status: 'in_progress';
   testType: TestTypeCode;
+}
+
+export interface AdminUser {
+  id: number;
+  fullName: string;
+  email: string;
+  role: 'super_admin' | 'admin';
+}
+
+export interface AdminLoginResponse {
+  token: string;
+  admin: AdminUser;
 }
 
 export interface StoredResultSummary {

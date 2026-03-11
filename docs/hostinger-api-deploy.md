@@ -1,6 +1,6 @@
 # Hostinger API Deployment Guide
 
-Target API domain: `api2.codeyourcareer.my.id`
+Target API domain: `https://api.your-app-domain.com`
 
 ## Deployment mode
 
@@ -53,27 +53,35 @@ Use the API package rooted in `apps/api` for the actual upload. The API entry fi
 Add these variables in the Environment Variables step or import them from `.env`:
 
 ```env
-APP_ORIGIN=https://codeyourcareer.my.id
+APP_ORIGIN=https://your-app-domain.com
 DB_HOST=localhost
 DB_PORT=3306
 DB_NAME=your_database_name
 DB_USER=your_database_user
 DB_PASSWORD=your_database_password
-JWT_SECRET=replace-with-a-long-random-secret
+JWT_SECRET=replace-this-with-a-long-random-secret
+ADMIN_EMAIL=admin@your-domain.com
+ADMIN_PASSWORD=replace-this-with-a-strong-password
 ```
 
 If Hostinger injects a `PORT` variable automatically, leave it as-is. The API already respects `PORT` when present.
 
 ## 5. Domain and testing
 
-Deploy the app to the Node.js website using `api2.codeyourcareer.my.id`.
+Deploy the app to your API domain.
 
 After deployment, test:
 
-- `https://api2.codeyourcareer.my.id/api/health`
-- `https://api2.codeyourcareer.my.id/api/public/session/disc-batch-a`
+- `https://api.your-app-domain.com/api/health`
+- `https://api.your-app-domain.com/api/public/session/disc-batch-a`
 
-## 6. If a public token is missing
+## 6. Security notes
+
+- Admin endpoints require a signed bearer token issued by `/api/auth/login`.
+- Public participant save and submit endpoints require a signed submission access token returned by `/api/public/session/:token/start`.
+- Keep `JWT_SECRET`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` only in the server environment, never in the frontend repo.
+
+## 7. If a public token is missing
 
 If the public session endpoint returns `{"error":"Public session not found"}`, import `006_repair_demo_sessions.sql` and verify the rows below.
 

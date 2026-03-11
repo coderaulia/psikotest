@@ -43,6 +43,7 @@ export function ParticipantTestPage() {
   const [session, setSession] = useState<PublicSessionResponse | null>(null);
   const [answers, setAnswers] = useState<Record<number, SubmissionAnswerInput>>({});
   const [submissionId, setSubmissionId] = useState<number | null>(null);
+  const [submissionAccessToken, setSubmissionAccessToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -55,6 +56,7 @@ export function ParticipantTestPage() {
     }
 
     setSubmissionId(storedSession.submissionId);
+    setSubmissionAccessToken(storedSession.submissionAccessToken);
 
     let isMounted = true;
 
@@ -131,7 +133,7 @@ export function ParticipantTestPage() {
   }
 
   async function handleSubmit() {
-    if (!session || !submissionId) {
+    if (!session || !submissionId || !submissionAccessToken) {
       return;
     }
 
@@ -143,8 +145,8 @@ export function ParticipantTestPage() {
       .filter((answer): answer is SubmissionAnswerInput => Boolean(answer));
 
     try {
-      await savePublicAnswers(submissionId, orderedAnswers);
-      const response = await submitPublicSubmission(submissionId, orderedAnswers);
+      await savePublicAnswers(submissionId, submissionAccessToken, orderedAnswers);
+      const response = await submitPublicSubmission(submissionId, submissionAccessToken, orderedAnswers);
       saveParticipantResult(token, response.result);
       navigate(`/t/${token}/completed`);
     } catch (submissionError) {

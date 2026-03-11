@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { env } from '../config/env.js';
 import { errorHandler } from '../middleware/error-handler.js';
 import { notFoundHandler } from '../middleware/not-found.js';
+import { requireAdminAuth } from '../middleware/require-admin-auth.js';
 import { authRoutes } from '../modules/auth/auth.routes.js';
 import { dashboardRoutes } from '../modules/dashboard/dashboard.routes.js';
 import { healthRoutes } from '../modules/health/health.routes.js';
@@ -26,9 +27,9 @@ export function createApp() {
 
   app.use('/api/health', healthRoutes);
   app.use('/api/auth', authRoutes);
-  app.use('/api/dashboard', dashboardRoutes);
-  app.use('/api/test-sessions', testSessionRoutes);
-  app.use('/api/results', resultRoutes);
+  app.use('/api/dashboard', requireAdminAuth, dashboardRoutes);
+  app.use('/api/test-sessions', requireAdminAuth, testSessionRoutes);
+  app.use('/api/results', requireAdminAuth, resultRoutes);
   app.use('/api/public', publicSessionRoutes);
 
   app.use(notFoundHandler);

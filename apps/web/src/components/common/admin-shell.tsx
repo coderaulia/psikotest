@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 
-import { FileStack, LayoutGrid, LineChart, Settings, Users } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
+import { FileStack, LayoutGrid, LineChart, LogOut, Settings, Users } from 'lucide-react';
+import { NavLink, useNavigate } from 'react-router-dom';
 
+import { clearAdminSession, loadAdminSession } from '@/lib/admin-session';
 import { cn } from '@/lib/cn';
 
 const navItems = [
@@ -14,6 +15,14 @@ const navItems = [
 ];
 
 export function AdminShell({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
+  const adminSession = loadAdminSession();
+
+  function handleLogout() {
+    clearAdminSession();
+    navigate('/admin/login', { replace: true });
+  }
+
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#fbfbfc_0%,#f3f4f6_45%,#eef1f5_100%)] text-slate-950">
       <div className="mx-auto flex min-h-screen w-full max-w-[1600px] gap-6 px-4 py-4 lg:px-6">
@@ -50,8 +59,18 @@ export function AdminShell({ children }: { children: ReactNode }) {
               <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">Admin Workspace</p>
               <p className="mt-1 text-lg font-semibold">Psychological Assessment Platform</p>
             </div>
-            <div className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-sm text-slate-500 md:block">
-              admin@psikotest.local
+            <div className="flex items-center gap-3">
+              <div className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-sm text-slate-500 md:block">
+                {adminSession?.admin.email ?? 'Protected workspace'}
+              </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 transition hover:border-slate-300 hover:text-slate-950"
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </button>
             </div>
           </header>
           <main className="flex-1 overflow-y-auto p-6">{children}</main>

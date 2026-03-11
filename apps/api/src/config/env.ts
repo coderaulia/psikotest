@@ -11,7 +11,9 @@ const envSchema = z.object({
   MYSQL_DATABASE: z.string().default('psikotest'),
   MYSQL_USER: z.string().default('root'),
   MYSQL_PASSWORD: z.string().default(''),
-  JWT_SECRET: z.string().default('change-me'),
+  JWT_SECRET: z.string().min(16).default('replace-this-with-a-long-random-secret'),
+  ADMIN_EMAIL: z.string().email().default('admin@example.com'),
+  ADMIN_PASSWORD: z.string().min(12).default('change-this-password'),
 });
 
 const rawEnv = {
@@ -23,6 +25,8 @@ const rawEnv = {
   MYSQL_USER: process.env.DB_USER ?? process.env.MYSQL_USER,
   MYSQL_PASSWORD: process.env.DB_PASSWORD ?? process.env.MYSQL_PASSWORD,
   JWT_SECRET: process.env.JWT_SECRET,
+  ADMIN_EMAIL: process.env.ADMIN_EMAIL,
+  ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
 };
 
 export const env = envSchema.parse(rawEnv);

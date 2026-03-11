@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type FormEvent, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { saveParticipantSession } from '@/lib/participant-session';
@@ -30,7 +30,7 @@ export function ParticipantIdentityPage() {
     }));
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
     setError(null);
