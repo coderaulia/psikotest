@@ -2,7 +2,6 @@
   "name": "psikotest-frontend",
   "private": true,
   "version": "0.1.0",
-  "main": "server.js",
   "engines": {
     "node": "20.x"
   },
@@ -18,8 +17,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:api": "npm --prefix apps/api run typecheck",
     "test": "node -e \"console.log('No frontend tests wired yet.')\"",
-    "check": "npm run typecheck && npm run build",
-    "start": "node server.js"
+    "check": "npm run typecheck && npm run build"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.3",

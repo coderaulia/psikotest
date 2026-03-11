@@ -27,7 +27,7 @@ Required environment variable:
 
 Hostinger's frontend deployment expects a build output directory such as `dist/`. After build, Hostinger publishes that output to the domain web root, which is `public_html` on the server.
 
-Do not configure the repo build itself to write into `public_html` for Git deployment.
+You do not manually point the site root to `nodejs/` for a frontend-only Vite app on Hostinger shared hosting.
 
 ## API deployment
 
@@ -44,19 +44,3 @@ The backend stays separate and should not be served on the main domain.
 - Store a long `JWT_SECRET` only in the API environment.
 - Admin login is validated against the `admins` table in MySQL.
 - Participant answer save and submit endpoints require a signed submission access token.
-
-## Set an admin password
-
-Generate a password hash locally:
-
-```bash
-npm --prefix apps/api run hash:password -- "YourStrongPasswordHere"
-```
-
-Then update your admin row in MySQL:
-
-```sql
-UPDATE admins
-SET password_hash = 'paste-generated-hash-here'
-WHERE email = 'admin@your-domain.com';
-```

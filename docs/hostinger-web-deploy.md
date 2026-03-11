@@ -21,11 +21,13 @@ Set this variable before building:
 VITE_API_BASE_URL=https://api.your-app-domain.com/api
 ```
 
-## Build output
+## Important note about `nodejs` and `public_html`
 
-The build output is `dist/`. Hostinger publishes that build output into the site's actual web root, which is `public_html` on the server.
+On Hostinger shared hosting, the website web root is `public_html`.
 
-The generated `dist/.htaccess` file enables SPA fallback for routes such as `/admin/login`, `/admin/dashboard`, and `/t/disc-batch-a`.
+For frontend Git deployments, Hostinger takes the build output directory, such as `dist/`, and publishes it into `public_html` automatically.
+
+Do not try to configure the frontend project itself to serve from `nodejs/`. The `nodejs/` directory is used by Hostinger for backend/runtime app deployments, not as a manual document root for a Vite frontend.
 
 ## Verification
 
