@@ -15,7 +15,11 @@ export async function loginAdmin(email: string, password: string) {
     return null;
   }
 
-  await markAdminLogin(admin.id);
+  try {
+    await markAdminLogin(admin.id);
+  } catch (error) {
+    console.warn('[auth] Failed to update admin last_login_at', error);
+  }
 
   return {
     token: createAdminSessionToken({
