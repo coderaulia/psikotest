@@ -4,7 +4,14 @@ Target API domain: `https://api.your-app-domain.com`
 
 ## Deployment mode
 
-This API is intended for manual upload as a separate Node.js app. Keep using the package prepared under `deploy/` or upload the `apps/api` build package manually.
+This API is intended for manual upload as a separate Node.js app.
+Always generate a fresh upload package before redeploying:
+
+```bash
+npm run package:api-deploy
+```
+
+That command rebuilds the API and writes a new ZIP to `deploy/api2-codeyourcareer-api.zip`.
 
 ## 1. Create the MySQL database
 
@@ -46,7 +53,8 @@ Recommended Hostinger settings:
 - Startup file: `server.js`
 - Start command, if the panel asks for it: `npm start`
 
-Use the API package rooted in `apps/api` for the actual upload. The API entry file is `apps/api/server.js`.
+Upload the package generated at `deploy/api2-codeyourcareer-api.zip`.
+The API entry file inside the package is `apps/api/server.js`.
 
 ## 4. Environment variables
 

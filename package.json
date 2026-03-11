@@ -13,6 +13,7 @@
     "build:hostinger-web": "npm run build",
     "build:api": "npm --prefix apps/api run build",
     "build:hostinger-api": "npm --prefix apps/api run build",
+    "package:api-deploy": "powershell -ExecutionPolicy Bypass -File scripts/package-api-deploy.ps1",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "typecheck:api": "npm --prefix apps/api run typecheck",
