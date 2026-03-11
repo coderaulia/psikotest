@@ -2,6 +2,10 @@
 
 Target API domain: `api2.codeyourcareer.my.id`
 
+## Deployment mode
+
+This API is intended for manual upload as a separate Node.js app. Keep using the package prepared under `deploy/` or upload the `apps/api` build package manually.
+
 ## 1. Create the MySQL database
 
 In Hostinger hPanel:
@@ -33,19 +37,16 @@ The final seed creates these public demo tokens:
 
 If you already imported the earlier demo-session seed and the token endpoint is still empty, import `006_repair_demo_sessions.sql` once.
 
-## 3. GitHub deployment setup
-
-For direct deployment from GitHub, use the repository root.
+## 3. API app settings
 
 Recommended Hostinger settings:
 
-- Branch: `main`
 - Node.js version: `20.x`
-- Build command: `npm run build:hostinger-api`
+- Build command: `npm run build`
 - Startup file: `server.js`
 - Start command, if the panel asks for it: `npm start`
 
-The repo root contains a `server.js` shim that starts the compiled API from `apps/api/dist/index.js`, so you do not need to upload the `apps/api` folder separately when using GitHub deployment.
+Use the API package rooted in `apps/api` for the actual upload. The API entry file is `apps/api/server.js`.
 
 ## 4. Environment variables
 
@@ -72,15 +73,7 @@ After deployment, test:
 - `https://api2.codeyourcareer.my.id/api/health`
 - `https://api2.codeyourcareer.my.id/api/public/session/disc-batch-a`
 
-## 6. Frontend API base URL
-
-Your frontend should use:
-
-```env
-VITE_API_BASE_URL=https://api2.codeyourcareer.my.id/api
-```
-
-## 7. If a public token is missing
+## 6. If a public token is missing
 
 If the public session endpoint returns `{"error":"Public session not found"}`, import `006_repair_demo_sessions.sql` and verify the rows below.
 
@@ -94,9 +87,3 @@ Expected tokens:
 - `disc-batch-a`
 - `iq-screening`
 - `workload-check`
-
-## Notes
-
-- This API reads MySQL credentials from `DB_*` variables, with fallback support for the previous `MYSQL_*` names.
-- Results and public submissions are persisted in MySQL.
-- Admin dashboard endpoints are still partially mock-backed and can be moved to repositories next.

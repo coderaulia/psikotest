@@ -14,12 +14,14 @@ Monorepo scaffold for a psychological assessment web app with a React frontend a
 - `apps/web`: public landing page, admin shell, participant flow
 - `apps/api`: REST API, MySQL-backed public sessions and results, migrations and seeds
 - `packages/shared`: shared types for test and result payloads
+- `deploy/`: local deployment artifacts for the API manual upload flow
 
 ## Getting started
 
-1. Copy `.env.example` values into your local environment.
-2. Install dependencies with `npm install`.
-3. Run the dev servers with `npm run dev`.
+1. Copy `.env.example` and `apps/web/.env.example` values into your local environment as needed.
+2. Copy `apps/api/.env.example` for the API environment.
+3. Install dependencies with `npm install`.
+4. Run the dev servers with `npm run dev`.
 
 ## Useful scripts
 
@@ -27,9 +29,36 @@ Monorepo scaffold for a psychological assessment web app with a React frontend a
 - `npm run dev:web`
 - `npm run dev:api`
 - `npm run build`
+- `npm run build:web`
+- `npm run build:api`
+- `npm run build:hostinger-web`
 - `npm run build:hostinger-api`
 - `npm run typecheck`
 - `npm run check`
+
+## Deployment split
+
+### Main app from GitHub
+
+Deploy the repo root as the main app. The root `server.js` serves the built SPA from `apps/web/dist`.
+
+Recommended Hostinger settings:
+
+- Branch: `main`
+- Node.js version: `20.x`
+- Build command: `npm run build:hostinger-web`
+- Startup file: `server.js`
+- Start command if requested: `npm start`
+
+Set this environment variable in Hostinger for the main app build:
+
+- `VITE_API_BASE_URL=https://api2.codeyourcareer.my.id/api`
+
+### API manual upload
+
+Keep the API as a separate manual deployment. The uploadable package and SQL helpers stay under `deploy/`, and the app-specific entry remains [apps/api/server.js](D:/web/psikotest/apps/api/server.js).
+
+See [hostinger-api-deploy.md](D:/web/psikotest/docs/hostinger-api-deploy.md) for API deployment details.
 
 ## Database
 
@@ -51,37 +80,3 @@ If you already imported the older demo-session seed and the public token endpoin
 - `disc-batch-a`
 - `iq-screening`
 - `workload-check`
-
-## Current API coverage
-
-- `GET /api/health`
-- `POST /api/auth/login`
-- `GET /api/dashboard/summary`
-- `GET /api/test-sessions`
-- `GET /api/results`
-- `GET /api/public/session/:token`
-- `POST /api/public/session/:token/start`
-- `POST /api/public/submissions/:submissionId/answers`
-- `POST /api/public/submissions/:submissionId/submit`
-
-## Hostinger GitHub deployment
-
-For a Node.js app deployed directly from this repository root:
-
-- Repository branch: `main`
-- Build command: `npm run build:hostinger-api`
-- Startup file: `server.js`
-- Start command if requested: `npm start`
-- Node.js version: `20.x`
-
-The repo root now includes `server.js`, which starts the built API from `apps/api/dist/index.js` so Hostinger can deploy directly from GitHub without uploading only the `apps/api` folder.
-
-## Troubleshooting public tokens
-
-If `GET /api/public/session/disc-batch-a` returns `{"error":"Public session not found"}`:
-
-1. Import `apps/api/src/database/seeds/006_repair_demo_sessions.sql`.
-2. Verify the rows exist:
-   - `SELECT id, email FROM admins WHERE email = 'admin@psikotest.local';`
-   - `SELECT id, access_token, status, created_by_admin_id FROM test_sessions ORDER BY id DESC;`
-3. Confirm `disc-batch-a`, `iq-screening`, and `workload-check` are present with `status = 'active'`.
