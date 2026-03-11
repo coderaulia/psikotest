@@ -22,9 +22,11 @@ Set this variable before building:
 VITE_API_BASE_URL=https://api.your-app-domain.com/api
 ```
 
-## Publishing note
+## Build output
 
-Hostinger serves the website from `public_html`. If build files land beside `public_html` instead of inside it, the domain can return `403 Forbidden` until the files are published into the actual web root.
+The build output goes directly to `public_html/`, which matches Hostinger's web root. No manual move from a sibling folder should be needed after build.
+
+The generated `public_html/.htaccess` file enables SPA fallback for routes such as `/admin/login`, `/admin/dashboard`, and `/t/disc-batch-a`.
 
 ## Verification
 

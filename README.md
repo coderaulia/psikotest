@@ -1,6 +1,6 @@
 # Psikotest Frontend
 
-The repository root is the frontend project for Hostinger Git import. It is a Vite + React app that serves the built SPA on the main domain.
+The repository root is the frontend project for Hostinger Git import. It is a Vite + React app that builds directly into `public_html` for shared-hosting style deployment.
 
 ## Frontend deployment
 
@@ -17,6 +17,10 @@ Recommended Hostinger settings:
 Required environment variable:
 
 - `VITE_API_BASE_URL=https://api.your-app-domain.com/api`
+
+## Output folder
+
+The frontend build now writes directly to `public_html/` and includes an `.htaccess` SPA fallback for routes like `/admin/dashboard` and `/t/disc-batch-a`.
 
 ## API deployment
 
@@ -58,11 +62,3 @@ WHERE email = 'admin@your-domain.com';
 - `npm run typecheck`
 - `npm run dev:api`
 - `npm run build:api`
-
-## Public test flow
-
-The frontend routes are SPA routes, so the root server provides an index fallback for:
-
-- `/admin/login`
-- `/admin/dashboard`
-- `/t/disc-batch-a`

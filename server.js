@@ -4,7 +4,7 @@ const path = require('node:path');
 const { URL } = require('node:url');
 
 const port = Number(process.env.PORT || 3000);
-const distDir = path.join(__dirname, 'dist');
+const distDir = path.join(__dirname, 'public_html');
 const indexPath = path.join(distDir, 'index.html');
 
 const mimeTypes = {
