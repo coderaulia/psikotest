@@ -3,8 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { URL } = require('node:url');
 
-const port = Number(process.env.PORT || process.env.WEB_PORT || 3000);
-const distDir = path.join(__dirname, 'apps', 'web', 'dist');
+const port = Number(process.env.PORT || 3000);
+const distDir = path.join(__dirname, 'dist');
 const indexPath = path.join(distDir, 'index.html');
 
 const mimeTypes = {
@@ -22,7 +22,7 @@ const mimeTypes = {
   '.txt': 'text/plain; charset=utf-8',
   '.webp': 'image/webp',
   '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
+  '.woff2': 'font/woff2'
 };
 
 function setCommonHeaders(response, filePath) {
@@ -86,7 +86,7 @@ const server = http.createServer((request, response) => {
 
   if (!fs.existsSync(indexPath)) {
     response.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
-    response.end('Web build not found. Run `npm run build:hostinger-web` before starting the server.');
+    response.end('Web build not found. Run `npm run build` before starting the server.');
     return;
   }
 
@@ -94,7 +94,7 @@ const server = http.createServer((request, response) => {
 
   if (requestUrl.pathname === '/api' || requestUrl.pathname.startsWith('/api/')) {
     response.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-    response.end(JSON.stringify({ error: 'API is hosted on a separate domain.' }));
+    response.end(JSON.stringify({ error: 'Backend API is hosted on api2.codeyourcareer.my.id.' }));
     return;
   }
 
