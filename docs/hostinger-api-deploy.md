@@ -60,13 +60,27 @@ DB_NAME=your_database_name
 DB_USER=your_database_user
 DB_PASSWORD=your_database_password
 JWT_SECRET=replace-this-with-a-long-random-secret
-ADMIN_EMAIL=admin@your-domain.com
-ADMIN_PASSWORD=replace-this-with-a-strong-password
 ```
 
 If Hostinger injects a `PORT` variable automatically, leave it as-is. The API already respects `PORT` when present.
 
-## 5. Domain and testing
+## 5. Set an admin password
+
+Generate a hash locally:
+
+```bash
+npm --prefix apps/api run hash:password -- "YourStrongPasswordHere"
+```
+
+Update the admin row in MySQL:
+
+```sql
+UPDATE admins
+SET password_hash = 'paste-generated-hash-here'
+WHERE email = 'admin@your-domain.com';
+```
+
+## 6. Domain and testing
 
 Deploy the app to your API domain.
 
@@ -75,13 +89,14 @@ After deployment, test:
 - `https://api.your-app-domain.com/api/health`
 - `https://api.your-app-domain.com/api/public/session/disc-batch-a`
 
-## 6. Security notes
+## 7. Security notes
 
 - Admin endpoints require a signed bearer token issued by `/api/auth/login`.
+- Admin login is checked against the `admins` table in MySQL.
 - Public participant save and submit endpoints require a signed submission access token returned by `/api/public/session/:token/start`.
-- Keep `JWT_SECRET`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` only in the server environment, never in the frontend repo.
+- Keep `JWT_SECRET` only in the server environment, never in the frontend repo.
 
-## 7. If a public token is missing
+## 8. If a public token is missing
 
 If the public session endpoint returns `{"error":"Public session not found"}`, import `006_repair_demo_sessions.sql` and verify the rows below.
 

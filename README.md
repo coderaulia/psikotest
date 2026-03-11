@@ -30,9 +30,25 @@ The backend stays separate and should not be served on the main domain.
 ## Security notes
 
 - Do not commit real deployment credentials or real administrator credentials.
-- Configure `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and a long `JWT_SECRET` in the API environment.
-- Admin API routes require a signed bearer token.
+- Store a long `JWT_SECRET` only in the API environment.
+- Admin login is validated against the `admins` table in MySQL.
 - Participant answer save and submit endpoints require a signed submission access token.
+
+## Set an admin password
+
+Generate a password hash locally:
+
+```bash
+npm --prefix apps/api run hash:password -- "YourStrongPasswordHere"
+```
+
+Then update your admin row in MySQL:
+
+```sql
+UPDATE admins
+SET password_hash = 'paste-generated-hash-here'
+WHERE email = 'admin@your-domain.com';
+```
 
 ## Local scripts
 
