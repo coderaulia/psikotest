@@ -1,13 +1,20 @@
 import { Router } from 'express';
 import { z } from 'zod';
 
-import { HttpError } from '../../lib/http-error.js';
 import {
   getPublicSession,
   saveSubmissionAnswers,
   startPublicSubmission,
   submitPublicSubmission,
 } from './public-session.service.js';
+
+const answerItemSchema = z.object({
+  questionId: z.number(),
+  mostOptionId: z.number().optional(),
+  leastOptionId: z.number().optional(),
+  selectedOptionId: z.number().optional(),
+  value: z.number().optional(),
+});
 
 const startSchema = z.object({
   fullName: z.string().min(3),
@@ -18,27 +25,17 @@ const startSchema = z.object({
 });
 
 const answersSchema = z.object({
-  answers: z.array(
-    z.object({
-      questionId: z.number(),
-      mostOptionId: z.number().optional(),
-      leastOptionId: z.number().optional(),
-      selectedOptionId: z.number().optional(),
-      value: z.number().optional(),
-    }),
-  ),
+  answers: z.array(answerItemSchema),
+});
+
+const submitSchema = z.object({
+  answers: z.array(answerItemSchema).optional(),
 });
 
 export const publicSessionRoutes = Router();
 
 publicSessionRoutes.get('/session/:token', (request, response) => {
-  const session = getPublicSession(request.params.token);
-
-  if (!session) {
-    throw new HttpError(404, 'Public session not found');
-  }
-
-  response.json(session);
+  response.json(getPublicSession(request.params.token));
 });
 
 publicSessionRoutes.post('/session/:token/start', (request, response) => {
@@ -54,6 +51,8 @@ publicSessionRoutes.post('/submissions/:submissionId/answers', (request, respons
 });
 
 publicSessionRoutes.post('/submissions/:submissionId/submit', (request, response) => {
+  const payload = submitSchema.parse(request.body ?? {});
   const submissionId = Number(request.params.submissionId);
-  response.json(submitPublicSubmission(submissionId));
+
+  response.json(submitPublicSubmission(submissionId, payload.answers));
 });

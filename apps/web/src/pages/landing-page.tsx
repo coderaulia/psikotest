@@ -50,8 +50,10 @@ export function LandingPage() {
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Button size="lg" className="gap-2">
-                Start Demo <ArrowRight className="h-4 w-4" />
+              <Button size="lg" className="gap-2" asChild>
+                <Link to="/t/disc-batch-a">
+                  Start Demo <ArrowRight className="h-4 w-4" />
+                </Link>
               </Button>
               <Button variant="secondary" size="lg" asChild>
                 <Link to="/admin/login">Open Admin Console</Link>

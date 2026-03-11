@@ -42,6 +42,26 @@ Apply them in phpMyAdmin or via MySQL CLI in this order:
 1. `001_init_schema.sql`
 2. `001_seed_test_types.sql`
 3. `002_seed_disc_questions.sql`
+4. `003_seed_iq_questions.sql`
+5. `004_seed_workload_questions.sql`
+
+## Demo public tokens
+
+- `disc-batch-a`
+- `iq-screening`
+- `workload-check`
+
+## Current API coverage
+
+- `GET /api/health`
+- `POST /api/auth/login`
+- `GET /api/dashboard/summary`
+- `GET /api/test-sessions`
+- `GET /api/results`
+- `GET /api/public/session/:token`
+- `POST /api/public/session/:token/start`
+- `POST /api/public/submissions/:submissionId/answers`
+- `POST /api/public/submissions/:submissionId/submit`
 
 ## Hostinger deployment notes
 

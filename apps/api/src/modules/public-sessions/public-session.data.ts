@@ -1,0 +1,261 @@
+import type { AssessmentOption, PublicSessionDefinition } from './public-session.types.js';
+
+function createLikertOptions(seed: number): AssessmentOption[] {
+  return [
+    { id: seed + 1, key: '1', label: 'Sangat Rendah', value: 1 },
+    { id: seed + 2, key: '2', label: 'Rendah', value: 2 },
+    { id: seed + 3, key: '3', label: 'Sedang', value: 3 },
+    { id: seed + 4, key: '4', label: 'Tinggi', value: 4 },
+    { id: seed + 5, key: '5', label: 'Sangat Tinggi', value: 5 },
+  ];
+}
+
+export const publicSessions: Record<string, PublicSessionDefinition> = {
+  'disc-batch-a': {
+    session: {
+      id: 1,
+      title: 'Graduate Hiring Batch A',
+      testType: 'disc',
+      instructions: [
+        'Pilih satu pernyataan yang paling menggambarkan diri Anda.',
+        'Pilih satu pernyataan yang paling tidak menggambarkan diri Anda.',
+        'Jawab secara spontan, tidak ada jawaban benar atau salah.',
+      ],
+      estimatedMinutes: 15,
+      status: 'active',
+    },
+    questions: [
+      {
+        id: 1,
+        code: 'DISC_Q001',
+        questionType: 'forced_choice',
+        instructionText: 'Pilih pernyataan yang paling dan paling tidak menggambarkan diri Anda.',
+        options: [
+          { id: 101, key: 'A', label: 'Saya suka mengambil keputusan dengan cepat', dimensionKey: 'D' },
+          { id: 102, key: 'B', label: 'Saya mudah bergaul dan berbicara dengan banyak orang', dimensionKey: 'I' },
+          { id: 103, key: 'C', label: 'Saya lebih nyaman bekerja dalam suasana stabil', dimensionKey: 'S' },
+          { id: 104, key: 'D', label: 'Saya memperhatikan detail sebelum mengambil keputusan', dimensionKey: 'C' },
+        ],
+      },
+      {
+        id: 2,
+        code: 'DISC_Q002',
+        questionType: 'forced_choice',
+        instructionText: 'Pilih pernyataan yang paling dan paling tidak menggambarkan diri Anda.',
+        options: [
+          { id: 201, key: 'A', label: 'Saya suka memimpin dan mengarahkan orang lain', dimensionKey: 'D' },
+          { id: 202, key: 'B', label: 'Saya suka membuat suasana kerja menjadi menyenangkan', dimensionKey: 'I' },
+          { id: 203, key: 'C', label: 'Saya sabar dan konsisten dalam bekerja', dimensionKey: 'S' },
+          { id: 204, key: 'D', label: 'Saya teliti dan mengikuti prosedur dengan baik', dimensionKey: 'C' },
+        ],
+      },
+      {
+        id: 3,
+        code: 'DISC_Q003',
+        questionType: 'forced_choice',
+        instructionText: 'Pilih pernyataan yang paling dan paling tidak menggambarkan diri Anda.',
+        options: [
+          { id: 301, key: 'A', label: 'Saya fokus pada hasil dan target', dimensionKey: 'D' },
+          { id: 302, key: 'B', label: 'Saya mudah membangun hubungan dengan orang baru', dimensionKey: 'I' },
+          { id: 303, key: 'C', label: 'Saya pendengar yang baik', dimensionKey: 'S' },
+          { id: 304, key: 'D', label: 'Saya menyukai data dan analisis', dimensionKey: 'C' },
+        ],
+      },
+      {
+        id: 4,
+        code: 'DISC_Q004',
+        questionType: 'forced_choice',
+        instructionText: 'Pilih pernyataan yang paling dan paling tidak menggambarkan diri Anda.',
+        options: [
+          { id: 401, key: 'A', label: 'Saya berani menghadapi tantangan', dimensionKey: 'D' },
+          { id: 402, key: 'B', label: 'Saya suka memotivasi orang lain', dimensionKey: 'I' },
+          { id: 403, key: 'C', label: 'Saya setia dan dapat diandalkan', dimensionKey: 'S' },
+          { id: 404, key: 'D', label: 'Saya berhati-hati dalam mengambil keputusan', dimensionKey: 'C' },
+        ],
+      },
+    ],
+  },
+  'iq-screening': {
+    session: {
+      id: 2,
+      title: 'Leadership IQ Screening',
+      testType: 'iq',
+      instructions: [
+        'Pilih satu jawaban yang paling tepat untuk setiap soal.',
+        'Fokus pada ketepatan jawaban dalam batas waktu yang tersedia.',
+      ],
+      estimatedMinutes: 20,
+      status: 'active',
+    },
+    questions: [
+      {
+        id: 11,
+        code: 'IQ_Q001',
+        questionType: 'single_choice',
+        prompt: 'Angka berikutnya dalam pola 2, 4, 6, 8, ... adalah?',
+        options: [
+          { id: 1101, key: 'A', label: '9' },
+          { id: 1102, key: 'B', label: '10', isCorrect: true },
+          { id: 1103, key: 'C', label: '12' },
+          { id: 1104, key: 'D', label: '14' },
+        ],
+      },
+      {
+        id: 12,
+        code: 'IQ_Q002',
+        questionType: 'single_choice',
+        prompt: 'Buku : Membaca = Garpu : ?',
+        options: [
+          { id: 1201, key: 'A', label: 'Menulis' },
+          { id: 1202, key: 'B', label: 'Makan', isCorrect: true },
+          { id: 1203, key: 'C', label: 'Menyapu' },
+          { id: 1204, key: 'D', label: 'Menggambar' },
+        ],
+      },
+      {
+        id: 13,
+        code: 'IQ_Q003',
+        questionType: 'single_choice',
+        prompt: 'Jika semua mawar adalah bunga dan beberapa bunga cepat layu, pernyataan yang benar adalah?',
+        options: [
+          { id: 1301, key: 'A', label: 'Beberapa mawar cepat layu' },
+          { id: 1302, key: 'B', label: 'Semua bunga adalah mawar' },
+          { id: 1303, key: 'C', label: 'Sebagian yang cepat layu bisa jadi mawar', isCorrect: true },
+          { id: 1304, key: 'D', label: 'Tidak ada bunga yang cepat layu' },
+        ],
+      },
+      {
+        id: 14,
+        code: 'IQ_Q004',
+        questionType: 'single_choice',
+        prompt: 'Pilih angka yang tidak sesuai dengan kelompok: 3, 5, 7, 10, 11',
+        options: [
+          { id: 1401, key: 'A', label: '3' },
+          { id: 1402, key: 'B', label: '5' },
+          { id: 1403, key: 'C', label: '7' },
+          { id: 1404, key: 'D', label: '10', isCorrect: true },
+          { id: 1405, key: 'E', label: '11' },
+        ],
+      },
+      {
+        id: 15,
+        code: 'IQ_Q005',
+        questionType: 'single_choice',
+        prompt: 'Rapat dimulai pukul 09:15 dan berlangsung 95 menit. Rapat selesai pukul?',
+        options: [
+          { id: 1501, key: 'A', label: '10:30' },
+          { id: 1502, key: 'B', label: '10:45' },
+          { id: 1503, key: 'C', label: '10:50', isCorrect: true },
+          { id: 1504, key: 'D', label: '11:00' },
+        ],
+      },
+      {
+        id: 16,
+        code: 'IQ_Q006',
+        questionType: 'single_choice',
+        prompt: 'Pilih pasangan kata yang paling mirip maknanya dengan “teliti”.',
+        options: [
+          { id: 1601, key: 'A', label: 'Cermat', isCorrect: true },
+          { id: 1602, key: 'B', label: 'Cepat' },
+          { id: 1603, key: 'C', label: 'Berani' },
+          { id: 1604, key: 'D', label: 'Lugas' },
+        ],
+      },
+    ],
+  },
+  'workload-check': {
+    session: {
+      id: 3,
+      title: 'Operations Workload Check',
+      testType: 'workload',
+      instructions: [
+        'Nilai tingkat beban kerja yang Anda rasakan untuk setiap pernyataan.',
+        'Gunakan skala dari sangat rendah hingga sangat tinggi.',
+      ],
+      estimatedMinutes: 10,
+      status: 'active',
+    },
+    questions: [
+      {
+        id: 21,
+        code: 'WORKLOAD_Q001',
+        questionType: 'likert',
+        prompt: 'Seberapa besar tuntutan mental yang Anda rasakan saat mengerjakan tugas utama?',
+        dimensionKey: 'mental_demand',
+        options: createLikertOptions(2100),
+      },
+      {
+        id: 22,
+        code: 'WORKLOAD_Q002',
+        questionType: 'likert',
+        prompt: 'Seberapa sering Anda merasa harus berpikir cepat saat bekerja?',
+        dimensionKey: 'mental_demand',
+        options: createLikertOptions(2200),
+      },
+      {
+        id: 23,
+        code: 'WORKLOAD_Q003',
+        questionType: 'likert',
+        prompt: 'Seberapa kuat tekanan waktu yang Anda rasakan dalam pekerjaan harian?',
+        dimensionKey: 'time_pressure',
+        options: createLikertOptions(2300),
+      },
+      {
+        id: 24,
+        code: 'WORKLOAD_Q004',
+        questionType: 'likert',
+        prompt: 'Seberapa sering tenggat waktu membuat Anda harus terburu-buru?',
+        dimensionKey: 'time_pressure',
+        options: createLikertOptions(2400),
+      },
+      {
+        id: 25,
+        code: 'WORKLOAD_Q005',
+        questionType: 'likert',
+        prompt: 'Seberapa sulit tugas yang Anda kerjakan dibanding kemampuan Anda saat ini?',
+        dimensionKey: 'task_difficulty',
+        options: createLikertOptions(2500),
+      },
+      {
+        id: 26,
+        code: 'WORKLOAD_Q006',
+        questionType: 'likert',
+        prompt: 'Seberapa sering Anda merasa tugas memerlukan usaha ekstra untuk diselesaikan?',
+        dimensionKey: 'task_difficulty',
+        options: createLikertOptions(2600),
+      },
+      {
+        id: 27,
+        code: 'WORKLOAD_Q007',
+        questionType: 'likert',
+        prompt: 'Seberapa tinggi tingkat stres yang Anda rasakan selama bekerja?',
+        dimensionKey: 'stress_level',
+        options: createLikertOptions(2700),
+      },
+      {
+        id: 28,
+        code: 'WORKLOAD_Q008',
+        questionType: 'likert',
+        prompt: 'Seberapa sering pekerjaan membuat Anda tegang secara emosional?',
+        dimensionKey: 'stress_level',
+        options: createLikertOptions(2800),
+      },
+      {
+        id: 29,
+        code: 'WORKLOAD_Q009',
+        questionType: 'likert',
+        prompt: 'Seberapa lelah Anda setelah menyelesaikan pekerjaan harian?',
+        dimensionKey: 'fatigue',
+        options: createLikertOptions(2900),
+      },
+      {
+        id: 30,
+        code: 'WORKLOAD_Q010',
+        questionType: 'likert',
+        prompt: 'Seberapa sering Anda merasa energi menurun sebelum pekerjaan selesai?',
+        dimensionKey: 'fatigue',
+        options: createLikertOptions(3000),
+      },
+    ],
+  },
+};

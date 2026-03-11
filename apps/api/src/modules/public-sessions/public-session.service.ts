@@ -1,67 +1,121 @@
-const publicSessions = {
-  'disc-batch-a': {
-    session: {
-      id: 1,
-      title: 'Graduate Hiring Batch A',
-      testType: 'disc',
-      instructions: [
-        'Pilih satu pernyataan yang paling menggambarkan diri Anda.',
-        'Pilih satu pernyataan yang paling tidak menggambarkan diri Anda.',
-        'Jawab dengan spontan, tidak ada jawaban benar atau salah.',
-      ],
-      estimatedMinutes: 15,
-    },
-    questions: [
-      {
-        id: 1,
-        code: 'DISC_Q001',
-        instructionText: 'Pilih pernyataan yang paling dan paling tidak menggambarkan diri Anda.',
-        options: [
-          { id: 11, key: 'A', label: 'Saya suka mengambil keputusan dengan cepat', dimension: 'D' },
-          { id: 12, key: 'B', label: 'Saya mudah bergaul dan berbicara dengan banyak orang', dimension: 'I' },
-          { id: 13, key: 'C', label: 'Saya lebih nyaman bekerja dalam suasana stabil', dimension: 'S' },
-          { id: 14, key: 'D', label: 'Saya memperhatikan detail sebelum mengambil keputusan', dimension: 'C' },
-        ],
-      },
-      {
-        id: 2,
-        code: 'DISC_Q002',
-        instructionText: 'Pilih pernyataan yang paling dan paling tidak menggambarkan diri Anda.',
-        options: [
-          { id: 21, key: 'A', label: 'Saya suka memimpin dan mengarahkan orang lain', dimension: 'D' },
-          { id: 22, key: 'B', label: 'Saya suka membuat suasana kerja menjadi menyenangkan', dimension: 'I' },
-          { id: 23, key: 'C', label: 'Saya sabar dan konsisten dalam bekerja', dimension: 'S' },
-          { id: 24, key: 'D', label: 'Saya teliti dan mengikuti prosedur dengan baik', dimension: 'C' },
-        ],
-      },
-    ],
-  },
-};
+import { HttpError } from '../../lib/http-error.js';
+import { storeResult } from '../results/result.service.js';
+import { scoreAssessment } from '../scoring/score-assessment.js';
+import { publicSessions } from './public-session.data.js';
+import type {
+  ParticipantIdentityInput,
+  PublicSessionDefinition,
+  SubmissionAnswerInput,
+  SubmissionRecord,
+} from './public-session.types.js';
 
-export function getPublicSession(token: string) {
-  return publicSessions[token as keyof typeof publicSessions] ?? null;
+const submissionStore = new Map<number, SubmissionRecord>();
+
+function getSessionDefinitionByToken(token: string): PublicSessionDefinition {
+  const definition = publicSessions[token];
+
+  if (!definition) {
+    throw new HttpError(404, 'Public session not found');
+  }
+
+  return definition;
 }
 
-export function startPublicSubmission(token: string, participant: Record<string, string>) {
-  return {
-    submissionId: Date.now(),
+function getStoredSubmission(submissionId: number) {
+  const submission = submissionStore.get(submissionId);
+
+  if (!submission) {
+    throw new HttpError(404, 'Submission not found');
+  }
+
+  return submission;
+}
+
+export function getPublicSession(token: string) {
+  return getSessionDefinitionByToken(token);
+}
+
+export function startPublicSubmission(token: string, participant: ParticipantIdentityInput) {
+  const definition = getSessionDefinitionByToken(token);
+  const submissionId = Date.now();
+  const participantId = submissionId;
+
+  const record: SubmissionRecord = {
+    submissionId,
+    participantId,
     token,
     participant,
+    testType: definition.session.testType,
     status: 'in_progress',
+    startedAt: new Date().toISOString(),
+    submittedAt: null,
+    answers: [],
+    resultId: null,
+  };
+
+  submissionStore.set(submissionId, record);
+
+  return {
+    submissionId,
+    participantId,
+    token,
+    status: record.status,
+    testType: record.testType,
   };
 }
 
-export function saveSubmissionAnswers(submissionId: number, answers: unknown) {
+export function saveSubmissionAnswers(submissionId: number, answers: SubmissionAnswerInput[]) {
+  const record = getStoredSubmission(submissionId);
+
+  record.answers = answers;
+  submissionStore.set(submissionId, record);
+
   return {
     submissionId,
     saved: true,
-    answers,
+    answerCount: answers.length,
+    status: record.status,
   };
 }
 
-export function submitPublicSubmission(submissionId: number) {
+export function submitPublicSubmission(submissionId: number, answers?: SubmissionAnswerInput[]) {
+  const record = getStoredSubmission(submissionId);
+  const definition = getSessionDefinitionByToken(record.token);
+
+  if (answers && answers.length > 0) {
+    record.answers = answers;
+  }
+
+  if (record.answers.length === 0) {
+    throw new HttpError(400, 'Cannot submit without answers');
+  }
+
+  const submittedAt = new Date().toISOString();
+  const scoredResult = scoreAssessment({
+    participantId: record.participantId,
+    definition,
+    answers: record.answers,
+  });
+
+  const storedResult = storeResult({
+    submissionId: record.submissionId,
+    participantId: record.participantId,
+    participantName: record.participant.fullName,
+    testType: record.testType,
+    submittedAt,
+    scoredResult,
+  });
+
+  record.status = 'scored';
+  record.submittedAt = submittedAt;
+  record.resultId = storedResult.id;
+  submissionStore.set(submissionId, record);
+
   return {
-    submissionId,
-    status: 'submitted',
+    submissionId: record.submissionId,
+    participantId: record.participantId,
+    status: record.status,
+    resultId: storedResult.id,
+    result: storedResult,
   };
 }

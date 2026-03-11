@@ -9,3 +9,5 @@ coverage/
 *.log
 apps/*/dist/
 apps/*/.turbo/
+
+*.tsbuildinfo
