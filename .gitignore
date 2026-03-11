@@ -11,5 +11,6 @@ coverage/
 apps/*/dist/
 apps/*/.turbo/
 deploy/
+apps/api/src/database/seeds/
 
 *.tsbuildinfo

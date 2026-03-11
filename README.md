@@ -6,7 +6,7 @@ The repository root is the frontend project for Hostinger Git import. The fronte
 
 - `src/`: frontend app source
 - `apps/api/`: separate backend API source
-- `deploy/`: API manual-upload artifacts and SQL helpers
+- `deploy/`: API manual-upload artifacts
 
 ## Frontend deployment
 
@@ -37,6 +37,8 @@ The backend stays separate and should not be served on the main domain.
 - API entry: `apps/api/server.js`
 - API upload artifacts: `deploy/`
 - API domain: `https://api.your-app-domain.com/api`
+
+Assessment seed SQL and private bootstrap data are intentionally not versioned in this repository.
 
 ## Security notes
 

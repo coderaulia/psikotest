@@ -17,7 +17,7 @@ const initialForm: ParticipantIdentityPayload = {
 };
 
 export function ParticipantIdentityPage() {
-  const { token = 'disc-batch-a' } = useParams();
+  const { token = 'assessment-token' } = useParams();
   const navigate = useNavigate();
   const [form, setForm] = useState<ParticipantIdentityPayload>(initialForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -116,3 +116,4 @@ export function ParticipantIdentityPage() {
     </Card>
   );
 }
+

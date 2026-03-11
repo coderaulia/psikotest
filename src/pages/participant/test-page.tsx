@@ -38,7 +38,7 @@ function renderOptionLabel(option: AssessmentOption) {
 }
 
 export function ParticipantTestPage() {
-  const { token = 'disc-batch-a' } = useParams();
+  const { token = 'assessment-token' } = useParams();
   const navigate = useNavigate();
   const [session, setSession] = useState<PublicSessionResponse | null>(null);
   const [answers, setAnswers] = useState<Record<number, SubmissionAnswerInput>>({});
@@ -292,3 +292,4 @@ export function ParticipantTestPage() {
     </div>
   );
 }
+

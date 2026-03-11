@@ -35,7 +35,7 @@ export const sessionRows = [
 export const participantRows = [
   {
     id: 1,
-    fullName: 'Nadia Pratama',
+    fullName: 'Participant 01',
     department: 'People Operations',
     position: 'Talent Acquisition Specialist',
     testType: 'DISC',
@@ -43,7 +43,7 @@ export const participantRows = [
   },
   {
     id: 2,
-    fullName: 'Raka Mahendra',
+    fullName: 'Participant 02',
     department: 'Finance',
     position: 'Financial Analyst',
     testType: 'IQ',
@@ -51,7 +51,7 @@ export const participantRows = [
   },
   {
     id: 3,
-    fullName: 'Tasya Mulyani',
+    fullName: 'Participant 03',
     department: 'Operations',
     position: 'Operations Coordinator',
     testType: 'Workload',
@@ -62,7 +62,7 @@ export const participantRows = [
 export const resultRows = [
   {
     id: 501,
-    participantName: 'Nadia Pratama',
+    participantName: 'Participant 01',
     testType: 'DISC',
     summary: 'Primary I, Secondary D',
     score: 'I/D',
@@ -70,7 +70,7 @@ export const resultRows = [
   },
   {
     id: 502,
-    participantName: 'Raka Mahendra',
+    participantName: 'Participant 02',
     testType: 'IQ',
     summary: 'Above average band',
     score: '114',
@@ -78,7 +78,7 @@ export const resultRows = [
   },
   {
     id: 503,
-    participantName: 'Tasya Mulyani',
+    participantName: 'Participant 03',
     testType: 'Workload',
     summary: 'Moderate workload',
     score: '61',

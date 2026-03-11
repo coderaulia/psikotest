@@ -35,6 +35,6 @@ After deployment, test these URLs on the main domain:
 
 - `/`
 - `/admin/login`
-- `/t/disc-batch-a`
+- `/t/<assessment-token>` after you create a live assessment session
 
 The backend should remain separate on `https://api.your-app-domain.com/api`.

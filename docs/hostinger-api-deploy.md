@@ -25,24 +25,13 @@ In Hostinger hPanel:
    - database user
    - database password
 
-## 2. Import the SQL files
+## 2. Import the schema
 
-Import these files in order using phpMyAdmin:
+Import the schema migration using phpMyAdmin:
 
-1. `001_init_schema.sql`
-2. `001_seed_test_types.sql`
-3. `002_seed_disc_questions.sql`
-4. `003_seed_iq_questions.sql`
-5. `004_seed_workload_questions.sql`
-6. `005_seed_demo_sessions.sql`
+1. `apps/api/src/database/migrations/001_init_schema.sql`
 
-The final seed creates these public demo tokens:
-
-- `disc-batch-a`
-- `iq-screening`
-- `workload-check`
-
-If you already imported the earlier demo-session seed and the token endpoint is still empty, import `006_repair_demo_sessions.sql` once.
+Assessment content, question banks, demo sessions, and any bootstrap seed data should be managed outside this repository. They are intentionally not versioned here.
 
 ## 3. API app settings
 
@@ -72,7 +61,7 @@ JWT_SECRET=replace-this-with-a-long-random-secret
 
 If Hostinger injects a `PORT` variable automatically, leave it as-is. The API already respects `PORT` when present.
 
-## 5. Set an admin password
+## 5. Create an admin password
 
 Generate a hash locally:
 
@@ -80,12 +69,16 @@ Generate a hash locally:
 npm --prefix apps/api run hash:password -- "YourStrongPasswordHere"
 ```
 
-Update the admin row in MySQL:
+Insert or update the admin row in MySQL:
 
 ```sql
-UPDATE admins
-SET password_hash = 'paste-generated-hash-here'
-WHERE email = 'admin@your-domain.com';
+INSERT INTO admins (full_name, email, password_hash, role, status)
+VALUES ('Administrator', 'admin@your-domain.com', 'paste-generated-hash-here', 'super_admin', 'active')
+ON DUPLICATE KEY UPDATE
+  full_name = VALUES(full_name),
+  password_hash = VALUES(password_hash),
+  role = VALUES(role),
+  status = VALUES(status);
 ```
 
 ## 6. Domain and testing
@@ -95,7 +88,8 @@ Deploy the app to your API domain.
 After deployment, test:
 
 - `https://api.your-app-domain.com/api/health`
-- `https://api.your-app-domain.com/api/public/session/disc-batch-a`
+- `https://api.your-app-domain.com/api/auth/login`
+- `https://api.your-app-domain.com/api/public/session/<assessment-token>` once you create your own session data
 
 ## 7. Security notes
 
@@ -103,18 +97,3 @@ After deployment, test:
 - Admin login is checked against the `admins` table in MySQL.
 - Public participant save and submit endpoints require a signed submission access token returned by `/api/public/session/:token/start`.
 - Keep `JWT_SECRET` only in the server environment, never in the frontend repo.
-
-## 8. If a public token is missing
-
-If the public session endpoint returns `{"error":"Public session not found"}`, import `006_repair_demo_sessions.sql` and verify the rows below.
-
-```sql
-SELECT id, email FROM admins WHERE email = 'admin@psikotest.local';
-SELECT id, access_token, status, created_by_admin_id FROM test_sessions ORDER BY id DESC;
-```
-
-Expected tokens:
-
-- `disc-batch-a`
-- `iq-screening`
-- `workload-check`

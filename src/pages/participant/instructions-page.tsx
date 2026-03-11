@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export function ParticipantInstructionsPage() {
-  const { token = 'disc-batch-a' } = useParams();
+  const { token = 'assessment-token' } = useParams();
   const navigate = useNavigate();
   const [session, setSession] = useState<PublicSessionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,3 +77,4 @@ export function ParticipantInstructionsPage() {
     </Card>
   );
 }
+

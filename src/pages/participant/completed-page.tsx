@@ -16,7 +16,7 @@ function formatTokenLabel(value: string | null | undefined) {
 }
 
 export function ParticipantCompletedPage() {
-  const { token = 'disc-batch-a' } = useParams();
+  const { token = 'assessment-token' } = useParams();
   const storedSession = loadParticipantSession(token);
   const result = storedSession?.result;
   const note = typeof result?.resultPayload.note === 'string' ? result.resultPayload.note : null;
@@ -75,3 +75,4 @@ export function ParticipantCompletedPage() {
     </Card>
   );
 }
+
