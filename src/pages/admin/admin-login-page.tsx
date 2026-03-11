@@ -44,13 +44,13 @@ export function AdminLoginPage() {
             <p className="text-xs uppercase tracking-[0.22em] text-white/50">Admin Access</p>
             <h1 className="mt-6 text-4xl font-semibold tracking-tight">Assessment operations made quiet and clear.</h1>
             <p className="mt-4 max-w-md text-sm leading-7 text-white/70">
-              Sign in with your configured administrator account to manage sessions, review participant progress, and inspect report-ready results.
+              Sign in with an administrator account stored in the application database to manage sessions, monitor participants, and review report-ready results.
             </p>
           </div>
           <div className="p-8 sm:p-10">
             <CardHeader className="p-0">
               <CardTitle>Admin login</CardTitle>
-              <CardDescription>This workspace is protected. Configure your admin credentials in the API environment.</CardDescription>
+              <CardDescription>This workspace is protected and backed by your MySQL admin account.</CardDescription>
             </CardHeader>
             <CardContent className="mt-8 p-0">
               <form className="space-y-4" onSubmit={handleSubmit}>

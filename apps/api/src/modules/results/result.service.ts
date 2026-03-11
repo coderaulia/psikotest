@@ -6,11 +6,25 @@ import {
   upsertResultRecord,
 } from './result.repository.js';
 
+export interface ResultListFilters {
+  search?: string;
+  testType?: PublicTestTypeCode;
+  dateFrom?: string;
+  dateTo?: string;
+  limit?: number;
+}
+
 export interface StoredResultRecord {
   id: number;
   submissionId: number;
   participantId: number;
   participantName: string;
+  participantEmail: string;
+  department: string | null;
+  positionTitle: string | null;
+  sessionId: number;
+  sessionTitle: string;
+  accessToken: string;
   testType: PublicTestTypeCode;
   submittedAt: string;
   scoreTotal: number | null;
@@ -23,8 +37,25 @@ export interface StoredResultRecord {
   summaries: ResultSummaryItem[];
 }
 
-export async function listResults() {
-  return fetchResults();
+export interface StoredResultDetailRecord extends StoredResultRecord {
+  participant: {
+    id: number;
+    fullName: string;
+    email: string;
+    employeeCode: string | null;
+    department: string | null;
+    positionTitle: string | null;
+  };
+  session: {
+    id: number;
+    title: string;
+    accessToken: string;
+    testType: PublicTestTypeCode;
+  };
+}
+
+export async function listResults(filters: ResultListFilters = {}) {
+  return fetchResults(filters);
 }
 
 export async function getResultById(id: number) {

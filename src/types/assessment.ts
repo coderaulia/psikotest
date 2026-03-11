@@ -68,6 +68,106 @@ export interface AdminLoginResponse {
   admin: AdminUser;
 }
 
+export interface DashboardSummaryCard {
+  label: string;
+  value: string;
+  delta: string;
+}
+
+export interface DashboardDistributionItem {
+  label: string;
+  value: number;
+}
+
+export interface DashboardLiveSessionItem {
+  id: number;
+  title: string;
+  testType: string;
+  status: string;
+  participants: number;
+  completed: number;
+}
+
+export interface DashboardRecentParticipantItem {
+  id: number;
+  fullName: string;
+  testType: string;
+  completedAt: string;
+  summary: string;
+}
+
+export interface DashboardSummaryResponse {
+  summaryCards: DashboardSummaryCard[];
+  distributions: {
+    disc: DashboardDistributionItem[];
+    workload: DashboardDistributionItem[];
+  };
+  liveSessions: DashboardLiveSessionItem[];
+  recentParticipants: DashboardRecentParticipantItem[];
+}
+
+export interface ParticipantListItem {
+  id: number;
+  fullName: string;
+  email: string;
+  employeeCode: string | null;
+  department: string | null;
+  positionTitle: string | null;
+  latestTestType: TestTypeCode | null;
+  latestStatus: 'not_started' | 'in_progress' | 'submitted' | 'scored';
+  totalSubmissions: number;
+  lastActivityAt: string | null;
+}
+
+export interface SessionParticipantProgressItem {
+  submissionId: number;
+  participantId: number;
+  fullName: string;
+  email: string;
+  employeeCode: string | null;
+  department: string | null;
+  positionTitle: string | null;
+  attemptNo: number;
+  status: 'not_started' | 'in_progress' | 'submitted' | 'scored';
+  startedAt: string | null;
+  submittedAt: string | null;
+  resultId: number | null;
+  scoreTotal: number | null;
+  scoreBand: string | null;
+  profileCode: string | null;
+}
+
+export interface AdminTestSessionListItem {
+  id: number;
+  title: string;
+  description: string | null;
+  testType: TestTypeCode;
+  status: 'draft' | 'active' | 'completed' | 'archived';
+  accessToken: string;
+  participantCount: number;
+  completedCount: number;
+  startsAt: string | null;
+  endsAt: string | null;
+  timeLimitMinutes: number | null;
+}
+
+export interface AdminTestSessionDetail extends AdminTestSessionListItem {
+  instructions: string[];
+  completionRate: number;
+  participants: SessionParticipantProgressItem[];
+}
+
+export interface CreateTestSessionPayload {
+  title: string;
+  testType: TestTypeCode;
+  description?: string;
+  instructions?: string;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  timeLimitMinutes?: number;
+  status: 'draft' | 'active';
+}
+
 export interface StoredResultSummary {
   metricKey: string;
   metricLabel: string;
@@ -80,6 +180,12 @@ export interface StoredResultRecord {
   submissionId: number;
   participantId: number;
   participantName: string;
+  participantEmail: string;
+  department: string | null;
+  positionTitle: string | null;
+  sessionId: number;
+  sessionTitle: string;
+  accessToken: string;
   testType: TestTypeCode;
   submittedAt: string;
   scoreTotal: number | null;
@@ -92,10 +198,27 @@ export interface StoredResultRecord {
   summaries: StoredResultSummary[];
 }
 
+export interface StoredResultDetailRecord extends StoredResultRecord {
+  participant: {
+    id: number;
+    fullName: string;
+    email: string;
+    employeeCode: string | null;
+    department: string | null;
+    positionTitle: string | null;
+  };
+  session: {
+    id: number;
+    title: string;
+    accessToken: string;
+    testType: TestTypeCode;
+  };
+}
+
 export interface SubmitSubmissionResponse {
   submissionId: number;
   participantId: number;
   status: 'scored';
   resultId: number;
-  result: StoredResultRecord;
+  result: StoredResultDetailRecord;
 }

@@ -30,5 +30,6 @@ export function requireAdminAuth(request: Request, response: Response, next: Nex
     });
   }
 
+  request.adminSession = adminSession;
   return next();
 }

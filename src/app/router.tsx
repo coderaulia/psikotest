@@ -7,7 +7,9 @@ import { AdminLoginPage } from '@/pages/admin/admin-login-page';
 import { DashboardPage } from '@/pages/admin/dashboard-page';
 import { ParticipantsPage } from '@/pages/admin/participants-page';
 import { ReportsPage } from '@/pages/admin/reports-page';
+import { ResultDetailPage } from '@/pages/admin/result-detail-page';
 import { ResultsPage } from '@/pages/admin/results-page';
+import { TestSessionDetailPage } from '@/pages/admin/test-session-detail-page';
 import { TestSessionsPage } from '@/pages/admin/test-sessions-page';
 import { LandingPage } from '@/pages/landing-page';
 import { NotFoundPage } from '@/pages/not-found-page';
@@ -34,7 +36,9 @@ export const router = createBrowserRouter([
       { path: 'dashboard', element: <DashboardPage /> },
       { path: 'participants', element: <ParticipantsPage /> },
       { path: 'test-sessions', element: <TestSessionsPage /> },
+      { path: 'test-sessions/:id', element: <TestSessionDetailPage /> },
       { path: 'results', element: <ResultsPage /> },
+      { path: 'results/:id', element: <ResultDetailPage /> },
       { path: 'reports', element: <ReportsPage /> },
     ],
   },

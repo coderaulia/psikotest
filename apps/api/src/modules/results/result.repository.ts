@@ -3,13 +3,24 @@ import type { RowDataPacket } from 'mysql2/promise';
 import { getDbPool } from '../../database/mysql.js';
 import type { PublicTestTypeCode } from '../public-sessions/public-session.types.js';
 import type { ResultSummaryItem, ScoredAssessmentResult } from '../scoring/scoring.types.js';
-import type { StoredResultRecord } from './result.service.js';
+import type {
+  ResultListFilters,
+  StoredResultDetailRecord,
+  StoredResultRecord,
+} from './result.service.js';
 
 interface ResultListRow extends RowDataPacket {
   id: number;
   submission_id: number;
   participant_id: number;
   participant_name: string;
+  participant_email: string;
+  employee_code: string | null;
+  department: string | null;
+  position_title: string | null;
+  session_id: number;
+  session_title: string;
+  access_token: string;
   test_type: PublicTestTypeCode;
   submitted_at: Date | string | null;
   score_total: number | null;
@@ -53,6 +64,14 @@ function mapSummaryType(summary: ResultSummaryItem) {
   return 'category';
 }
 
+function toIsoString(value: string | Date | null) {
+  if (!value) {
+    return new Date().toISOString();
+  }
+
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
 async function loadSummariesForResultIds(resultIds: number[]) {
   if (resultIds.length === 0) {
     return [] as ResultSummaryRow[];
@@ -79,8 +98,14 @@ function attachSummaries(rows: ResultListRow[], summaryRows: ResultSummaryRow[])
     submissionId: row.submission_id,
     participantId: row.participant_id,
     participantName: row.participant_name,
+    participantEmail: row.participant_email,
+    department: row.department,
+    positionTitle: row.position_title,
+    sessionId: row.session_id,
+    sessionTitle: row.session_title,
+    accessToken: row.access_token,
     testType: row.test_type,
-    submittedAt: row.submitted_at instanceof Date ? row.submitted_at.toISOString() : String(row.submitted_at ?? ''),
+    submittedAt: toIsoString(row.submitted_at),
     scoreTotal: row.score_total,
     scoreBand: row.score_band,
     primaryType: row.primary_type,
@@ -99,17 +124,51 @@ function attachSummaries(rows: ResultListRow[], summaryRows: ResultSummaryRow[])
   }));
 }
 
-export async function fetchResults() {
-  const pool = getDbPool();
-  const [rows] = await pool.query<ResultListRow[]>(
-    `
+function buildResultQuery(filters: ResultListFilters = {}) {
+  const conditions: string[] = [];
+  const params: Array<string> = [];
+
+  const search = filters.search?.trim();
+  if (search) {
+    const like = `%${search}%`;
+    conditions.push('(p.full_name LIKE ? OR p.email LIKE ? OR ts.title LIKE ?)');
+    params.push(like, like, like);
+  }
+
+  if (filters.testType) {
+    conditions.push('tt.code = ?');
+    params.push(filters.testType);
+  }
+
+  if (filters.dateFrom) {
+    conditions.push('DATE(COALESCE(s.submitted_at, r.created_at)) >= ?');
+    params.push(filters.dateFrom);
+  }
+
+  if (filters.dateTo) {
+    conditions.push('DATE(COALESCE(s.submitted_at, r.created_at)) <= ?');
+    params.push(filters.dateTo);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const limit = Math.max(1, Math.min(filters.limit ?? 100, 200));
+
+  return {
+    query: `
       SELECT
         r.id,
         r.submission_id,
         s.participant_id,
         p.full_name AS participant_name,
+        p.email AS participant_email,
+        p.employee_code,
+        p.department,
+        p.position_title,
+        ts.id AS session_id,
+        ts.title AS session_title,
+        ts.access_token,
         tt.code AS test_type,
-        s.submitted_at,
+        COALESCE(s.submitted_at, r.created_at) AS submitted_at,
         r.score_total,
         r.score_band,
         r.primary_type,
@@ -120,12 +179,20 @@ export async function fetchResults() {
       FROM results r
       INNER JOIN submissions s ON s.id = r.submission_id
       INNER JOIN participants p ON p.id = s.participant_id
+      INNER JOIN test_sessions ts ON ts.id = s.test_session_id
       INNER JOIN test_types tt ON tt.id = r.test_type_id
-      ORDER BY r.created_at DESC
-      LIMIT 100
+      ${whereClause}
+      ORDER BY COALESCE(s.submitted_at, r.created_at) DESC, r.id DESC
+      LIMIT ${limit}
     `,
-  );
+    params,
+  };
+}
 
+export async function fetchResults(filters: ResultListFilters = {}) {
+  const pool = getDbPool();
+  const { query, params } = buildResultQuery(filters);
+  const [rows] = await pool.query<ResultListRow[]>(query, params);
   const summaries = await loadSummariesForResultIds(rows.map((row) => row.id));
   return attachSummaries(rows, summaries);
 }
@@ -139,8 +206,15 @@ export async function fetchResultById(id: number) {
         r.submission_id,
         s.participant_id,
         p.full_name AS participant_name,
+        p.email AS participant_email,
+        p.employee_code,
+        p.department,
+        p.position_title,
+        ts.id AS session_id,
+        ts.title AS session_title,
+        ts.access_token,
         tt.code AS test_type,
-        s.submitted_at,
+        COALESCE(s.submitted_at, r.created_at) AS submitted_at,
         r.score_total,
         r.score_band,
         r.primary_type,
@@ -151,6 +225,7 @@ export async function fetchResultById(id: number) {
       FROM results r
       INNER JOIN submissions s ON s.id = r.submission_id
       INNER JOIN participants p ON p.id = s.participant_id
+      INNER JOIN test_sessions ts ON ts.id = s.test_session_id
       INNER JOIN test_types tt ON tt.id = r.test_type_id
       WHERE r.id = ?
       LIMIT 1
@@ -164,7 +239,25 @@ export async function fetchResultById(id: number) {
   }
 
   const summaries = await loadSummariesForResultIds([row.id]);
-  return attachSummaries([row], summaries)[0] ?? null;
+  const base = attachSummaries([row], summaries)[0];
+
+  return {
+    ...base,
+    participant: {
+      id: row.participant_id,
+      fullName: row.participant_name,
+      email: row.participant_email,
+      employeeCode: row.employee_code,
+      department: row.department,
+      positionTitle: row.position_title,
+    },
+    session: {
+      id: row.session_id,
+      title: row.session_title,
+      accessToken: row.access_token,
+      testType: row.test_type,
+    },
+  } satisfies StoredResultDetailRecord;
 }
 
 export async function upsertResultRecord(input: {
