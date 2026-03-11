@@ -1,5 +1,30 @@
 export type TestTypeCode = 'iq' | 'disc' | 'workload';
 export type QuestionType = 'single_choice' | 'forced_choice' | 'likert';
+export type AssessmentPurpose = 'recruitment' | 'employee_development' | 'academic_evaluation' | 'research' | 'self_assessment';
+export type AdministrationMode = 'supervised' | 'remote_unsupervised';
+export type InterpretationMode = 'self_assessment' | 'professional_review';
+export type ParticipantResultMode = 'instant_summary' | 'review_required';
+export type ResultReviewStatus = 'preliminary' | 'reviewed';
+export type QuestionStatus = 'draft' | 'active' | 'archived';
+
+export interface TestSessionComplianceSettings {
+  assessmentPurpose: AssessmentPurpose;
+  administrationMode: AdministrationMode;
+  interpretationMode: InterpretationMode;
+  participantResultMode: ParticipantResultMode;
+  consentStatement: string;
+  privacyStatement: string;
+  contactPerson: string;
+}
+
+export interface SessionSettingsPayload {
+  assessmentPurpose: AssessmentPurpose;
+  administrationMode: AdministrationMode;
+  interpretationMode: InterpretationMode;
+  consentStatement: string;
+  privacyStatement: string;
+  contactPerson: string;
+}
 
 export interface AssessmentOption {
   id: number;
@@ -27,8 +52,13 @@ export interface PublicSessionResponse {
     instructions: string[];
     estimatedMinutes: number;
     status: 'active';
+    compliance: TestSessionComplianceSettings;
   };
   questions: AssessmentQuestion[];
+}
+
+export interface ParticipantConsentState {
+  consentAcceptedAt: string;
 }
 
 export interface ParticipantIdentityPayload {
@@ -37,6 +67,11 @@ export interface ParticipantIdentityPayload {
   employeeCode?: string;
   department?: string;
   position?: string;
+  appliedPosition?: string;
+  age?: number;
+  educationLevel?: string;
+  consentAccepted: true;
+  consentAcceptedAt: string;
 }
 
 export interface SubmissionAnswerInput {
@@ -54,6 +89,7 @@ export interface StartSubmissionResponse {
   submissionAccessToken: string;
   status: 'in_progress';
   testType: TestTypeCode;
+  participantResultMode: ParticipantResultMode;
 }
 
 export interface AdminUser {
@@ -106,6 +142,33 @@ export interface DashboardSummaryResponse {
   recentParticipants: DashboardRecentParticipantItem[];
 }
 
+export interface ReportAverageByTypeItem {
+  testType: TestTypeCode;
+  averageScore: number | null;
+  submissionCount: number;
+}
+
+export interface ReportRecentCompletionItem {
+  id: number;
+  participantName: string;
+  sessionTitle: string;
+  testType: TestTypeCode;
+  submittedAt: string | null;
+  summary: string;
+  reviewStatus: ResultReviewStatus;
+}
+
+export interface ReportsSummaryResponse {
+  summaryCards: DashboardSummaryCard[];
+  averagesByTestType: ReportAverageByTypeItem[];
+  distributions: {
+    disc: DashboardDistributionItem[];
+    workload: DashboardDistributionItem[];
+    reviewStatus: DashboardDistributionItem[];
+  };
+  recentCompletions: ReportRecentCompletionItem[];
+}
+
 export interface ParticipantListItem {
   id: number;
   fullName: string;
@@ -135,6 +198,7 @@ export interface SessionParticipantProgressItem {
   scoreTotal: number | null;
   scoreBand: string | null;
   profileCode: string | null;
+  reviewStatus: ResultReviewStatus | null;
 }
 
 export interface AdminTestSessionListItem {
@@ -149,6 +213,7 @@ export interface AdminTestSessionListItem {
   startsAt: string | null;
   endsAt: string | null;
   timeLimitMinutes: number | null;
+  settings: SessionSettingsPayload;
 }
 
 export interface AdminTestSessionDetail extends AdminTestSessionListItem {
@@ -166,6 +231,18 @@ export interface CreateTestSessionPayload {
   endsAt?: string | null;
   timeLimitMinutes?: number;
   status: 'draft' | 'active';
+  settings: SessionSettingsPayload;
+}
+
+export interface UpdateTestSessionPayload {
+  title: string;
+  description?: string;
+  instructions?: string;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  timeLimitMinutes?: number;
+  status: 'draft' | 'active' | 'completed' | 'archived';
+  settings: SessionSettingsPayload;
 }
 
 export interface StoredResultSummary {
@@ -194,6 +271,9 @@ export interface StoredResultRecord {
   secondaryType: string | null;
   profileCode: string | null;
   interpretationKey: string | null;
+  reviewStatus: ResultReviewStatus;
+  reviewedAt: string | null;
+  reviewedByAdminId: number | null;
   resultPayload: Record<string, unknown>;
   summaries: StoredResultSummary[];
 }
@@ -221,4 +301,85 @@ export interface SubmitSubmissionResponse {
   status: 'scored';
   resultId: number;
   result: StoredResultDetailRecord;
+}
+
+export interface QuestionBankOptionPayload {
+  id?: number;
+  optionKey: string;
+  optionText: string;
+  dimensionKey?: string | null;
+  valueNumber?: number | null;
+  isCorrect?: boolean;
+  optionOrder: number;
+  scorePayload?: Record<string, unknown> | null;
+}
+
+export interface QuestionBankQuestionListItem {
+  id: number;
+  testType: TestTypeCode;
+  questionCode: string;
+  prompt: string | null;
+  instructionText: string | null;
+  questionGroupKey: string | null;
+  dimensionKey: string | null;
+  questionType: QuestionType;
+  questionOrder: number;
+  isRequired: boolean;
+  status: QuestionStatus;
+  optionCount: number;
+  updatedAt: string;
+}
+
+export interface QuestionBankQuestionDetail extends QuestionBankQuestionListItem {
+  questionMeta: Record<string, unknown>;
+  options: QuestionBankOptionPayload[];
+}
+
+export interface QuestionBankQuestionPayload {
+  testType: TestTypeCode;
+  questionCode: string;
+  instructionText?: string | null;
+  prompt?: string | null;
+  questionGroupKey?: string | null;
+  dimensionKey?: string | null;
+  questionType: QuestionType;
+  questionOrder: number;
+  isRequired: boolean;
+  status: QuestionStatus;
+  questionMeta?: Record<string, unknown> | null;
+  options: QuestionBankOptionPayload[];
+}
+
+export interface AdminProfileSettings {
+  id: number;
+  fullName: string;
+  email: string;
+  role: 'super_admin' | 'admin';
+  lastLoginAt: string | null;
+  createdAt: string | null;
+}
+
+export interface SessionDefaultsSettings {
+  timeLimitMinutes: number;
+  descriptionTemplate: string;
+  instructions: string[];
+  settings: SessionSettingsPayload;
+}
+
+export interface AuditFeedItem {
+  id: number;
+  actorType: 'admin' | 'participant' | 'system';
+  actorAdminId: number | null;
+  actorName: string | null;
+  entityType: string;
+  entityId: number | null;
+  action: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface SettingsOverviewResponse {
+  profile: AdminProfileSettings;
+  sessionDefaults: SessionDefaultsSettings;
+  auditFeed: AuditFeedItem[];
 }

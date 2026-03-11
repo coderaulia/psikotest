@@ -17,7 +17,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "typecheck:api": "npm --prefix apps/api run typecheck",
-    "test": "node -e \"console.log('No frontend tests wired yet.')\"",
+    "test": "npm --prefix apps/api run test",
     "check": "npm run typecheck && npm run build"
   },
   "dependencies": {

@@ -1,5 +1,5 @@
-import { Copy, ExternalLink } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Copy, ExternalLink, PencilLine } from 'lucide-react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { StateCard } from '@/components/common/state-card';
@@ -7,9 +7,27 @@ import { SectionHeading } from '@/components/common/section-heading';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { fetchTestSessionDetail } from '@/services/admin-data';
-import type { AdminTestSessionDetail } from '@/types/assessment';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
+import { fetchTestSessionDetail, updateAdminTestSession } from '@/services/admin-data';
+import type { AdminTestSessionDetail, UpdateTestSessionPayload } from '@/types/assessment';
 import { formatDateTime, formatStatusLabel, formatTestTypeLabel, formatTokenLabel } from '@/lib/formatters';
+
+const textAreaClassName = 'min-h-[120px] w-full rounded-2xl border border-border bg-white/80 px-4 py-3 text-sm text-foreground shadow-sm outline-none transition placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200';
+
+function toDateTimeLocal(value: string | null) {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+  const pad = (input: number) => String(input).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function toIsoString(value: string) {
+  return value ? new Date(value).toISOString() : null;
+}
 
 export function TestSessionDetailPage() {
   const { id } = useParams();
@@ -17,13 +35,47 @@ export function TestSessionDetailPage() {
   const [session, setSession] = useState<AdminTestSessionDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    instructions: '',
+    startsAt: '',
+    endsAt: '',
+    timeLimitMinutes: '',
+    status: 'active',
+    assessmentPurpose: 'recruitment',
+    administrationMode: 'remote_unsupervised',
+    interpretationMode: 'professional_review',
+    contactPerson: '',
+    consentStatement: '',
+    privacyStatement: '',
+  });
 
   async function loadSession() {
     setIsLoading(true);
     setError(null);
 
     try {
-      setSession(await fetchTestSessionDetail(sessionId));
+      const detail = await fetchTestSessionDetail(sessionId);
+      setSession(detail);
+      setForm({
+        title: detail.title,
+        description: detail.description ?? '',
+        instructions: detail.instructions.join('\n'),
+        startsAt: toDateTimeLocal(detail.startsAt),
+        endsAt: toDateTimeLocal(detail.endsAt),
+        timeLimitMinutes: detail.timeLimitMinutes ? String(detail.timeLimitMinutes) : '',
+        status: detail.status,
+        assessmentPurpose: detail.settings.assessmentPurpose,
+        administrationMode: detail.settings.administrationMode,
+        interpretationMode: detail.settings.interpretationMode,
+        contactPerson: detail.settings.contactPerson,
+        consentStatement: detail.settings.consentStatement,
+        privacyStatement: detail.settings.privacyStatement,
+      });
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to load session detail');
     } finally {
@@ -44,6 +96,42 @@ export function TestSessionDetailPage() {
 
     const origin = typeof window === 'undefined' ? '' : window.location.origin;
     await navigator.clipboard.writeText(`${origin}/t/${session.accessToken}`);
+  }
+
+  async function handleSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSaving(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const payload: UpdateTestSessionPayload = {
+        title: form.title.trim(),
+        description: form.description.trim() || undefined,
+        instructions: form.instructions.trim() || undefined,
+        startsAt: toIsoString(form.startsAt),
+        endsAt: toIsoString(form.endsAt),
+        timeLimitMinutes: form.timeLimitMinutes ? Number(form.timeLimitMinutes) : undefined,
+        status: form.status as UpdateTestSessionPayload['status'],
+        settings: {
+          assessmentPurpose: form.assessmentPurpose as UpdateTestSessionPayload['settings']['assessmentPurpose'],
+          administrationMode: form.administrationMode as UpdateTestSessionPayload['settings']['administrationMode'],
+          interpretationMode: form.interpretationMode as UpdateTestSessionPayload['settings']['interpretationMode'],
+          contactPerson: form.contactPerson.trim(),
+          consentStatement: form.consentStatement.trim(),
+          privacyStatement: form.privacyStatement.trim(),
+        },
+      };
+
+      const updated = await updateAdminTestSession(sessionId, payload);
+      setSession(updated);
+      setSuccessMessage('Session metadata updated.');
+      setIsEditing(false);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to update session');
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   if (!Number.isFinite(sessionId)) {
@@ -75,6 +163,9 @@ export function TestSessionDetailPage() {
             <Button variant="secondary" className="gap-2" onClick={() => void handleCopyLink()}>
               <Copy className="h-4 w-4" /> Copy link
             </Button>
+            <Button variant="secondary" className="gap-2" onClick={() => setIsEditing((current) => !current)}>
+              <PencilLine className="h-4 w-4" /> {isEditing ? 'Close editor' : 'Edit metadata'}
+            </Button>
             <Button variant="outline" className="gap-2" asChild>
               <a href={publicUrl} target="_blank" rel="noreferrer">
                 <ExternalLink className="h-4 w-4" /> Open public flow
@@ -84,9 +175,8 @@ export function TestSessionDetailPage() {
         }
       />
 
-      {error ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">{error}</div>
-      ) : null}
+      {error ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">{error}</div> : null}
+      {successMessage ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{successMessage}</div> : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card className="bg-white/80"><CardHeader><CardDescription>Status</CardDescription><CardTitle>{formatStatusLabel(session.status)}</CardTitle></CardHeader></Card>
@@ -94,6 +184,94 @@ export function TestSessionDetailPage() {
         <Card className="bg-white/80"><CardHeader><CardDescription>Completed</CardDescription><CardTitle>{session.completedCount}</CardTitle></CardHeader></Card>
         <Card className="bg-white/80"><CardHeader><CardDescription>Completion Rate</CardDescription><CardTitle>{session.completionRate}%</CardTitle></CardHeader></Card>
       </div>
+
+      {isEditing ? (
+        <Card className="bg-white/80">
+          <CardHeader>
+            <CardTitle>Edit session metadata</CardTitle>
+            <CardDescription>Update instructions, consent language, interpretation mode, and scheduling without changing the public link.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={handleSave}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-600">Title</label>
+                  <Input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} required />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-600">Status</label>
+                  <Select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}>
+                    <option value="draft">Draft</option>
+                    <option value="active">Active</option>
+                    <option value="completed">Completed</option>
+                    <option value="archived">Archived</option>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-600">Start time</label>
+                  <Input type="datetime-local" value={form.startsAt} onChange={(event) => setForm((current) => ({ ...current, startsAt: event.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-600">End time</label>
+                  <Input type="datetime-local" value={form.endsAt} onChange={(event) => setForm((current) => ({ ...current, endsAt: event.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-600">Time limit (minutes)</label>
+                  <Input type="number" min={1} max={180} value={form.timeLimitMinutes} onChange={(event) => setForm((current) => ({ ...current, timeLimitMinutes: event.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-600">Contact person</label>
+                  <Input value={form.contactPerson} onChange={(event) => setForm((current) => ({ ...current, contactPerson: event.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-600">Assessment purpose</label>
+                  <Select value={form.assessmentPurpose} onChange={(event) => setForm((current) => ({ ...current, assessmentPurpose: event.target.value }))}>
+                    <option value="recruitment">Recruitment</option>
+                    <option value="employee_development">Employee development</option>
+                    <option value="academic_evaluation">Academic evaluation</option>
+                    <option value="research">Research</option>
+                    <option value="self_assessment">Self assessment</option>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-600">Administration mode</label>
+                  <Select value={form.administrationMode} onChange={(event) => setForm((current) => ({ ...current, administrationMode: event.target.value }))}>
+                    <option value="remote_unsupervised">Remote unsupervised</option>
+                    <option value="supervised">Supervised</option>
+                  </Select>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium text-slate-600">Interpretation mode</label>
+                  <Select value={form.interpretationMode} onChange={(event) => setForm((current) => ({ ...current, interpretationMode: event.target.value }))}>
+                    <option value="professional_review">Professional review</option>
+                    <option value="self_assessment">Self assessment</option>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Description</label>
+                <textarea className={textAreaClassName} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Participant instructions</label>
+                <textarea className={textAreaClassName} value={form.instructions} onChange={(event) => setForm((current) => ({ ...current, instructions: event.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Consent statement</label>
+                <textarea className={textAreaClassName} value={form.consentStatement} onChange={(event) => setForm((current) => ({ ...current, consentStatement: event.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Privacy statement</label>
+                <textarea className={textAreaClassName} value={form.privacyStatement} onChange={(event) => setForm((current) => ({ ...current, privacyStatement: event.target.value }))} />
+              </div>
+              <div className="flex justify-end">
+                <Button type="submit" disabled={isSaving}>{isSaving ? 'Saving metadata...' : 'Save metadata'}</Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
         <Card className="bg-white/80">
@@ -103,45 +281,59 @@ export function TestSessionDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-slate-500">
             <div className="grid gap-3">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Test Type</p>
-                <p className="mt-2 font-medium text-slate-950">{formatTestTypeLabel(session.testType)}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Access Token</p>
-                <p className="mt-2 font-medium text-slate-950">{session.accessToken}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Start Time</p>
-                <p className="mt-2 font-medium text-slate-950">{formatDateTime(session.startsAt)}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Time Limit</p>
-                <p className="mt-2 font-medium text-slate-950">{session.timeLimitMinutes ? `${session.timeLimitMinutes} minutes` : 'Not set'}</p>
-              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Test Type</p><p className="mt-2 font-medium text-slate-950">{formatTestTypeLabel(session.testType)}</p></div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Purpose</p><p className="mt-2 font-medium text-slate-950">{formatTokenLabel(session.settings.assessmentPurpose)}</p></div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Administration</p><p className="mt-2 font-medium text-slate-950">{formatTokenLabel(session.settings.administrationMode)}</p></div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Interpretation</p><p className="mt-2 font-medium text-slate-950">{formatTokenLabel(session.settings.interpretationMode)}</p></div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Access Token</p><p className="mt-2 font-medium text-slate-950">{session.accessToken}</p></div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Start Time</p><p className="mt-2 font-medium text-slate-950">{formatDateTime(session.startsAt)}</p></div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Time Limit</p><p className="mt-2 font-medium text-slate-950">{session.timeLimitMinutes ? `${session.timeLimitMinutes} minutes` : 'Not set'}</p></div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-white/80">
-          <CardHeader>
-            <CardTitle>Instructions</CardTitle>
-            <CardDescription>What participants see before they start this session.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {session.instructions.length === 0 ? (
-              <p className="text-sm text-slate-500">No instructions were saved for this session.</p>
-            ) : (
-              <div className="space-y-3">
-                {session.instructions.map((instruction) => (
-                  <div key={instruction} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-                    {instruction}
-                  </div>
-                ))}
+        <div className="space-y-6">
+          <Card className="bg-white/80">
+            <CardHeader>
+              <CardTitle>Consent and privacy</CardTitle>
+              <CardDescription>Participant-facing compliance statements for this session.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm text-slate-600">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Consent Statement</p>
+                <p className="mt-2">{session.settings.consentStatement}</p>
               </div>
-            )}
-          </CardContent>
-        </Card>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Privacy Statement</p>
+                <p className="mt-2">{session.settings.privacyStatement}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Contact Person</p>
+                <p className="mt-2">{session.settings.contactPerson}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/80">
+            <CardHeader>
+              <CardTitle>Instructions</CardTitle>
+              <CardDescription>What participants see before they start this session.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {session.instructions.length === 0 ? (
+                <p className="text-sm text-slate-500">No instructions were saved for this session.</p>
+              ) : (
+                <div className="space-y-3">
+                  {session.instructions.map((instruction) => (
+                    <div key={instruction} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                      {instruction}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <Card className="bg-white/80">
@@ -160,8 +352,8 @@ export function TestSessionDetailPage() {
                     <th className="px-4 py-3 font-medium">Participant</th>
                     <th className="px-4 py-3 font-medium">Status</th>
                     <th className="px-4 py-3 font-medium">Attempt</th>
+                    <th className="px-4 py-3 font-medium">Review</th>
                     <th className="px-4 py-3 font-medium">Result</th>
-                    <th className="px-4 py-3 font-medium">Started</th>
                     <th className="px-4 py-3 font-medium">Submitted</th>
                   </tr>
                 </thead>
@@ -176,10 +368,10 @@ export function TestSessionDetailPage() {
                       </td>
                       <td className="px-4 py-4"><Badge>{formatStatusLabel(participant.status)}</Badge></td>
                       <td className="px-4 py-4 text-slate-500">#{participant.attemptNo}</td>
+                      <td className="px-4 py-4 text-slate-500">{participant.reviewStatus ? <Badge>{formatTokenLabel(participant.reviewStatus)}</Badge> : '-'}</td>
                       <td className="px-4 py-4 text-slate-500">
                         {participant.resultId ? <Link className="font-medium text-slate-950 underline-offset-4 hover:underline" to={`/admin/results/${participant.resultId}`}>{participant.profileCode ?? participant.scoreTotal ?? formatTokenLabel(participant.scoreBand)}</Link> : '-'}
                       </td>
-                      <td className="px-4 py-4 text-slate-500">{formatDateTime(participant.startedAt)}</td>
                       <td className="px-4 py-4 text-slate-500">{formatDateTime(participant.submittedAt)}</td>
                     </tr>
                   ))}

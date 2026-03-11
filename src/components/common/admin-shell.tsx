@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { FileStack, LayoutGrid, LineChart, LogOut, Settings, Users } from 'lucide-react';
+import { FileCog, FileStack, LayoutGrid, LineChart, LogOut, Settings, Users } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 
 import { clearAdminSession, loadAdminSession } from '@/lib/admin-session';
@@ -10,8 +10,10 @@ const navItems = [
   { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutGrid },
   { to: '/admin/participants', label: 'Participants', icon: Users },
   { to: '/admin/test-sessions', label: 'Test Sessions', icon: FileStack },
+  { to: '/admin/question-bank', label: 'Question Bank', icon: FileCog },
   { to: '/admin/results', label: 'Results', icon: LineChart },
-  { to: '/admin/reports', label: 'Reports', icon: Settings },
+  { to: '/admin/reports', label: 'Reports', icon: LineChart },
+  { to: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
 export function AdminShell({ children }: { children: ReactNode }) {
@@ -79,3 +81,4 @@ export function AdminShell({ children }: { children: ReactNode }) {
     </div>
   );
 }
+

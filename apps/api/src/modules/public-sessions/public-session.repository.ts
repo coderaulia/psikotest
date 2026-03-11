@@ -1,6 +1,10 @@
 import type { PoolConnection, RowDataPacket } from 'mysql2/promise';
 
 import { getDbPool } from '../../database/mysql.js';
+import {
+  getParticipantResultMode,
+  parseTestSessionSettings,
+} from '../test-sessions/session-settings.js';
 import type {
   ParticipantIdentityInput,
   PublicSessionDefinition,
@@ -14,6 +18,7 @@ interface SessionRow extends RowDataPacket {
   access_token: string;
   instructions: string | null;
   time_limit_minutes: number | null;
+  settings_json: string | Record<string, unknown> | null;
   status: 'active';
   test_type_code: 'iq' | 'disc' | 'workload';
 }
@@ -70,6 +75,7 @@ async function loadSessionRowByToken(token: string) {
         ts.access_token,
         ts.instructions,
         ts.time_limit_minutes,
+        ts.settings_json,
         ts.status,
         tt.code AS test_type_code
       FROM test_sessions ts
@@ -95,6 +101,7 @@ async function loadSessionRowById(sessionId: number) {
         ts.access_token,
         ts.instructions,
         ts.time_limit_minutes,
+        ts.settings_json,
         ts.status,
         tt.code AS test_type_code
       FROM test_sessions ts
@@ -177,6 +184,7 @@ export async function findPublicSessionByToken(token: string): Promise<PublicSes
     return null;
   }
 
+  const settings = parseTestSessionSettings(sessionRow.settings_json);
   const questions = await loadQuestionsByTestType(sessionRow.test_type_id);
 
   return {
@@ -187,6 +195,10 @@ export async function findPublicSessionByToken(token: string): Promise<PublicSes
       instructions: parseInstructions(sessionRow.instructions),
       estimatedMinutes: sessionRow.time_limit_minutes ?? 15,
       status: sessionRow.status,
+      compliance: {
+        ...settings,
+        participantResultMode: getParticipantResultMode(settings),
+      },
     },
     questions,
   };
@@ -207,6 +219,15 @@ async function resolveParticipantId(
     [participant.email],
   );
 
+  const metadata = JSON.stringify({
+    source: 'public_session',
+    age: participant.age ?? null,
+    educationLevel: participant.educationLevel ?? null,
+    appliedPosition: participant.appliedPosition ?? null,
+    currentPosition: participant.position ?? null,
+    latestConsentAcceptedAt: participant.consentAcceptedAt,
+  });
+
   if (existingRows[0]) {
     const participantId = Number(existingRows[0].id);
     await connection.query(
@@ -224,8 +245,8 @@ async function resolveParticipantId(
         participant.fullName,
         participant.employeeCode ?? null,
         participant.department ?? null,
-        participant.position ?? null,
-        JSON.stringify({ source: 'public_session' }),
+        participant.position ?? participant.appliedPosition ?? null,
+        metadata,
         participantId,
       ],
     );
@@ -250,8 +271,8 @@ async function resolveParticipantId(
       participant.email,
       participant.employeeCode ?? null,
       participant.department ?? null,
-      participant.position ?? null,
-      JSON.stringify({ source: 'public_session' }),
+      participant.position ?? participant.appliedPosition ?? null,
+      metadata,
     ],
   );
 
@@ -265,6 +286,8 @@ export async function createSubmissionForToken(token: string, participant: Parti
     return null;
   }
 
+  const settings = parseTestSessionSettings(sessionRow.settings_json);
+  const participantResultMode = getParticipantResultMode(settings);
   const pool = getDbPool();
   const connection = await pool.getConnection();
 
@@ -283,6 +306,24 @@ export async function createSubmissionForToken(token: string, participant: Parti
     );
 
     const attemptNo = Number(attemptRows[0]?.next_attempt ?? 1);
+    const identitySnapshot = JSON.stringify({
+      fullName: participant.fullName,
+      email: participant.email,
+      employeeCode: participant.employeeCode ?? null,
+      department: participant.department ?? null,
+      position: participant.position ?? null,
+      appliedPosition: participant.appliedPosition ?? null,
+      age: participant.age ?? null,
+      educationLevel: participant.educationLevel ?? null,
+    });
+    const consentPayload = JSON.stringify({
+      accepted: participant.consentAccepted,
+      acceptedAt: participant.consentAcceptedAt,
+      assessmentPurpose: settings.assessmentPurpose,
+      administrationMode: settings.administrationMode,
+      contactPerson: settings.contactPerson,
+    });
+
     const [insertResult] = await connection.query(
       `
         INSERT INTO submissions (
@@ -290,11 +331,21 @@ export async function createSubmissionForToken(token: string, participant: Parti
           participant_id,
           attempt_no,
           status,
-          started_at
+          started_at,
+          consent_given_at,
+          consent_payload_json,
+          identity_snapshot_json
         )
-        VALUES (?, ?, ?, 'in_progress', NOW())
+        VALUES (?, ?, ?, 'in_progress', NOW(), ?, ?, ?)
       `,
-      [sessionRow.session_id, participantId, attemptNo],
+      [
+        sessionRow.session_id,
+        participantId,
+        attemptNo,
+        new Date(participant.consentAcceptedAt),
+        consentPayload,
+        identitySnapshot,
+      ],
     );
 
     await connection.commit();
@@ -305,6 +356,7 @@ export async function createSubmissionForToken(token: string, participant: Parti
       token,
       status: 'in_progress' as const,
       testType: sessionRow.test_type_code,
+      participantResultMode,
     };
   } catch (error) {
     await connection.rollback();
@@ -484,3 +536,4 @@ export async function loadSubmissionScoringContext(submissionId: number) {
     answers: [...answerMap.values()],
   };
 }
+

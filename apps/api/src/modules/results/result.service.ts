@@ -3,8 +3,11 @@ import type { ResultSummaryItem, ScoredAssessmentResult } from '../scoring/scori
 import {
   fetchResultById,
   fetchResults,
+  updateResultReviewStatusRecord,
   upsertResultRecord,
 } from './result.repository.js';
+
+export type ResultReviewStatus = 'preliminary' | 'reviewed';
 
 export interface ResultListFilters {
   search?: string;
@@ -33,6 +36,9 @@ export interface StoredResultRecord {
   secondaryType: string | null;
   profileCode: string | null;
   interpretationKey: string | null;
+  reviewStatus: ResultReviewStatus;
+  reviewedAt: string | null;
+  reviewedByAdminId: number | null;
   resultPayload: Record<string, unknown>;
   summaries: ResultSummaryItem[];
 }
@@ -60,6 +66,10 @@ export async function listResults(filters: ResultListFilters = {}) {
 
 export async function getResultById(id: number) {
   return fetchResultById(id);
+}
+
+export async function updateResultReviewStatus(id: number, reviewStatus: ResultReviewStatus, adminId: number) {
+  return updateResultReviewStatusRecord(id, reviewStatus, adminId);
 }
 
 export async function storeResult(input: {

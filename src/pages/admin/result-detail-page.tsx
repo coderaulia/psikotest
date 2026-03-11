@@ -3,9 +3,10 @@ import { useEffect, useState } from 'react';
 
 import { StateCard } from '@/components/common/state-card';
 import { SectionHeading } from '@/components/common/section-heading';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { fetchResultDetail } from '@/services/admin-data';
+import { fetchResultDetail, updateAdminResultReviewStatus } from '@/services/admin-data';
 import type { StoredResultDetailRecord } from '@/types/assessment';
 import {
   formatDateTime,
@@ -19,6 +20,7 @@ export function ResultDetailPage() {
   const resultId = Number(id);
   const [result, setResult] = useState<StoredResultDetailRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUpdatingReview, setIsUpdatingReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function loadResult() {
@@ -39,6 +41,24 @@ export function ResultDetailPage() {
       void loadResult();
     }
   }, [resultId]);
+
+  async function handleReviewToggle() {
+    if (!result) {
+      return;
+    }
+
+    setIsUpdatingReview(true);
+    setError(null);
+
+    try {
+      const nextStatus = result.reviewStatus === 'reviewed' ? 'preliminary' : 'reviewed';
+      setResult(await updateAdminResultReviewStatus(result.id, nextStatus));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to update review state');
+    } finally {
+      setIsUpdatingReview(false);
+    }
+  }
 
   if (!Number.isFinite(resultId)) {
     return <StateCard title="Invalid result" description="The requested result id is not valid." tone="danger" />;
@@ -64,7 +84,18 @@ export function ResultDetailPage() {
         eyebrow="Result Detail"
         title={result.participant.fullName}
         description={`${result.testType.toUpperCase()} assessment • ${formatDateTime(result.submittedAt)}`}
-        actions={<Button variant="outline" asChild><Link to={`/admin/test-sessions/${result.session.id}`}>Open session</Link></Button>}
+        actions={
+          <div className="flex flex-wrap gap-3">
+            <Button variant="outline" asChild><Link to={`/admin/test-sessions/${result.session.id}`}>Open session</Link></Button>
+            <Button onClick={() => void handleReviewToggle()} disabled={isUpdatingReview}>
+              {isUpdatingReview
+                ? 'Updating...'
+                : result.reviewStatus === 'reviewed'
+                  ? 'Mark as preliminary'
+                  : 'Mark as reviewed'}
+            </Button>
+          </div>
+        }
       />
 
       {error ? (
@@ -95,14 +126,14 @@ export function ResultDetailPage() {
         </Card>
         <Card className="bg-white/80">
           <CardHeader>
-            <CardDescription>Interpretation</CardDescription>
-            <CardTitle>{formatTokenLabel(result.interpretationKey)}</CardTitle>
+            <CardDescription>Review status</CardDescription>
+            <CardTitle><Badge>{formatTokenLabel(result.reviewStatus)}</Badge></CardTitle>
           </CardHeader>
         </Card>
         <Card className="bg-white/80">
           <CardHeader>
-            <CardDescription>Session</CardDescription>
-            <CardTitle>{result.session.title}</CardTitle>
+            <CardDescription>Reviewed At</CardDescription>
+            <CardTitle>{result.reviewedAt ? formatDateTime(result.reviewedAt) : '-'}</CardTitle>
           </CardHeader>
         </Card>
       </div>

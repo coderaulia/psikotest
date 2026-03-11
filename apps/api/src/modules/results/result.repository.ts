@@ -5,6 +5,7 @@ import type { PublicTestTypeCode } from '../public-sessions/public-session.types
 import type { ResultSummaryItem, ScoredAssessmentResult } from '../scoring/scoring.types.js';
 import type {
   ResultListFilters,
+  ResultReviewStatus,
   StoredResultDetailRecord,
   StoredResultRecord,
 } from './result.service.js';
@@ -72,6 +73,19 @@ function toIsoString(value: string | Date | null) {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
+function readReviewState(payload: Record<string, unknown>) {
+  return {
+    reviewStatus: payload.reviewStatus === 'reviewed' ? 'reviewed' : 'preliminary',
+    reviewedAt: typeof payload.reviewedAt === 'string' ? payload.reviewedAt : null,
+    reviewedByAdminId:
+      typeof payload.reviewedByAdminId === 'number' ? payload.reviewedByAdminId : null,
+  } satisfies {
+    reviewStatus: ResultReviewStatus;
+    reviewedAt: string | null;
+    reviewedByAdminId: number | null;
+  };
+}
+
 async function loadSummariesForResultIds(resultIds: number[]) {
   if (resultIds.length === 0) {
     return [] as ResultSummaryRow[];
@@ -93,35 +107,43 @@ async function loadSummariesForResultIds(resultIds: number[]) {
 }
 
 function attachSummaries(rows: ResultListRow[], summaryRows: ResultSummaryRow[]): StoredResultRecord[] {
-  return rows.map((row) => ({
-    id: row.id,
-    submissionId: row.submission_id,
-    participantId: row.participant_id,
-    participantName: row.participant_name,
-    participantEmail: row.participant_email,
-    department: row.department,
-    positionTitle: row.position_title,
-    sessionId: row.session_id,
-    sessionTitle: row.session_title,
-    accessToken: row.access_token,
-    testType: row.test_type,
-    submittedAt: toIsoString(row.submitted_at),
-    scoreTotal: row.score_total,
-    scoreBand: row.score_band,
-    primaryType: row.primary_type,
-    secondaryType: row.secondary_type,
-    profileCode: row.profile_code,
-    interpretationKey: row.interpretation_key,
-    resultPayload: normalizePayload(row.result_payload_json),
-    summaries: summaryRows
-      .filter((summary) => summary.result_id === row.id)
-      .map((summary) => ({
-        metricKey: summary.metric_key,
-        metricLabel: summary.metric_label,
-        score: summary.score,
-        band: summary.band,
-      })),
-  }));
+  return rows.map((row) => {
+    const resultPayload = normalizePayload(row.result_payload_json);
+    const reviewState = readReviewState(resultPayload);
+
+    return {
+      id: row.id,
+      submissionId: row.submission_id,
+      participantId: row.participant_id,
+      participantName: row.participant_name,
+      participantEmail: row.participant_email,
+      department: row.department,
+      positionTitle: row.position_title,
+      sessionId: row.session_id,
+      sessionTitle: row.session_title,
+      accessToken: row.access_token,
+      testType: row.test_type,
+      submittedAt: toIsoString(row.submitted_at),
+      scoreTotal: row.score_total,
+      scoreBand: row.score_band,
+      primaryType: row.primary_type,
+      secondaryType: row.secondary_type,
+      profileCode: row.profile_code,
+      interpretationKey: row.interpretation_key,
+      reviewStatus: reviewState.reviewStatus,
+      reviewedAt: reviewState.reviewedAt,
+      reviewedByAdminId: reviewState.reviewedByAdminId,
+      resultPayload,
+      summaries: summaryRows
+        .filter((summary) => summary.result_id === row.id)
+        .map((summary) => ({
+          metricKey: summary.metric_key,
+          metricLabel: summary.metric_label,
+          score: summary.score,
+          band: summary.band,
+        })),
+    };
+  });
 }
 
 function buildResultQuery(filters: ResultListFilters = {}) {
@@ -260,6 +282,44 @@ export async function fetchResultById(id: number) {
   } satisfies StoredResultDetailRecord;
 }
 
+export async function updateResultReviewStatusRecord(
+  id: number,
+  reviewStatus: ResultReviewStatus,
+  adminId: number,
+) {
+  const pool = getDbPool();
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'SELECT result_payload_json FROM results WHERE id = ? LIMIT 1',
+    [id],
+  );
+
+  if (!rows[0]) {
+    return null;
+  }
+
+  const currentPayload = normalizePayload(
+    (rows[0].result_payload_json as string | Record<string, unknown> | null) ?? null,
+  );
+
+  const nextPayload: Record<string, unknown> = {
+    ...currentPayload,
+    reviewStatus,
+    reviewedAt: reviewStatus === 'reviewed' ? new Date().toISOString() : null,
+    reviewedByAdminId: reviewStatus === 'reviewed' ? adminId : null,
+  };
+
+  await pool.query(
+    `
+      UPDATE results
+      SET result_payload_json = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `,
+    [JSON.stringify(nextPayload), id],
+  );
+
+  return fetchResultById(id);
+}
+
 export async function upsertResultRecord(input: {
   submissionId: number;
   participantId: number;
@@ -283,6 +343,13 @@ export async function upsertResultRecord(input: {
     if (!testTypeId) {
       throw new Error(`Unknown test type: ${input.testType}`);
     }
+
+    const resultPayload = {
+      ...input.scoredResult.payload,
+      reviewStatus: 'preliminary',
+      reviewedAt: null,
+      reviewedByAdminId: null,
+    };
 
     await connection.query(
       `
@@ -317,7 +384,7 @@ export async function upsertResultRecord(input: {
         input.scoredResult.secondaryType,
         input.scoredResult.profileCode,
         input.scoredResult.interpretationKey,
-        JSON.stringify(input.scoredResult.payload),
+        JSON.stringify(resultPayload),
       ],
     );
 

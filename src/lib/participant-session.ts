@@ -1,4 +1,5 @@
 import type {
+  ParticipantConsentState,
   ParticipantIdentityPayload,
   StartSubmissionResponse,
   StoredResultRecord,
@@ -11,12 +12,17 @@ export interface StoredParticipantSession {
   token: string;
   submissionAccessToken: string;
   testType: TestTypeCode;
+  participantResultMode: 'instant_summary' | 'review_required';
   participant: ParticipantIdentityPayload;
   result: StoredResultRecord | null;
 }
 
 function getStorageKey(token: string) {
   return `psikotest:participant:${token}`;
+}
+
+function getConsentKey(token: string) {
+  return `psikotest:participant-consent:${token}`;
 }
 
 export function loadParticipantSession(token: string): StoredParticipantSession | null {
@@ -43,6 +49,7 @@ export function saveParticipantSession(
     token: start.token,
     submissionAccessToken: start.submissionAccessToken,
     testType: start.testType,
+    participantResultMode: start.participantResultMode,
     participant,
     result: null,
   };
@@ -62,4 +69,21 @@ export function saveParticipantResult(token: string, result: StoredResultRecord)
 
   existing.result = result;
   window.sessionStorage.setItem(getStorageKey(token), JSON.stringify(existing));
+}
+
+export function saveParticipantConsent(token: string, consent: ParticipantConsentState) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.sessionStorage.setItem(getConsentKey(token), JSON.stringify(consent));
+}
+
+export function loadParticipantConsent(token: string): ParticipantConsentState | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const raw = window.sessionStorage.getItem(getConsentKey(token));
+  return raw ? (JSON.parse(raw) as ParticipantConsentState) : null;
 }

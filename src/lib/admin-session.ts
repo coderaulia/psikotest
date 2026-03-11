@@ -21,6 +21,16 @@ export function saveAdminSession(session: AdminLoginResponse) {
   window.localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
 }
 
+export function updateStoredAdminProfile(admin: StoredAdminSession['admin']) {
+  const current = loadAdminSession();
+
+  if (!current || typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ ...current, admin }));
+}
+
 export function clearAdminSession() {
   if (typeof window === 'undefined') {
     return;
@@ -28,3 +38,4 @@ export function clearAdminSession() {
 
   window.localStorage.removeItem(ADMIN_SESSION_KEY);
 }
+

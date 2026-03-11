@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { fetchResults } from '@/services/admin-data';
 import type { StoredResultRecord, TestTypeCode } from '@/types/assessment';
-import { formatDate, formatResultHeadline, formatResultSummary, formatTestTypeLabel } from '@/lib/formatters';
+import { formatDate, formatResultHeadline, formatResultSummary, formatTestTypeLabel, formatTokenLabel } from '@/lib/formatters';
 
 export function ResultsPage() {
   const [search, setSearch] = useState('');
@@ -96,6 +96,7 @@ export function ResultsPage() {
                   <tr>
                     <th className="px-4 py-3 font-medium">Participant</th>
                     <th className="px-4 py-3 font-medium">Test</th>
+                    <th className="px-4 py-3 font-medium">Review</th>
                     <th className="px-4 py-3 font-medium">Summary</th>
                     <th className="px-4 py-3 font-medium">Score</th>
                     <th className="px-4 py-3 font-medium">Date</th>
@@ -111,6 +112,7 @@ export function ResultsPage() {
                         <p className="mt-1 text-xs font-normal uppercase tracking-[0.18em] text-slate-400">{result.sessionTitle}</p>
                       </td>
                       <td className="px-4 py-4"><Badge>{formatTestTypeLabel(result.testType)}</Badge></td>
+                      <td className="px-4 py-4"><Badge>{formatTokenLabel(result.reviewStatus)}</Badge></td>
                       <td className="px-4 py-4 text-slate-500">
                         {formatResultSummary({
                           testType: result.testType,

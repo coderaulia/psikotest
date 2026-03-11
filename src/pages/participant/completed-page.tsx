@@ -1,25 +1,16 @@
 import { Link, useParams } from 'react-router-dom';
 
 import { loadParticipantSession } from '@/lib/participant-session';
+import { formatTokenLabel } from '@/lib/formatters';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-
-function formatTokenLabel(value: string | null | undefined) {
-  if (!value) {
-    return '-';
-  }
-
-  return value
-    .split('_')
-    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(' ');
-}
 
 export function ParticipantCompletedPage() {
   const { token = 'assessment-token' } = useParams();
   const storedSession = loadParticipantSession(token);
   const result = storedSession?.result;
   const note = typeof result?.resultPayload.note === 'string' ? result.resultPayload.note : null;
+  const isReviewRequired = storedSession?.participantResultMode === 'review_required' && result?.reviewStatus !== 'reviewed';
 
   return (
     <Card className="mx-auto w-full max-w-3xl bg-white/82 text-center">
@@ -30,7 +21,13 @@ export function ParticipantCompletedPage() {
       <CardContent className="space-y-6">
         <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-6 text-left text-sm leading-7 text-slate-500">
           <p className="font-medium text-slate-950">{storedSession?.participant.fullName ?? 'Participant'}</p>
-          {result ? (
+          {isReviewRequired ? (
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Review status</p>
+              <p className="mt-2 text-base font-medium text-slate-950">Professional review required</p>
+              <p className="mt-2 text-sm text-slate-500">Your responses have been recorded. Final interpretation will be available after an authorized reviewer completes the assessment review.</p>
+            </div>
+          ) : result ? (
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <div className="rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Primary result</p>
@@ -50,7 +47,7 @@ export function ParticipantCompletedPage() {
           )}
         </div>
 
-        {result ? (
+        {!isReviewRequired && result ? (
           <div className="grid gap-3 text-left md:grid-cols-2">
             {result.summaries.map((summary) => (
               <div key={summary.metricKey} className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
@@ -75,4 +72,3 @@ export function ParticipantCompletedPage() {
     </Card>
   );
 }
-

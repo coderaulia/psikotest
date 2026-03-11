@@ -1,5 +1,7 @@
+import { createAuditEvent } from '../../lib/audit-log.js';
 import { HttpError } from '../../lib/http-error.js';
 import { createSubmissionAccessToken, verifySubmissionAccessToken } from '../../lib/signed-token.js';
+import type { StoredResultDetailRecord } from '../results/result.service.js';
 import { storeResult } from '../results/result.service.js';
 import { scoreAssessment } from '../scoring/score-assessment.js';
 import {
@@ -23,6 +25,30 @@ function assertSubmissionAccess(submissionId: number, submissionAccessToken: str
   return claims;
 }
 
+function sanitizeParticipantResult(
+  result: StoredResultDetailRecord,
+  participantResultMode: 'instant_summary' | 'review_required',
+) {
+  if (participantResultMode === 'instant_summary' || result.reviewStatus === 'reviewed') {
+    return result;
+  }
+
+  return {
+    ...result,
+    scoreTotal: null,
+    scoreBand: null,
+    primaryType: null,
+    secondaryType: null,
+    profileCode: null,
+    interpretationKey: null,
+    summaries: [],
+    resultPayload: {
+      reviewStatus: result.reviewStatus,
+      note: 'Your responses have been recorded. Final interpretation will be available after professional review.',
+    },
+  } satisfies StoredResultDetailRecord;
+}
+
 export async function getPublicSession(token: string) {
   const session = await findPublicSessionByToken(token);
 
@@ -39,6 +65,18 @@ export async function startPublicSubmission(token: string, participant: Particip
   if (!submission) {
     throw new HttpError(404, 'Public session not found');
   }
+
+  await createAuditEvent({
+    actorType: 'participant',
+    entityType: 'submission',
+    entityId: submission.submissionId,
+    action: 'submission.started',
+    metadata: {
+      participantId: submission.participantId,
+      testType: submission.testType,
+      token,
+    },
+  });
 
   return {
     ...submission,
@@ -95,11 +133,39 @@ export async function submitPublicSubmission(
     scoredResult,
   });
 
+  await createAuditEvent({
+    actorType: 'participant',
+    entityType: 'submission',
+    entityId: context.submissionId,
+    action: 'submission.submitted',
+    metadata: {
+      resultId: storedResult.id,
+      testType: context.testType,
+      reviewStatus: storedResult.reviewStatus,
+    },
+  });
+
+  await createAuditEvent({
+    actorType: 'system',
+    entityType: 'result',
+    entityId: storedResult.id,
+    action: 'result.scored',
+    metadata: {
+      submissionId: context.submissionId,
+      testType: context.testType,
+      reviewStatus: storedResult.reviewStatus,
+    },
+  });
+
   return {
     submissionId: context.submissionId,
     participantId: context.participantId,
     status: 'scored' as const,
     resultId: storedResult.id,
-    result: storedResult,
+    result: sanitizeParticipantResult(
+      storedResult,
+      context.definition.session.compliance.participantResultMode,
+    ),
   };
 }
+

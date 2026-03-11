@@ -24,6 +24,11 @@ const startSchema = z.object({
   employeeCode: z.string().optional(),
   department: z.string().optional(),
   position: z.string().optional(),
+  appliedPosition: z.string().optional(),
+  age: z.number().int().min(10).max(100).optional(),
+  educationLevel: z.string().max(120).optional(),
+  consentAccepted: z.literal(true),
+  consentAcceptedAt: z.string().datetime(),
 });
 
 const answersSchema = z.object({

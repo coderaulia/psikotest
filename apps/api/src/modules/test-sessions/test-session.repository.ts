@@ -3,8 +3,13 @@ import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 
 import { getDbPool } from '../../database/mysql.js';
 import type { PublicTestTypeCode } from '../public-sessions/public-session.types.js';
+import {
+  type TestSessionSettings,
+  parseTestSessionSettings,
+} from './session-settings.js';
 
 export type TestSessionStatus = 'draft' | 'active' | 'completed' | 'archived';
+export type ResultReviewStatus = 'preliminary' | 'reviewed';
 
 export interface TestSessionListFilters {
   search?: string;
@@ -29,6 +34,7 @@ export interface SessionParticipantProgressItem {
   scoreTotal: number | null;
   scoreBand: string | null;
   profileCode: string | null;
+  reviewStatus: ResultReviewStatus | null;
 }
 
 export interface TestSessionListItem {
@@ -43,6 +49,7 @@ export interface TestSessionListItem {
   startsAt: string | null;
   endsAt: string | null;
   timeLimitMinutes: number | null;
+  settings: TestSessionSettings;
 }
 
 export interface TestSessionDetail extends TestSessionListItem {
@@ -60,7 +67,19 @@ export interface CreateTestSessionInput {
   endsAt?: string | null;
   timeLimitMinutes?: number;
   status: 'draft' | 'active';
+  settings: TestSessionSettings;
   createdByAdminId: number;
+}
+
+export interface UpdateTestSessionInput {
+  title: string;
+  description?: string;
+  instructions?: string;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  timeLimitMinutes?: number;
+  status: TestSessionStatus;
+  settings: TestSessionSettings;
 }
 
 interface SessionSummaryRow extends RowDataPacket {
@@ -72,6 +91,7 @@ interface SessionSummaryRow extends RowDataPacket {
   access_token: string;
   instructions: string | null;
   time_limit_minutes: number | null;
+  settings_json: string | Record<string, unknown> | null;
   starts_at: string | Date | null;
   ends_at: string | Date | null;
   participant_count: number;
@@ -94,6 +114,7 @@ interface SessionParticipantRow extends RowDataPacket {
   score_total: number | null;
   score_band: string | null;
   profile_code: string | null;
+  result_payload_json: string | Record<string, unknown> | null;
 }
 
 function toIsoString(value: string | Date | null) {
@@ -111,6 +132,18 @@ function parseInstructions(instructions: string | null) {
     .filter(Boolean);
 }
 
+function parseReviewStatus(payload: string | Record<string, unknown> | null): ResultReviewStatus {
+  if (!payload) {
+    return 'preliminary';
+  }
+
+  const normalized = typeof payload === 'string'
+    ? (JSON.parse(payload) as Record<string, unknown>)
+    : payload;
+
+  return normalized.reviewStatus === 'reviewed' ? 'reviewed' : 'preliminary';
+}
+
 function mapSessionSummary(row: SessionSummaryRow): TestSessionListItem {
   return {
     id: row.id,
@@ -124,6 +157,7 @@ function mapSessionSummary(row: SessionSummaryRow): TestSessionListItem {
     startsAt: toIsoString(row.starts_at),
     endsAt: toIsoString(row.ends_at),
     timeLimitMinutes: row.time_limit_minutes,
+    settings: parseTestSessionSettings(row.settings_json),
   };
 }
 
@@ -149,7 +183,7 @@ function buildSummaryQuery(filters: TestSessionListFilters = {}) {
   const search = filters.search?.trim();
   if (search) {
     const like = `%${search}%`;
-    conditions.push('(ts.title LIKE ? OR COALESCE(ts.description, \'\') LIKE ? OR ts.access_token LIKE ?)');
+    conditions.push('(ts.title LIKE ? OR COALESCE(ts.description, \"\") LIKE ? OR ts.access_token LIKE ?)');
     params.push(like, like, like);
   }
 
@@ -177,6 +211,7 @@ function buildSummaryQuery(filters: TestSessionListFilters = {}) {
         ts.access_token,
         ts.instructions,
         ts.time_limit_minutes,
+        ts.settings_json,
         ts.starts_at,
         ts.ends_at,
         COUNT(DISTINCT s.participant_id) AS participant_count,
@@ -194,6 +229,7 @@ function buildSummaryQuery(filters: TestSessionListFilters = {}) {
         ts.access_token,
         ts.instructions,
         ts.time_limit_minutes,
+        ts.settings_json,
         ts.starts_at,
         ts.ends_at,
         ts.updated_at
@@ -224,6 +260,7 @@ export async function fetchTestSessionById(id: number) {
         ts.access_token,
         ts.instructions,
         ts.time_limit_minutes,
+        ts.settings_json,
         ts.starts_at,
         ts.ends_at,
         COUNT(DISTINCT s.participant_id) AS participant_count,
@@ -241,6 +278,7 @@ export async function fetchTestSessionById(id: number) {
         ts.access_token,
         ts.instructions,
         ts.time_limit_minutes,
+        ts.settings_json,
         ts.starts_at,
         ts.ends_at
       LIMIT 1
@@ -270,7 +308,8 @@ export async function fetchTestSessionById(id: number) {
         r.id AS result_id,
         r.score_total,
         r.score_band,
-        r.profile_code
+        r.profile_code,
+        r.result_payload_json
       FROM submissions s
       INNER JOIN participants p ON p.id = s.participant_id
       LEFT JOIN results r ON r.submission_id = s.id
@@ -301,6 +340,7 @@ export async function fetchTestSessionById(id: number) {
       scoreTotal: participant.score_total,
       scoreBand: participant.score_band,
       profileCode: participant.profile_code,
+      reviewStatus: participant.result_id ? parseReviewStatus(participant.result_payload_json) : null,
     } satisfies SessionParticipantProgressItem)),
   } satisfies TestSessionDetail;
 }
@@ -331,24 +371,26 @@ export async function createTestSessionRecord(input: CreateTestSessionInput) {
           description,
           access_token,
           instructions,
+          settings_json,
           time_limit_minutes,
           status,
           starts_at,
           ends_at,
           created_by_admin_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         testTypeId,
-        input.title,
-        input.description ?? null,
+        input.title.trim(),
+        input.description?.trim() || null,
         accessToken,
         input.instructions?.trim() ? input.instructions.trim() : null,
+        JSON.stringify(input.settings),
         input.timeLimitMinutes ?? null,
         input.status,
-        input.startsAt ?? null,
-        input.endsAt ?? null,
+        input.startsAt ? new Date(input.startsAt) : null,
+        input.endsAt ? new Date(input.endsAt) : null,
         input.createdByAdminId,
       ],
     );
@@ -361,4 +403,37 @@ export async function createTestSessionRecord(input: CreateTestSessionInput) {
   } finally {
     connection.release();
   }
+}
+
+export async function updateTestSessionRecord(id: number, input: UpdateTestSessionInput) {
+  const pool = getDbPool();
+  await pool.query<ResultSetHeader>(
+    `
+      UPDATE test_sessions
+      SET
+        title = ?,
+        description = ?,
+        instructions = ?,
+        settings_json = ?,
+        time_limit_minutes = ?,
+        status = ?,
+        starts_at = ?,
+        ends_at = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `,
+    [
+      input.title.trim(),
+      input.description?.trim() || null,
+      input.instructions?.trim() ? input.instructions.trim() : null,
+      JSON.stringify(input.settings),
+      input.timeLimitMinutes ?? null,
+      input.status,
+      input.startsAt ? new Date(input.startsAt) : null,
+      input.endsAt ? new Date(input.endsAt) : null,
+      id,
+    ],
+  );
+
+  return fetchTestSessionById(id);
 }

@@ -12,7 +12,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node server.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "hash:password": "node scripts/hash-password.mjs"
+    "hash:password": "node scripts/hash-password.mjs",
+    "test": "npm run build && node dist/tests/run-tests.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
