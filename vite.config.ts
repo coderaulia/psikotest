@@ -11,14 +11,14 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './apps/web/src'),
+      '@': path.resolve(__dirname, './src'),
     },
   },
   server: {
     port: 5173,
   },
   build: {
-    outDir: 'public_html',
+    outDir: 'dist',
     emptyOutDir: true,
   },
 });

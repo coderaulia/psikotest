@@ -3,13 +3,13 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["apps/web/src/*"]
+      "@/*": ["src/*"]
     },
     "jsx": "react-jsx",
     "moduleResolution": "Bundler",
     "allowImportingTsExtensions": false,
     "types": ["vite/client"]
   },
-  "include": ["src", "apps/web/src"],
+  "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

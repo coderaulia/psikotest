@@ -1,6 +1,12 @@
 # Psikotest Frontend
 
-The repository root is the frontend project for Hostinger Git import. It is a Vite + React app that builds directly into `public_html` for shared-hosting style deployment.
+The repository root is the frontend project for Hostinger Git import. The frontend source lives directly in `src/`, while the separate API source stays in `apps/api`.
+
+## Structure
+
+- `src/`: frontend app source
+- `apps/api/`: separate backend API source
+- `deploy/`: API manual-upload artifacts and SQL helpers
 
 ## Frontend deployment
 
@@ -11,16 +17,17 @@ Recommended Hostinger settings:
 - Branch: `main`
 - Node.js version: `20.x`
 - Build command: `npm run build`
-- Startup file: `server.js`
-- Start command if requested: `npm start`
+- Output directory: `dist`
 
 Required environment variable:
 
 - `VITE_API_BASE_URL=https://api.your-app-domain.com/api`
 
-## Output folder
+## Hostinger behavior
 
-The frontend build now writes directly to `public_html/` and includes an `.htaccess` SPA fallback for routes like `/admin/dashboard` and `/t/disc-batch-a`.
+Hostinger's frontend deployment expects a build output directory such as `dist/`. After build, Hostinger publishes that output to the domain web root, which is `public_html` on the server.
+
+Do not configure the repo build itself to write into `public_html` for Git deployment.
 
 ## API deployment
 
@@ -53,12 +60,3 @@ UPDATE admins
 SET password_hash = 'paste-generated-hash-here'
 WHERE email = 'admin@your-domain.com';
 ```
-
-## Local scripts
-
-- `npm run dev`
-- `npm run build`
-- `npm run preview`
-- `npm run typecheck`
-- `npm run dev:api`
-- `npm run build:api`
