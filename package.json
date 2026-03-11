@@ -2,6 +2,10 @@
   "name": "psikotest-monorepo",
   "private": true,
   "version": "0.1.0",
+  "main": "server.js",
+  "engines": {
+    "node": "20.x"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -11,9 +15,12 @@
     "dev:web": "npm run dev --workspace @psikotest/web",
     "dev:api": "npm run dev --workspace @psikotest/api",
     "build": "npm run build --workspace @psikotest/shared && npm run build --workspace @psikotest/api && npm run build --workspace @psikotest/web",
+    "build:api": "npm run build --workspace @psikotest/api",
+    "build:hostinger-api": "npm run build --workspace @psikotest/api",
     "typecheck": "npm run typecheck --workspace @psikotest/shared && npm run typecheck --workspace @psikotest/api && npm run typecheck --workspace @psikotest/web",
     "test": "node -e \"console.log('No automated tests wired yet.')\"",
-    "check": "npm run typecheck && npm run build"
+    "check": "npm run typecheck && npm run build",
+    "start": "node server.js"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

@@ -1,120 +1,76 @@
 import { HttpError } from '../../lib/http-error.js';
 import { storeResult } from '../results/result.service.js';
 import { scoreAssessment } from '../scoring/score-assessment.js';
-import { publicSessions } from './public-session.data.js';
+import {
+  createSubmissionForToken,
+  findPublicSessionByToken,
+  loadSubmissionScoringContext,
+  replaceSubmissionAnswers,
+} from './public-session.repository.js';
 import type {
   ParticipantIdentityInput,
-  PublicSessionDefinition,
   SubmissionAnswerInput,
-  SubmissionRecord,
 } from './public-session.types.js';
 
-const submissionStore = new Map<number, SubmissionRecord>();
+export async function getPublicSession(token: string) {
+  const session = await findPublicSessionByToken(token);
 
-function getSessionDefinitionByToken(token: string): PublicSessionDefinition {
-  const definition = publicSessions[token];
-
-  if (!definition) {
+  if (!session) {
     throw new HttpError(404, 'Public session not found');
   }
 
-  return definition;
+  return session;
 }
 
-function getStoredSubmission(submissionId: number) {
-  const submission = submissionStore.get(submissionId);
+export async function startPublicSubmission(token: string, participant: ParticipantIdentityInput) {
+  const submission = await createSubmissionForToken(token, participant);
 
   if (!submission) {
-    throw new HttpError(404, 'Submission not found');
+    throw new HttpError(404, 'Public session not found');
   }
 
   return submission;
 }
 
-export function getPublicSession(token: string) {
-  return getSessionDefinitionByToken(token);
+export async function saveSubmissionAnswers(submissionId: number, answers: SubmissionAnswerInput[]) {
+  return replaceSubmissionAnswers(submissionId, answers);
 }
 
-export function startPublicSubmission(token: string, participant: ParticipantIdentityInput) {
-  const definition = getSessionDefinitionByToken(token);
-  const submissionId = Date.now();
-  const participantId = submissionId;
-
-  const record: SubmissionRecord = {
-    submissionId,
-    participantId,
-    token,
-    participant,
-    testType: definition.session.testType,
-    status: 'in_progress',
-    startedAt: new Date().toISOString(),
-    submittedAt: null,
-    answers: [],
-    resultId: null,
-  };
-
-  submissionStore.set(submissionId, record);
-
-  return {
-    submissionId,
-    participantId,
-    token,
-    status: record.status,
-    testType: record.testType,
-  };
-}
-
-export function saveSubmissionAnswers(submissionId: number, answers: SubmissionAnswerInput[]) {
-  const record = getStoredSubmission(submissionId);
-
-  record.answers = answers;
-  submissionStore.set(submissionId, record);
-
-  return {
-    submissionId,
-    saved: true,
-    answerCount: answers.length,
-    status: record.status,
-  };
-}
-
-export function submitPublicSubmission(submissionId: number, answers?: SubmissionAnswerInput[]) {
-  const record = getStoredSubmission(submissionId);
-  const definition = getSessionDefinitionByToken(record.token);
-
+export async function submitPublicSubmission(submissionId: number, answers?: SubmissionAnswerInput[]) {
   if (answers && answers.length > 0) {
-    record.answers = answers;
+    await replaceSubmissionAnswers(submissionId, answers);
   }
 
-  if (record.answers.length === 0) {
+  const context = await loadSubmissionScoringContext(submissionId);
+
+  if (!context) {
+    throw new HttpError(404, 'Submission not found');
+  }
+
+  if (context.answers.length === 0) {
     throw new HttpError(400, 'Cannot submit without answers');
   }
 
   const submittedAt = new Date().toISOString();
   const scoredResult = scoreAssessment({
-    participantId: record.participantId,
-    definition,
-    answers: record.answers,
+    participantId: context.participantId,
+    definition: context.definition,
+    answers: context.answers,
   });
 
-  const storedResult = storeResult({
-    submissionId: record.submissionId,
-    participantId: record.participantId,
-    participantName: record.participant.fullName,
-    testType: record.testType,
+  const storedResult = await storeResult({
+    submissionId: context.submissionId,
+    participantId: context.participantId,
+    participantName: context.participantName,
+    testType: context.testType,
     submittedAt,
     scoredResult,
   });
 
-  record.status = 'scored';
-  record.submittedAt = submittedAt;
-  record.resultId = storedResult.id;
-  submissionStore.set(submissionId, record);
-
   return {
-    submissionId: record.submissionId,
-    participantId: record.participantId,
-    status: record.status,
+    submissionId: context.submissionId,
+    participantId: context.participantId,
+    status: 'scored' as const,
     resultId: storedResult.id,
     result: storedResult,
   };
