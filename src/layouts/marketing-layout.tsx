@@ -18,9 +18,6 @@ export function MarketingLayout() {
             <Link to="/signup" className="rounded-full bg-slate-950 px-4 py-2 text-white shadow-sm transition hover:bg-slate-900">
               Sign Up
             </Link>
-            <Link to="/admin/login" className="rounded-full border border-slate-200 px-4 py-2 text-slate-950">
-              Webmaster Login
-            </Link>
           </nav>
         </div>
       </header>
