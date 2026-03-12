@@ -52,6 +52,7 @@ interface FakeCustomerAssessment {
   onboarding_status: 'draft' | 'ready';
   plan_status: 'trial' | 'upgraded';
   created_at: string;
+  updated_at?: string;
 }
 
 interface FakeQuestion {
@@ -173,6 +174,31 @@ export class FakeDbPool implements DbPoolLike {
     return new FakeConnection(this) as unknown as mysql.PoolConnection;
   }
 
+  private buildCustomerAssessmentRow(assessment: FakeCustomerAssessment) {
+    const session = this.state.sessions.find((item) => item.id === assessment.test_session_id);
+    const testType = session ? this.state.testTypes.find((item) => item.id === session.test_type_id) : null;
+
+    if (!session || !testType) {
+      return null;
+    }
+
+    return {
+      assessment_id: assessment.id,
+      session_id: session.id,
+      title: session.title,
+      description: session.description,
+      organization_name_snapshot: assessment.organization_name_snapshot,
+      test_type: testType.code,
+      time_limit_minutes: session.time_limit_minutes,
+      settings_json: session.settings_json,
+      instructions: session.instructions,
+      session_status: session.status,
+      plan_status: assessment.plan_status,
+      access_token: session.access_token,
+      created_at: assessment.created_at,
+    };
+  }
+
   async query(sql: string, values?: unknown[]) {
     const normalized = normalizeSql(sql);
     const params = (values ?? []) as unknown[];
@@ -261,7 +287,6 @@ export class FakeDbPool implements DbPoolLike {
 
     if (normalized.startsWith('insert into test_sessions')) {
       const now = new Date().toISOString();
-      const isCustomerInsert = normalized.includes("values (?, ?, ?, ?, ?, ?, ?, 'draft', null, null, ?)");
       const session: FakeSession = {
         id: this.nextSessionId++,
         test_type_id: Number(params[0]),
@@ -271,8 +296,8 @@ export class FakeDbPool implements DbPoolLike {
         instructions: (params[4] as string | null) ?? null,
         settings_json: String(params[5] ?? '{}'),
         time_limit_minutes: (params[6] as number | null) ?? null,
-        status: isCustomerInsert ? 'draft' : (params[7] as FakeSession['status']),
-        created_by_admin_id: Number(isCustomerInsert ? params[7] : params[10] ?? 0),
+        status: 'draft',
+        created_by_admin_id: Number(params[7] ?? 0),
         created_at: now,
       };
       this.state.sessions.push(session);
@@ -280,6 +305,7 @@ export class FakeDbPool implements DbPoolLike {
     }
 
     if (normalized.startsWith('insert into customer_assessments')) {
+      const now = new Date().toISOString();
       const assessment: FakeCustomerAssessment = {
         id: this.nextCustomerAssessmentId++,
         customer_account_id: Number(params[0]),
@@ -287,58 +313,69 @@ export class FakeDbPool implements DbPoolLike {
         organization_name_snapshot: String(params[2] ?? ''),
         onboarding_status: 'ready',
         plan_status: 'trial',
-        created_at: new Date().toISOString(),
+        created_at: now,
+        updated_at: now,
       };
       this.state.customerAssessments.push(assessment);
       return [{ insertId: assessment.id }, []] as unknown as [any, any];
     }
 
-    if (normalized.includes('from customer_assessments ca inner join test_sessions ts on ts.id = ca.test_session_id inner join test_types tt on tt.id = ts.test_type_id where ca.customer_account_id = ? and ca.test_session_id = ?')) {
+    if (normalized.startsWith('select ts.id as session_id from customer_assessments ca inner join test_sessions ts on ts.id = ca.test_session_id where ca.customer_account_id = ? and ca.id = ? limit 1')) {
       const accountId = Number(params[0]);
-      const sessionId = Number(params[1]);
-      const assessment = this.state.customerAssessments.find((item) => item.customer_account_id === accountId && item.test_session_id === sessionId);
+      const assessmentId = Number(params[1]);
+      const assessment = this.state.customerAssessments.find((item) => item.customer_account_id === accountId && item.id === assessmentId);
       if (!assessment) {
         return [[], []] as unknown as [any, any];
       }
-      const session = this.state.sessions.find((item) => item.id === assessment.test_session_id)!;
-      const testType = this.state.testTypes.find((item) => item.id === session.test_type_id)!;
-      return [[{
-        assessment_id: assessment.id,
-        session_id: session.id,
-        title: session.title,
-        organization_name_snapshot: assessment.organization_name_snapshot,
-        test_type: testType.code,
-        time_limit_minutes: session.time_limit_minutes,
-        settings_json: session.settings_json,
-        session_status: session.status,
-        plan_status: assessment.plan_status,
-        access_token: session.access_token,
-        created_at: assessment.created_at,
-      }], []] as unknown as [any, any];
+      return [[{ session_id: assessment.test_session_id }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('update customer_assessments set plan_status = \'upgraded\', updated_at = current_timestamp where customer_account_id = ? and id = ?')) {
+      const accountId = Number(params[0]);
+      const assessmentId = Number(params[1]);
+      const assessment = this.state.customerAssessments.find((item) => item.customer_account_id === accountId && item.id === assessmentId);
+      if (assessment) {
+        assessment.plan_status = 'upgraded';
+        assessment.updated_at = new Date().toISOString();
+      }
+      return [[{ affectedRows: assessment ? 1 : 0 }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('update test_sessions set status = \'active\', updated_at = current_timestamp where id = ? and status = \'draft\'')) {
+      const sessionId = Number(params[0]);
+      const session = this.state.sessions.find((item) => item.id === sessionId && item.status === 'draft');
+      if (session) {
+        session.status = 'active';
+      }
+      return [[{ affectedRows: session ? 1 : 0 }], []] as unknown as [any, any];
+    }
+
+    if (normalized.includes('from customer_assessments ca inner join test_sessions ts on ts.id = ca.test_session_id inner join test_types tt on tt.id = ts.test_type_id where ca.customer_account_id = ? and ca.test_session_id = ? limit 1')) {
+      const accountId = Number(params[0]);
+      const sessionId = Number(params[1]);
+      const assessment = this.state.customerAssessments.find((item) => item.customer_account_id === accountId && item.test_session_id === sessionId);
+      const row = assessment ? this.buildCustomerAssessmentRow(assessment) : null;
+      return [[row].filter(Boolean), []] as unknown as [any, any];
+    }
+
+    if (normalized.includes('from customer_assessments ca inner join test_sessions ts on ts.id = ca.test_session_id inner join test_types tt on tt.id = ts.test_type_id where ca.customer_account_id = ? and ca.id = ? limit 1')) {
+      const accountId = Number(params[0]);
+      const assessmentId = Number(params[1]);
+      const assessment = this.state.customerAssessments.find((item) => item.customer_account_id === accountId && item.id === assessmentId);
+      const row = assessment ? this.buildCustomerAssessmentRow(assessment) : null;
+      return [[row].filter(Boolean), []] as unknown as [any, any];
     }
 
     if (normalized.includes('from customer_assessments ca inner join test_sessions ts on ts.id = ca.test_session_id inner join test_types tt on tt.id = ts.test_type_id where ca.customer_account_id = ? order by ca.created_at desc')) {
       const accountId = Number(params[0]);
       const rows = this.state.customerAssessments
         .filter((item) => item.customer_account_id === accountId)
-        .sort((left, right) => right.id - left.id)
-        .map((assessment) => {
-          const session = this.state.sessions.find((item) => item.id === assessment.test_session_id)!;
-          const testType = this.state.testTypes.find((item) => item.id === session.test_type_id)!;
-          return {
-            assessment_id: assessment.id,
-            session_id: session.id,
-            title: session.title,
-            organization_name_snapshot: assessment.organization_name_snapshot,
-            test_type: testType.code,
-            time_limit_minutes: session.time_limit_minutes,
-            settings_json: session.settings_json,
-            session_status: session.status,
-            plan_status: assessment.plan_status,
-            access_token: session.access_token,
-            created_at: assessment.created_at,
-          };
-        });
+        .sort((left, right) => {
+          const timeDiff = new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+          return timeDiff || right.id - left.id;
+        })
+        .map((assessment) => this.buildCustomerAssessmentRow(assessment))
+        .filter(Boolean);
       return [rows, []] as unknown as [any, any];
     }
 

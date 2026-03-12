@@ -15,6 +15,7 @@ import { SettingsPage } from '@/pages/admin/settings-page';
 import { TestSessionDetailPage } from '@/pages/admin/test-session-detail-page';
 import { TestSessionsPage } from '@/pages/admin/test-sessions-page';
 import { CustomerLoginPage } from '@/pages/customer/customer-login-page';
+import { CustomerAssessmentDetailPage } from '@/pages/customer/customer-assessment-detail-page';
 import { CustomerOnboardingPage } from '@/pages/customer/customer-onboarding-page';
 import { CustomerSignupPage } from '@/pages/customer/customer-signup-page';
 import { CustomerWorkspacePage } from '@/pages/customer/customer-workspace-page';
@@ -50,6 +51,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <CustomerWorkspacePage /> },
       { path: 'create', element: <CustomerOnboardingPage /> },
+      { path: 'assessments/:assessmentId', element: <CustomerAssessmentDetailPage /> },
     ],
   },
   {
@@ -84,3 +86,5 @@ export const router = createBrowserRouter([
     element: <NotFoundPage />,
   },
 ]);
+
+

@@ -237,6 +237,35 @@ export async function runApiIntegrationTests() {
     assert.equal((onboardingListPayload?.items as unknown[]).length, 1);
     assert.equal(state.auditLogs.some((item) => item.action === 'customer_assessment.created'), true);
 
+    const createdAssessmentId = Number(onboardingCreatePayload?.assessmentId ?? 0);
+    assert.ok(createdAssessmentId > 0);
+
+    const onboardingDetailResponse = await fetch(`${baseUrl}/api/site-onboarding/assessments/${createdAssessmentId}`, {
+      headers: {
+        Authorization: `Bearer ${customerToken}`,
+      },
+    });
+    assert.equal(onboardingDetailResponse.status, 200);
+    const onboardingDetailPayload = await readJson(onboardingDetailResponse);
+    assert.equal(onboardingDetailPayload?.description, 'Draft CUSTOM assessment for Psych Lab (research).');
+    assert.equal(Array.isArray(onboardingDetailPayload?.instructions), true);
+    assert.equal(onboardingDetailPayload?.canActivateSharing, true);
+
+    const activateAssessmentResponse = await fetch(`${baseUrl}/api/site-onboarding/assessments/${createdAssessmentId}/activate`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${customerToken}`,
+      },
+    });
+    assert.equal(activateAssessmentResponse.status, 200);
+    const activateAssessmentPayload = await readJson(activateAssessmentResponse);
+    assert.equal(activateAssessmentPayload?.sessionStatus, 'active');
+    assert.equal(activateAssessmentPayload?.planStatus, 'upgraded');
+    assert.equal(activateAssessmentPayload?.canActivateSharing, false);
+    assert.equal(state.customerAssessments[0]?.plan_status, 'upgraded');
+    assert.equal(state.sessions.some((item) => item.title === 'Study Pilot A' && item.status === 'active'), true);
+    assert.equal(state.auditLogs.some((item) => item.action === 'customer_assessment.activated'), true);
+
     const sessionResponse = await fetch(`${baseUrl}/api/public/session/disc-batch-a`);
     assert.equal(sessionResponse.status, 200);
     const sessionPayload = await readJson(sessionResponse);
@@ -274,7 +303,7 @@ export async function runApiIntegrationTests() {
     assert.equal(typeof startPayload?.submissionAccessToken, 'string');
     assert.equal(state.participants.length, 2);
     assert.equal(state.submissions.length, 2);
-    assert.equal(state.auditLogs.length, 2);
+    assert.equal(state.auditLogs.length, 3);
     assert.equal(state.auditLogs.at(-1)?.action, 'submission.started');
 
     const answerResponse = await fetch(`${baseUrl}/api/public/submissions/500/answers`, {
@@ -302,6 +331,8 @@ export async function runApiIntegrationTests() {
     setDbPoolForTests(null);
   }
 }
+
+
 
 
 

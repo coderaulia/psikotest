@@ -3,7 +3,12 @@ import { z } from 'zod';
 
 import { asyncHandler } from '../../lib/async-handler.js';
 import { HttpError } from '../../lib/http-error.js';
-import { createCustomerAssessment, listCustomerAssessmentItems } from './site-onboarding.service.js';
+import {
+  activateCustomerAssessment,
+  createCustomerAssessment,
+  getCustomerAssessmentDetail,
+  listCustomerAssessmentItems,
+} from './site-onboarding.service.js';
 
 const createAssessmentSchema = z.object({
   testType: z.enum(['iq', 'disc', 'workload', 'custom']),
@@ -14,6 +19,10 @@ const createAssessmentSchema = z.object({
   timeLimitMinutes: z.coerce.number().int().positive().max(180).nullable().optional(),
   participantLimit: z.coerce.number().int().positive().max(50000).nullable().optional(),
   resultVisibility: z.enum(['participant_summary', 'review_required']),
+});
+
+const paramsSchema = z.object({
+  id: z.coerce.number().int().positive(),
 });
 
 export const siteOnboardingRoutes = Router();
@@ -27,6 +36,24 @@ siteOnboardingRoutes.get(
 
     const items = await listCustomerAssessmentItems(request.customerSession.accountId);
     response.json({ items });
+  }),
+);
+
+siteOnboardingRoutes.get(
+  '/assessments/:id',
+  asyncHandler(async (request, response) => {
+    if (!request.customerSession) {
+      throw new HttpError(401, 'Customer session is required');
+    }
+
+    const { id } = paramsSchema.parse(request.params);
+    const detail = await getCustomerAssessmentDetail(request.customerSession.accountId, id);
+
+    if (!detail) {
+      throw new HttpError(404, 'Assessment draft not found');
+    }
+
+    response.json(detail);
   }),
 );
 
@@ -51,5 +78,18 @@ siteOnboardingRoutes.post(
     });
 
     response.status(201).json(assessment);
+  }),
+);
+
+siteOnboardingRoutes.post(
+  '/assessments/:id/activate',
+  asyncHandler(async (request, response) => {
+    if (!request.customerSession) {
+      throw new HttpError(401, 'Customer session is required');
+    }
+
+    const { id } = paramsSchema.parse(request.params);
+    const assessment = await activateCustomerAssessment(request.customerSession.accountId, id);
+    response.json(assessment);
   }),
 );

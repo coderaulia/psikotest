@@ -332,8 +332,9 @@ export function CustomerOnboardingPage() {
                       Upgrade to share
                     </Button>
                   </div>
-                  <div className="text-sm text-slate-500">
-                    <Link to="/workspace" className="font-medium text-slate-950">Return to workspace</Link>
+                  <div className="flex flex-col gap-3 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                    <Link to={`/workspace/assessments/${createdAssessment.assessmentId}`} className="font-medium text-slate-950">Review draft before sharing</Link>
+                    <Link to="/workspace" className="text-slate-500 underline-offset-4 hover:text-slate-950 hover:underline">Return to workspace</Link>
                   </div>
                 </div>
               ) : null}
@@ -393,3 +394,4 @@ export function CustomerOnboardingPage() {
     </div>
   );
 }
+

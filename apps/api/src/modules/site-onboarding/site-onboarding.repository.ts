@@ -3,7 +3,13 @@ import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 
 import { env } from '../../config/env.js';
 import { getDbPool } from '../../database/mysql.js';
-import { parseTestSessionSettings, type AssessmentPurpose, type AdministrationMode, type InterpretationMode, type TestSessionSettings } from '../test-sessions/session-settings.js';
+import {
+  parseTestSessionSettings,
+  type AssessmentPurpose,
+  type AdministrationMode,
+  type InterpretationMode,
+  type TestSessionSettings,
+} from '../test-sessions/session-settings.js';
 import type { PublicTestTypeCode } from '../public-sessions/public-session.types.js';
 
 export type CustomerAccountType = 'business' | 'researcher';
@@ -28,6 +34,16 @@ export interface CustomerAssessmentListItem {
   createdAt: string;
 }
 
+export interface CustomerAssessmentDetail extends CustomerAssessmentListItem {
+  description: string | null;
+  instructions: string[];
+  consentStatement: string;
+  privacyStatement: string;
+  contactPerson: string;
+  interpretationMode: InterpretationMode;
+  canActivateSharing: boolean;
+}
+
 interface PlatformAdminRow extends RowDataPacket {
   id: number;
 }
@@ -40,10 +56,12 @@ interface CustomerAssessmentRow extends RowDataPacket {
   assessment_id: number;
   session_id: number;
   title: string;
+  description: string | null;
   organization_name_snapshot: string;
   test_type: PublicTestTypeCode;
   time_limit_minutes: number | null;
   settings_json: string | Record<string, unknown> | null;
+  instructions: string | null;
   session_status: 'draft' | 'active' | 'completed' | 'archived';
   plan_status: CustomerAssessmentPlanStatus;
   access_token: string;
@@ -71,6 +89,13 @@ function toIsoString(value: string | Date | null) {
   }
 
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function parseInstructions(value: string | null) {
+  return (value ?? '')
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function getPreviewDemoToken(testType: PublicTestTypeCode) {
@@ -113,6 +138,45 @@ function mapAssessmentRow(row: CustomerAssessmentRow): CustomerAssessmentListIte
     previewDemoLink: `${env.APP_ORIGIN}/t/${getPreviewDemoToken(row.test_type)}`,
     createdAt: toIsoString(row.created_at),
   };
+}
+
+function mapAssessmentDetailRow(row: CustomerAssessmentRow): CustomerAssessmentDetail {
+  const settings = parseTestSessionSettings(row.settings_json);
+  const base = mapAssessmentRow(row);
+
+  return {
+    ...base,
+    description: row.description,
+    instructions: parseInstructions(row.instructions),
+    consentStatement: settings.consentStatement,
+    privacyStatement: settings.privacyStatement,
+    contactPerson: settings.contactPerson,
+    interpretationMode: settings.interpretationMode,
+    canActivateSharing: base.sessionStatus === 'draft',
+  };
+}
+
+function getAssessmentSelectSql(whereClause: string) {
+  return `
+      SELECT
+        ca.id AS assessment_id,
+        ts.id AS session_id,
+        ts.title,
+        ts.description,
+        ca.organization_name_snapshot,
+        tt.code AS test_type,
+        ts.time_limit_minutes,
+        ts.settings_json,
+        ts.instructions,
+        ts.status AS session_status,
+        ca.plan_status,
+        ts.access_token,
+        ca.created_at
+      FROM customer_assessments ca
+      INNER JOIN test_sessions ts ON ts.id = ca.test_session_id
+      INNER JOIN test_types tt ON tt.id = ts.test_type_id
+      ${whereClause}
+    `;
 }
 
 export async function resolvePlatformAdminId() {
@@ -230,26 +294,7 @@ export async function insertCustomerAssessment(input: {
 export async function fetchCustomerAssessmentBySessionId(customerAccountId: number, sessionId: number) {
   const pool = getDbPool();
   const [rows] = await pool.query<CustomerAssessmentRow[]>(
-    `
-      SELECT
-        ca.id AS assessment_id,
-        ts.id AS session_id,
-        ts.title,
-        ca.organization_name_snapshot,
-        tt.code AS test_type,
-        ts.time_limit_minutes,
-        ts.settings_json,
-        ts.status AS session_status,
-        ca.plan_status,
-        ts.access_token,
-        ca.created_at
-      FROM customer_assessments ca
-      INNER JOIN test_sessions ts ON ts.id = ca.test_session_id
-      INNER JOIN test_types tt ON tt.id = ts.test_type_id
-      WHERE ca.customer_account_id = ?
-        AND ca.test_session_id = ?
-      LIMIT 1
-    `,
+    `${getAssessmentSelectSql('WHERE ca.customer_account_id = ? AND ca.test_session_id = ? LIMIT 1')}`,
     [customerAccountId, sessionId],
   );
 
@@ -257,30 +302,78 @@ export async function fetchCustomerAssessmentBySessionId(customerAccountId: numb
   return row ? mapAssessmentRow(row) : null;
 }
 
+export async function fetchCustomerAssessmentById(customerAccountId: number, assessmentId: number) {
+  const pool = getDbPool();
+  const [rows] = await pool.query<CustomerAssessmentRow[]>(
+    `${getAssessmentSelectSql('WHERE ca.customer_account_id = ? AND ca.id = ? LIMIT 1')}`,
+    [customerAccountId, assessmentId],
+  );
+
+  const row = rows[0];
+  return row ? mapAssessmentDetailRow(row) : null;
+}
+
 export async function fetchCustomerAssessments(customerAccountId: number) {
   const pool = getDbPool();
   const [rows] = await pool.query<CustomerAssessmentRow[]>(
-    `
-      SELECT
-        ca.id AS assessment_id,
-        ts.id AS session_id,
-        ts.title,
-        ca.organization_name_snapshot,
-        tt.code AS test_type,
-        ts.time_limit_minutes,
-        ts.settings_json,
-        ts.status AS session_status,
-        ca.plan_status,
-        ts.access_token,
-        ca.created_at
-      FROM customer_assessments ca
-      INNER JOIN test_sessions ts ON ts.id = ca.test_session_id
-      INNER JOIN test_types tt ON tt.id = ts.test_type_id
-      WHERE ca.customer_account_id = ?
-      ORDER BY ca.created_at DESC, ca.id DESC
-    `,
+    `${getAssessmentSelectSql('WHERE ca.customer_account_id = ? ORDER BY ca.created_at DESC, ca.id DESC')}`,
     [customerAccountId],
   );
 
   return rows.map(mapAssessmentRow);
+}
+
+export async function activateCustomerAssessmentRecord(customerAccountId: number, assessmentId: number) {
+  const pool = getDbPool();
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [existingRows] = await connection.query<RowDataPacket[]>(
+      `
+        SELECT ts.id AS session_id
+        FROM customer_assessments ca
+        INNER JOIN test_sessions ts ON ts.id = ca.test_session_id
+        WHERE ca.customer_account_id = ?
+          AND ca.id = ?
+        LIMIT 1
+      `,
+      [customerAccountId, assessmentId],
+    );
+
+    const sessionId = Number(existingRows[0]?.session_id ?? 0);
+    if (!sessionId) {
+      await connection.rollback();
+      return null;
+    }
+
+    await connection.query<ResultSetHeader>(
+      `
+        UPDATE customer_assessments
+        SET plan_status = 'upgraded', updated_at = CURRENT_TIMESTAMP
+        WHERE customer_account_id = ?
+          AND id = ?
+      `,
+      [customerAccountId, assessmentId],
+    );
+
+    await connection.query<ResultSetHeader>(
+      `
+        UPDATE test_sessions
+        SET status = 'active', updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND status = 'draft'
+      `,
+      [sessionId],
+    );
+
+    await connection.commit();
+    return fetchCustomerAssessmentById(customerAccountId, assessmentId);
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }

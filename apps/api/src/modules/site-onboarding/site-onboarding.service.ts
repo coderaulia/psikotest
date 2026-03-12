@@ -10,6 +10,8 @@ import {
 } from '../test-sessions/session-settings.js';
 import type { PublicTestTypeCode } from '../public-sessions/public-session.types.js';
 import {
+  activateCustomerAssessmentRecord,
+  fetchCustomerAssessmentById,
   fetchCustomerAssessmentBySessionId,
   fetchCustomerAssessments,
   insertCustomerAssessment,
@@ -100,6 +102,10 @@ export async function listCustomerAssessmentItems(customerAccountId: number) {
   return fetchCustomerAssessments(customerAccountId);
 }
 
+export async function getCustomerAssessmentDetail(customerAccountId: number, assessmentId: number) {
+  return fetchCustomerAssessmentById(customerAccountId, assessmentId);
+}
+
 export async function createCustomerAssessment(input: {
   customerAccountId: number;
   testType: PublicTestTypeCode;
@@ -182,4 +188,31 @@ export async function createCustomerAssessment(input: {
   return assessment;
 }
 
+export async function activateCustomerAssessment(customerAccountId: number, assessmentId: number) {
+  const account = await findCustomerById(customerAccountId);
 
+  if (!account || account.status !== 'active') {
+    throw new HttpError(401, 'Customer account is not active');
+  }
+
+  const assessment = await activateCustomerAssessmentRecord(customerAccountId, assessmentId);
+
+  if (!assessment) {
+    throw new HttpError(404, 'Assessment draft not found');
+  }
+
+  await createAuditEvent({
+    actorType: 'system',
+    entityType: 'customer_assessment',
+    entityId: assessmentId,
+    action: 'customer_assessment.activated',
+    metadata: {
+      customerAccountId,
+      sessionId: assessment.sessionId,
+      participantLink: assessment.participantLink,
+      sessionStatus: assessment.sessionStatus,
+    },
+  });
+
+  return assessment;
+}

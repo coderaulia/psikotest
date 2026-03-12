@@ -151,6 +151,16 @@ export interface CreateCustomerAssessmentPayload {
   resultVisibility: CustomerAssessmentResultVisibility;
 }
 
+export interface CustomerAssessmentDetail extends CustomerAssessmentItem {
+  description: string | null;
+  instructions: string[];
+  consentStatement: string;
+  privacyStatement: string;
+  contactPerson: string;
+  interpretationMode: InterpretationMode;
+  canActivateSharing: boolean;
+}
+
 export interface DashboardSummaryCard {
   label: string;
   value: string;
@@ -430,4 +440,5 @@ export interface SettingsOverviewResponse {
   sessionDefaults: SessionDefaultsSettings;
   auditFeed: AuditFeedItem[];
 }
+
 
