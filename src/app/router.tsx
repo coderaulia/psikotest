@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 import { AdminLayout } from '@/layouts/admin-layout';
+import { CustomerLayout } from '@/layouts/customer-layout';
 import { MarketingLayout } from '@/layouts/marketing-layout';
 import { ParticipantLayout } from '@/layouts/participant-layout';
 import { AdminLoginPage } from '@/pages/admin/admin-login-page';
@@ -10,9 +11,13 @@ import { QuestionBankPage } from '@/pages/admin/question-bank-page';
 import { ReportsPage } from '@/pages/admin/reports-page';
 import { ResultDetailPage } from '@/pages/admin/result-detail-page';
 import { ResultsPage } from '@/pages/admin/results-page';
+import { SettingsPage } from '@/pages/admin/settings-page';
 import { TestSessionDetailPage } from '@/pages/admin/test-session-detail-page';
 import { TestSessionsPage } from '@/pages/admin/test-sessions-page';
-import { SettingsPage } from '@/pages/admin/settings-page';
+import { CustomerLoginPage } from '@/pages/customer/customer-login-page';
+import { CustomerOnboardingPage } from '@/pages/customer/customer-onboarding-page';
+import { CustomerSignupPage } from '@/pages/customer/customer-signup-page';
+import { CustomerWorkspacePage } from '@/pages/customer/customer-workspace-page';
 import { LandingPage } from '@/pages/landing-page';
 import { NotFoundPage } from '@/pages/not-found-page';
 import { ParticipantCompletedPage } from '@/pages/participant/completed-page';
@@ -28,8 +33,24 @@ export const router = createBrowserRouter([
     children: [{ index: true, element: <LandingPage /> }],
   },
   {
+    path: '/signup',
+    element: <CustomerSignupPage />,
+  },
+  {
+    path: '/login',
+    element: <CustomerLoginPage />,
+  },
+  {
     path: '/admin/login',
     element: <AdminLoginPage />,
+  },
+  {
+    path: '/workspace',
+    element: <CustomerLayout />,
+    children: [
+      { index: true, element: <CustomerWorkspacePage /> },
+      { path: 'create', element: <CustomerOnboardingPage /> },
+    ],
   },
   {
     path: '/admin',
@@ -63,4 +84,3 @@ export const router = createBrowserRouter([
     element: <NotFoundPage />,
   },
 ]);
-

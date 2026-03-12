@@ -10,6 +10,8 @@ import {
   updateSessionDefaults,
 } from './settings.service.js';
 
+const participantLimitSchema = z.coerce.number().int().positive().max(50000).nullable().optional();
+
 const sessionDefaultsSchema = z.object({
   timeLimitMinutes: z.coerce.number().int().positive().max(180),
   descriptionTemplate: z.string().min(10).max(1000),
@@ -18,6 +20,7 @@ const sessionDefaultsSchema = z.object({
     assessmentPurpose: z.enum(['recruitment', 'employee_development', 'academic_evaluation', 'research', 'self_assessment']),
     administrationMode: z.enum(['supervised', 'remote_unsupervised']),
     interpretationMode: z.enum(['self_assessment', 'professional_review']),
+    participantLimit: participantLimitSchema,
     consentStatement: z.string().min(20).max(2000),
     privacyStatement: z.string().min(20).max(2000),
     contactPerson: z.string().min(3).max(255),
@@ -73,7 +76,14 @@ settingsRoutes.patch(
     }
 
     const payload = sessionDefaultsSchema.parse(request.body);
-    const defaults = await updateSessionDefaults(payload);
+    const normalizedPayload = {
+      ...payload,
+      settings: {
+        ...payload.settings,
+        participantLimit: payload.settings.participantLimit ?? null,
+      },
+    };
+    const defaults = await updateSessionDefaults(normalizedPayload);
 
     await createAuditEvent({
       actorType: 'admin',
@@ -84,6 +94,7 @@ settingsRoutes.patch(
       metadata: {
         assessmentPurpose: defaults.settings.assessmentPurpose,
         interpretationMode: defaults.settings.interpretationMode,
+        participantLimit: defaults.settings.participantLimit ?? null,
       },
     });
 

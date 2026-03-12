@@ -37,7 +37,23 @@ export function formatTestTypeLabel(value: string | null | undefined) {
     return '-';
   }
 
-  return value.toUpperCase();
+  if (value === 'iq') {
+    return 'IQ';
+  }
+
+  if (value === 'disc') {
+    return 'DISC';
+  }
+
+  if (value === 'workload') {
+    return 'Workload';
+  }
+
+  if (value === 'custom') {
+    return 'Custom Research';
+  }
+
+  return formatTokenLabel(value);
 }
 
 export function formatStatusLabel(value: string | null | undefined) {
@@ -62,11 +78,7 @@ export function formatResultHeadline(input: {
     }
   }
 
-  if (input.testType === 'iq' && input.scoreTotal != null) {
-    return String(input.scoreTotal);
-  }
-
-  if (input.testType === 'workload' && input.scoreTotal != null) {
+  if ((input.testType === 'iq' || input.testType === 'workload' || input.testType === 'custom') && input.scoreTotal != null) {
     return String(input.scoreTotal);
   }
 
@@ -85,6 +97,10 @@ export function formatResultSummary(input: {
     }
 
     return 'DISC result available';
+  }
+
+  if (input.testType === 'custom') {
+    return input.scoreBand ? formatTokenLabel(input.scoreBand) : 'Research questionnaire completed';
   }
 
   if (input.scoreBand) {

@@ -10,9 +10,11 @@ import {
   updateResultReviewStatus,
 } from './result.service.js';
 
+const testTypeSchema = z.enum(['iq', 'disc', 'workload', 'custom']);
+
 const querySchema = z.object({
   search: z.string().optional(),
-  testType: z.enum(['iq', 'disc', 'workload']).optional(),
+  testType: testTypeSchema.optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
 });
@@ -75,4 +77,3 @@ resultRoutes.patch(
     response.json(result);
   }),
 );
-

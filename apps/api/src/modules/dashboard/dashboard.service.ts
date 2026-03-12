@@ -7,7 +7,7 @@ import {
 } from './dashboard.repository.js';
 
 function formatRecentSummary(item: {
-  testType: 'iq' | 'disc' | 'workload';
+  testType: 'iq' | 'disc' | 'workload' | 'custom';
   primaryType: string | null;
   secondaryType: string | null;
   scoreBand: string | null;
@@ -25,7 +25,19 @@ function formatRecentSummary(item: {
     return item.scoreBand ? `${item.scoreBand.replace(/_/g, ' ')} band` : 'IQ result available';
   }
 
-  return item.scoreBand ? item.scoreBand.replace(/_/g, ' ') : 'Workload result available';
+  if (item.testType === 'workload') {
+    return item.scoreBand ? item.scoreBand.replace(/_/g, ' ') : 'Workload result available';
+  }
+
+  return item.scoreBand ? item.scoreBand.replace(/_/g, ' ') : 'Research questionnaire completed';
+}
+
+function formatDashboardTestType(testType: 'iq' | 'disc' | 'workload' | 'custom') {
+  if (testType === 'custom') {
+    return 'Custom Research';
+  }
+
+  return testType.toUpperCase();
 }
 
 export async function getDashboardSummary() {
@@ -71,7 +83,7 @@ export async function getDashboardSummary() {
     liveSessions: liveSessions.map((session) => ({
       id: session.id,
       title: session.title,
-      testType: session.testType.toUpperCase(),
+      testType: formatDashboardTestType(session.testType),
       status: session.status,
       participants: session.participantCount,
       completed: session.completedCount,
@@ -79,7 +91,7 @@ export async function getDashboardSummary() {
     recentParticipants: recentResults.map((result) => ({
       id: result.id,
       fullName: result.participantName,
-      testType: result.testType.toUpperCase(),
+      testType: formatDashboardTestType(result.testType),
       completedAt: result.submittedAt,
       summary: formatRecentSummary(result),
     })),

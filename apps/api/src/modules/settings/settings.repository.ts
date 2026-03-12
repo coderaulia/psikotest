@@ -62,6 +62,7 @@ function getDefaultSessionDefaults() {
       assessmentPurpose: defaults.assessmentPurpose,
       administrationMode: defaults.administrationMode,
       interpretationMode: defaults.interpretationMode,
+      participantLimit: defaults.participantLimit,
       consentStatement: defaults.consentStatement,
       privacyStatement: defaults.privacyStatement,
       contactPerson: defaults.contactPerson,
@@ -142,6 +143,7 @@ export async function fetchSessionDefaults() {
       assessmentPurpose: settings.assessmentPurpose,
       administrationMode: settings.administrationMode,
       interpretationMode: settings.interpretationMode,
+      participantLimit: settings.participantLimit,
       consentStatement: settings.consentStatement,
       privacyStatement: settings.privacyStatement,
       contactPerson: settings.contactPerson,
@@ -157,6 +159,7 @@ export async function saveSessionDefaults(input: {
     assessmentPurpose: 'recruitment' | 'employee_development' | 'academic_evaluation' | 'research' | 'self_assessment';
     administrationMode: 'supervised' | 'remote_unsupervised';
     interpretationMode: 'self_assessment' | 'professional_review';
+    participantLimit: number | null;
     consentStatement: string;
     privacyStatement: string;
     contactPerson: string;

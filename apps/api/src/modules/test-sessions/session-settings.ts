@@ -13,6 +13,7 @@ export interface TestSessionSettings {
   assessmentPurpose: AssessmentPurpose;
   administrationMode: AdministrationMode;
   interpretationMode: InterpretationMode;
+  participantLimit: number | null;
   consentStatement: string;
   privacyStatement: string;
   contactPerson: string;
@@ -20,19 +21,41 @@ export interface TestSessionSettings {
 
 const defaultConsentStatement =
   'I agree to participate in this psychological assessment and understand that my responses will be used for the stated assessment purpose.';
+const defaultResearchConsentStatement =
+  'I agree to participate in this psychological research questionnaire and understand that my responses will be collected for academic or research analysis.';
 const defaultPrivacyStatement =
   'Your personal information and responses will be treated as confidential assessment data and accessed only by authorized reviewers.';
+const defaultResearchPrivacyStatement =
+  'Your responses will be stored as confidential research data and used only by authorized lecturers, students, or research supervisors.';
 const defaultContactPerson = 'Assessment administrator';
+const defaultResearchContactPerson = 'Research coordinator';
 
-export function getDefaultTestSessionSettings(): TestSessionSettings {
-  return {
+export function getDefaultTestSessionSettings(overrides: Partial<TestSessionSettings> = {}): TestSessionSettings {
+  const base: TestSessionSettings = {
     assessmentPurpose: 'self_assessment',
     administrationMode: 'remote_unsupervised',
     interpretationMode: 'self_assessment',
+    participantLimit: null,
     consentStatement: defaultConsentStatement,
     privacyStatement: defaultPrivacyStatement,
     contactPerson: defaultContactPerson,
   };
+
+  return {
+    ...base,
+    ...overrides,
+  };
+}
+
+export function getDefaultResearchSessionSettings(): TestSessionSettings {
+  return getDefaultTestSessionSettings({
+    assessmentPurpose: 'research',
+    interpretationMode: 'self_assessment',
+    participantLimit: 100,
+    consentStatement: defaultResearchConsentStatement,
+    privacyStatement: defaultResearchPrivacyStatement,
+    contactPerson: defaultResearchContactPerson,
+  });
 }
 
 export function parseTestSessionSettings(
@@ -49,6 +72,11 @@ export function parseTestSessionSettings(
       ? (JSON.parse(rawValue) as Record<string, unknown>)
       : rawValue;
 
+  const participantLimitValue =
+    typeof parsed.participantLimit === 'number' && Number.isFinite(parsed.participantLimit)
+      ? Math.max(1, Math.round(parsed.participantLimit))
+      : null;
+
   return {
     assessmentPurpose:
       typeof parsed.assessmentPurpose === 'string'
@@ -62,6 +90,7 @@ export function parseTestSessionSettings(
       typeof parsed.interpretationMode === 'string'
         ? (parsed.interpretationMode as InterpretationMode)
         : defaults.interpretationMode,
+    participantLimit: participantLimitValue,
     consentStatement:
       typeof parsed.consentStatement === 'string' && parsed.consentStatement.trim().length > 0
         ? parsed.consentStatement.trim()

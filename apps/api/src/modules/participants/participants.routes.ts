@@ -4,9 +4,11 @@ import { z } from 'zod';
 import { asyncHandler } from '../../lib/async-handler.js';
 import { listParticipants } from './participants.service.js';
 
+const testTypeSchema = z.enum(['iq', 'disc', 'workload', 'custom']);
+
 const querySchema = z.object({
   search: z.string().optional(),
-  testType: z.enum(['iq', 'disc', 'workload']).optional(),
+  testType: testTypeSchema.optional(),
   status: z.enum(['not_started', 'in_progress', 'submitted', 'scored']).optional(),
 });
 

@@ -66,6 +66,7 @@ export function ResultsPage() {
                 <option value="disc">DISC</option>
                 <option value="iq">IQ</option>
                 <option value="workload">Workload</option>
+                <option value="custom">Custom Research</option>
               </Select>
               <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
               <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />

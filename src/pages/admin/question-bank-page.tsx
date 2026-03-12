@@ -24,6 +24,37 @@ import { formatTestTypeLabel, formatTokenLabel } from '@/lib/formatters';
 
 const textAreaClassName = 'min-h-[110px] w-full rounded-2xl border border-border bg-white/80 px-4 py-3 text-sm text-foreground shadow-sm outline-none transition placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200';
 
+function getDefaultQuestionType(testType: TestTypeCode): QuestionType {
+  if (testType === 'workload' || testType === 'custom') {
+    return 'likert';
+  }
+
+  if (testType === 'disc') {
+    return 'forced_choice';
+  }
+
+  return 'single_choice';
+}
+
+function createDefaultOptions(testType: TestTypeCode): QuestionBankQuestionPayload['options'] {
+  if (testType === 'custom') {
+    return [
+      { optionKey: '1', optionText: 'Strongly disagree', optionOrder: 1, valueNumber: 1, isCorrect: false },
+      { optionKey: '2', optionText: 'Disagree', optionOrder: 2, valueNumber: 2, isCorrect: false },
+      { optionKey: '3', optionText: 'Neutral', optionOrder: 3, valueNumber: 3, isCorrect: false },
+      { optionKey: '4', optionText: 'Agree', optionOrder: 4, valueNumber: 4, isCorrect: false },
+      { optionKey: '5', optionText: 'Strongly agree', optionOrder: 5, valueNumber: 5, isCorrect: false },
+    ];
+  }
+
+  return [
+    { optionKey: 'A', optionText: '', optionOrder: 1, isCorrect: false },
+    { optionKey: 'B', optionText: '', optionOrder: 2, isCorrect: false },
+    { optionKey: 'C', optionText: '', optionOrder: 3, isCorrect: false },
+    { optionKey: 'D', optionText: '', optionOrder: 4, isCorrect: false },
+  ];
+}
+
 function createEmptyForm(testType: TestTypeCode = 'disc'): QuestionBankQuestionPayload {
   return {
     testType,
@@ -32,17 +63,12 @@ function createEmptyForm(testType: TestTypeCode = 'disc'): QuestionBankQuestionP
     prompt: '',
     questionGroupKey: '',
     dimensionKey: '',
-    questionType: testType === 'workload' ? 'likert' : testType === 'disc' ? 'forced_choice' : 'single_choice',
+    questionType: getDefaultQuestionType(testType),
     questionOrder: 1,
     isRequired: true,
     status: 'draft',
     questionMeta: {},
-    options: [
-      { optionKey: 'A', optionText: '', optionOrder: 1, isCorrect: false },
-      { optionKey: 'B', optionText: '', optionOrder: 2, isCorrect: false },
-      { optionKey: 'C', optionText: '', optionOrder: 3, isCorrect: false },
-      { optionKey: 'D', optionText: '', optionOrder: 4, isCorrect: false },
-    ],
+    options: createDefaultOptions(testType),
   };
 }
 
@@ -181,7 +207,9 @@ export function QuestionBankPage() {
       options: [
         ...current.options,
         {
-          optionKey: String.fromCharCode(65 + current.options.length),
+          optionKey: current.testType === 'custom'
+            ? String(current.options.length + 1)
+            : String.fromCharCode(65 + current.options.length),
           optionText: '',
           optionOrder: current.options.length + 1,
           isCorrect: false,
@@ -241,6 +269,22 @@ export function QuestionBankPage() {
     }
   }
 
+  function handleTestTypeChange(nextType: TestTypeCode) {
+    setForm((current) => {
+      const nextDefaultType = getDefaultQuestionType(nextType);
+      const currentDefaultType = getDefaultQuestionType(current.testType);
+      const shouldReplaceQuestionType = current.questionType === currentDefaultType;
+      const shouldReplaceOptions = current.options.length === 0 || (current.testType !== nextType && isCreating);
+
+      return {
+        ...current,
+        testType: nextType,
+        questionType: shouldReplaceQuestionType ? nextDefaultType : current.questionType,
+        options: shouldReplaceOptions ? createDefaultOptions(nextType) : current.options,
+      };
+    });
+  }
+
   if (isLoading && items.length === 0 && !isCreating) {
     return <StateCard title="Loading question bank" description="Pulling secured question content and option structures." />;
   }
@@ -272,6 +316,7 @@ export function QuestionBankPage() {
                   <option value="disc">DISC</option>
                   <option value="iq">IQ</option>
                   <option value="workload">Workload</option>
+                  <option value="custom">Custom Research</option>
                 </Select>
                 <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'all' | QuestionStatus)}>
                   <option value="all">All statuses</option>
@@ -313,17 +358,18 @@ export function QuestionBankPage() {
         <Card className="bg-white/80">
           <CardHeader>
             <CardTitle>{isCreating || !selectedId ? 'Create question' : 'Edit question'}</CardTitle>
-            <CardDescription>Supports IQ, DISC, and workload item structures without changing the underlying schema.</CardDescription>
+            <CardDescription>Supports IQ, DISC, workload, and custom research item structures without changing the underlying schema.</CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-600">Test type</label>
-                  <Select value={form.testType} onChange={(event) => setForm((current) => ({ ...current, testType: event.target.value as TestTypeCode }))}>
+                  <Select value={form.testType} onChange={(event) => handleTestTypeChange(event.target.value as TestTypeCode)}>
                     <option value="disc">DISC</option>
                     <option value="iq">IQ</option>
                     <option value="workload">Workload</option>
+                    <option value="custom">Custom Research</option>
                   </Select>
                 </div>
                 <div className="space-y-2">
@@ -414,4 +460,3 @@ export function QuestionBankPage() {
     </div>
   );
 }
-

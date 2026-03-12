@@ -11,9 +11,12 @@ import {
   updateQuestionBankQuestion,
 } from './question-bank.service.js';
 
+const testTypeSchema = z.enum(['iq', 'disc', 'workload', 'custom']);
+const questionTypeSchema = z.enum(['single_choice', 'forced_choice', 'likert']);
+
 const querySchema = z.object({
   search: z.string().optional(),
-  testType: z.enum(['iq', 'disc', 'workload']).optional(),
+  testType: testTypeSchema.optional(),
   status: z.enum(['draft', 'active', 'archived']).optional(),
 });
 
@@ -28,13 +31,13 @@ const optionSchema = z.object({
 });
 
 const questionSchema = z.object({
-  testType: z.enum(['iq', 'disc', 'workload']),
+  testType: testTypeSchema,
   questionCode: z.string().min(3).max(50),
   instructionText: z.string().max(2000).optional().nullable(),
   prompt: z.string().max(2000).optional().nullable(),
   questionGroupKey: z.string().max(50).optional().nullable(),
   dimensionKey: z.string().max(50).optional().nullable(),
-  questionType: z.enum(['single_choice', 'forced_choice', 'likert']),
+  questionType: questionTypeSchema,
   questionOrder: z.coerce.number().int().positive(),
   isRequired: z.boolean().default(true),
   status: z.enum(['draft', 'active', 'archived']).default('active'),

@@ -6,6 +6,7 @@ import { env } from '../config/env.js';
 import { errorHandler } from '../middleware/error-handler.js';
 import { notFoundHandler } from '../middleware/not-found.js';
 import { requireAdminAuth } from '../middleware/require-admin-auth.js';
+import { requireCustomerAuth } from '../middleware/require-customer-auth.js';
 import { authRoutes } from '../modules/auth/auth.routes.js';
 import { dashboardRoutes } from '../modules/dashboard/dashboard.routes.js';
 import { healthRoutes } from '../modules/health/health.routes.js';
@@ -15,6 +16,8 @@ import { questionBankRoutes } from '../modules/question-bank/question-bank.route
 import { reportRoutes } from '../modules/reports/report.routes.js';
 import { resultRoutes } from '../modules/results/result.routes.js';
 import { settingsRoutes } from '../modules/settings/settings.routes.js';
+import { siteAuthRoutes } from '../modules/site-auth/site-auth.routes.js';
+import { siteOnboardingRoutes } from '../modules/site-onboarding/site-onboarding.routes.js';
 import { testSessionRoutes } from '../modules/test-sessions/test-session.routes.js';
 
 export function createApp() {
@@ -31,6 +34,8 @@ export function createApp() {
 
   app.use('/api/health', healthRoutes);
   app.use('/api/auth', authRoutes);
+  app.use('/api/site-auth', siteAuthRoutes);
+  app.use('/api/site-onboarding', requireCustomerAuth, siteOnboardingRoutes);
   app.use('/api/dashboard', requireAdminAuth, dashboardRoutes);
   app.use('/api/participants', requireAdminAuth, participantRoutes);
   app.use('/api/test-sessions', requireAdminAuth, testSessionRoutes);
@@ -45,4 +50,3 @@ export function createApp() {
 
   return app;
 }
-

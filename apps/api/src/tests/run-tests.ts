@@ -3,12 +3,15 @@ import assert from 'node:assert/strict';
 import { hashPassword, verifyPassword } from '../lib/password.js';
 import {
   createAdminSessionToken,
+  createCustomerSessionToken,
   createSubmissionAccessToken,
   verifyAdminSessionToken,
+  verifyCustomerSessionToken,
   verifySubmissionAccessToken,
 } from '../lib/signed-token.js';
 import { scoreAssessment } from '../modules/scoring/score-assessment.js';
 import type { ScoreAssessmentContext } from '../modules/scoring/scoring.types.js';
+import { runApiIntegrationTests } from './api-integration.js';
 
 function createBaseCompliance() {
   return {
@@ -16,6 +19,7 @@ function createBaseCompliance() {
     administrationMode: 'remote_unsupervised' as const,
     interpretationMode: 'professional_review' as const,
     participantResultMode: 'review_required' as const,
+    participantLimit: null,
     consentStatement: 'Consent statement for testing purposes.',
     privacyStatement: 'Privacy statement for testing purposes.',
     contactPerson: 'Testing Admin',
@@ -126,6 +130,46 @@ function testWorkloadScoring() {
   assert.equal(result.summaries.at(-1)?.score, 3);
 }
 
+function testCustomResearchScoring() {
+  const context: ScoreAssessmentContext = {
+    participantId: 31,
+    definition: {
+      session: {
+        id: 4,
+        title: 'Research Pilot',
+        testType: 'custom',
+        instructions: [],
+        estimatedMinutes: 12,
+        status: 'active',
+        compliance: {
+          ...createBaseCompliance(),
+          assessmentPurpose: 'research',
+          interpretationMode: 'self_assessment',
+          participantResultMode: 'instant_summary',
+          participantLimit: 100,
+        },
+      },
+      questions: [
+        { id: 401, code: 'CUSTOM_1', questionType: 'likert', dimensionKey: 'self_regulation', options: [{ id: 4001, key: '1', label: '1', value: 1 }, { id: 4002, key: '5', label: '5', value: 5 }] },
+        { id: 402, code: 'CUSTOM_2', questionType: 'likert', dimensionKey: 'self_regulation', options: [{ id: 4003, key: '1', label: '1', value: 1 }, { id: 4004, key: '4', label: '4', value: 4 }] },
+        { id: 403, code: 'CUSTOM_3', questionType: 'likert', dimensionKey: 'mental_fatigue', options: [{ id: 4005, key: '2', label: '2', value: 2 }, { id: 4006, key: '3', label: '3', value: 3 }] },
+      ],
+    },
+    answers: [
+      { questionId: 401, selectedOptionId: 4002, value: 5 },
+      { questionId: 402, selectedOptionId: 4004, value: 4 },
+      { questionId: 403, selectedOptionId: 4006, value: 3 },
+    ],
+  };
+
+  const result = scoreAssessment(context);
+  assert.equal(result.scoreTotal, 12);
+  assert.equal(result.scoreBand, 'high_response');
+  assert.equal(result.interpretationKey, 'custom_high_response');
+  assert.equal(result.summaries.find((item) => item.metricKey === 'self_regulation')?.score, 9);
+  assert.equal(result.summaries.at(-1)?.metricKey, 'overall_average');
+}
+
 async function testSecurityUtilities() {
   const hashed = await hashPassword('StrongPassword123!');
   assert.match(hashed, /^scrypt\$/);
@@ -144,6 +188,16 @@ async function testSecurityUtilities() {
   assert.equal(adminClaims?.role, 'super_admin');
   assert.equal(verifyAdminSessionToken(`${adminToken}tampered`), null);
 
+  const customerToken = createCustomerSessionToken({
+    accountId: 5,
+    email: 'owner@example.com',
+    accountType: 'researcher',
+  });
+  const customerClaims = verifyCustomerSessionToken(customerToken);
+  assert.ok(customerClaims);
+  assert.equal(customerClaims?.accountId, 5);
+  assert.equal(customerClaims?.accountType, 'researcher');
+
   const submissionToken = createSubmissionAccessToken({
     submissionId: 55,
     participantId: 77,
@@ -158,7 +212,9 @@ async function main() {
   testIqScoring();
   testDiscScoring();
   testWorkloadScoring();
+  testCustomResearchScoring();
   await testSecurityUtilities();
+  await runApiIntegrationTests();
   console.log('API tests passed');
 }
 
@@ -166,3 +222,5 @@ main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
+
+

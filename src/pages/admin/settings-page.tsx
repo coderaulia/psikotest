@@ -31,6 +31,7 @@ export function SettingsPage() {
   const [profileForm, setProfileForm] = useState({ fullName: '', email: '' });
   const [defaultsForm, setDefaultsForm] = useState({
     timeLimitMinutes: '15',
+    participantLimit: '',
     descriptionTemplate: '',
     instructions: '',
     assessmentPurpose: 'recruitment',
@@ -54,6 +55,9 @@ export function SettingsPage() {
       setProfileForm({ fullName: overview.profile.fullName, email: overview.profile.email });
       setDefaultsForm({
         timeLimitMinutes: String(overview.sessionDefaults.timeLimitMinutes),
+        participantLimit: overview.sessionDefaults.settings.participantLimit
+          ? String(overview.sessionDefaults.settings.participantLimit)
+          : '',
         descriptionTemplate: overview.sessionDefaults.descriptionTemplate,
         instructions: joinLines(overview.sessionDefaults.instructions),
         assessmentPurpose: overview.sessionDefaults.settings.assessmentPurpose,
@@ -112,6 +116,7 @@ export function SettingsPage() {
           assessmentPurpose: defaultsForm.assessmentPurpose as SettingsOverviewResponse['sessionDefaults']['settings']['assessmentPurpose'],
           administrationMode: defaultsForm.administrationMode as SettingsOverviewResponse['sessionDefaults']['settings']['administrationMode'],
           interpretationMode: defaultsForm.interpretationMode as SettingsOverviewResponse['sessionDefaults']['settings']['interpretationMode'],
+          participantLimit: defaultsForm.participantLimit ? Number(defaultsForm.participantLimit) : null,
           contactPerson: defaultsForm.contactPerson,
           consentStatement: defaultsForm.consentStatement,
           privacyStatement: defaultsForm.privacyStatement,
@@ -195,6 +200,10 @@ export function SettingsPage() {
                   <Input type="number" min={1} max={180} value={defaultsForm.timeLimitMinutes} onChange={(event) => setDefaultsForm((current) => ({ ...current, timeLimitMinutes: event.target.value }))} required />
                 </div>
                 <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-600">Participant limit</label>
+                  <Input type="number" min={1} max={50000} value={defaultsForm.participantLimit} onChange={(event) => setDefaultsForm((current) => ({ ...current, participantLimit: event.target.value }))} placeholder="Optional" />
+                </div>
+                <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-600">Contact person</label>
                   <Input value={defaultsForm.contactPerson} onChange={(event) => setDefaultsForm((current) => ({ ...current, contactPerson: event.target.value }))} required />
                 </div>
@@ -272,4 +281,3 @@ export function SettingsPage() {
     </div>
   );
 }
-

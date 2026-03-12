@@ -37,6 +37,7 @@ export function TestSessionsPage() {
     testType: 'disc' as TestTypeCode,
     status: 'active' as 'draft' | 'active',
     timeLimitMinutes: '15',
+    participantLimit: '',
     startsAt: '',
     description: '',
     instructions: '',
@@ -83,6 +84,9 @@ export function TestSessionsPage() {
         setForm((current) => ({
           ...current,
           timeLimitMinutes: String(overview.sessionDefaults.timeLimitMinutes),
+          participantLimit: overview.sessionDefaults.settings.participantLimit
+            ? String(overview.sessionDefaults.settings.participantLimit)
+            : '',
           description: current.description || overview.sessionDefaults.descriptionTemplate,
           instructions: current.instructions || overview.sessionDefaults.instructions.join('\n'),
           assessmentPurpose: overview.sessionDefaults.settings.assessmentPurpose,
@@ -120,6 +124,7 @@ export function TestSessionsPage() {
         assessmentPurpose: form.assessmentPurpose as CreateTestSessionPayload['settings']['assessmentPurpose'],
         administrationMode: form.administrationMode as CreateTestSessionPayload['settings']['administrationMode'],
         interpretationMode: form.interpretationMode as CreateTestSessionPayload['settings']['interpretationMode'],
+        participantLimit: form.participantLimit ? Number(form.participantLimit) : null,
         contactPerson: form.contactPerson.trim(),
         consentStatement: form.consentStatement.trim(),
         privacyStatement: form.privacyStatement.trim(),
@@ -173,6 +178,7 @@ export function TestSessionsPage() {
                       <option value="disc">DISC</option>
                       <option value="iq">IQ</option>
                       <option value="workload">Workload</option>
+                      <option value="custom">Custom Research</option>
                     </Select>
                   </div>
                   <div className="space-y-2">
@@ -212,7 +218,7 @@ export function TestSessionsPage() {
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-600">Start time</label>
                   <Input type="datetime-local" value={form.startsAt} onChange={(event) => updateForm('startsAt', event.target.value)} />
@@ -220,6 +226,10 @@ export function TestSessionsPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-600">Time limit (minutes)</label>
                   <Input type="number" min={1} max={180} value={form.timeLimitMinutes} onChange={(event) => updateForm('timeLimitMinutes', event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-600">Participant limit</label>
+                  <Input type="number" min={1} max={50000} value={form.participantLimit} onChange={(event) => updateForm('participantLimit', event.target.value)} placeholder={form.testType === 'custom' ? '100' : 'Optional'} />
                 </div>
               </div>
 
@@ -272,6 +282,7 @@ export function TestSessionsPage() {
                 <option value="disc">DISC</option>
                 <option value="iq">IQ</option>
                 <option value="workload">Workload</option>
+                <option value="custom">Custom Research</option>
               </Select>
               <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
                 <option value="all">All statuses</option>
@@ -306,7 +317,7 @@ export function TestSessionsPage() {
                       </div>
                     </div>
 
-                    <div className="grid gap-3 md:grid-cols-2">
+                    <div className="grid gap-3 md:grid-cols-3">
                       <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
                         <p className="font-medium text-slate-950">Purpose</p>
                         <p className="mt-1">{formatTokenLabel(session.settings.assessmentPurpose)}</p>
@@ -314,6 +325,10 @@ export function TestSessionsPage() {
                       <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
                         <p className="font-medium text-slate-950">Interpretation</p>
                         <p className="mt-1">{formatTokenLabel(session.settings.interpretationMode)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                        <p className="font-medium text-slate-950">Participant Limit</p>
+                        <p className="mt-1">{session.settings.participantLimit ?? 'Open'}</p>
                       </div>
                     </div>
 
@@ -348,4 +363,3 @@ export function TestSessionsPage() {
     </div>
   );
 }
-

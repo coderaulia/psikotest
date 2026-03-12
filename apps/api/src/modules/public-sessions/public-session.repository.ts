@@ -1,6 +1,7 @@
 import type { PoolConnection, RowDataPacket } from 'mysql2/promise';
 
 import { getDbPool } from '../../database/mysql.js';
+import { HttpError } from '../../lib/http-error.js';
 import {
   getParticipantResultMode,
   parseTestSessionSettings,
@@ -8,6 +9,7 @@ import {
 import type {
   ParticipantIdentityInput,
   PublicSessionDefinition,
+  PublicTestTypeCode,
   SubmissionAnswerInput,
 } from './public-session.types.js';
 
@@ -20,7 +22,7 @@ interface SessionRow extends RowDataPacket {
   time_limit_minutes: number | null;
   settings_json: string | Record<string, unknown> | null;
   status: 'active';
-  test_type_code: 'iq' | 'disc' | 'workload';
+  test_type_code: PublicTestTypeCode;
 }
 
 interface QuestionRow extends RowDataPacket {
@@ -47,7 +49,7 @@ interface SubmissionContextRow extends RowDataPacket {
   participant_id: number;
   participant_name: string;
   session_id: number;
-  test_type_code: 'iq' | 'disc' | 'workload';
+  test_type_code: PublicTestTypeCode;
 }
 
 interface StoredAnswerRow extends RowDataPacket {
@@ -306,6 +308,23 @@ export async function createSubmissionForToken(token: string, participant: Parti
     );
 
     const attemptNo = Number(attemptRows[0]?.next_attempt ?? 1);
+
+    if (settings.participantLimit && attemptNo === 1) {
+      const [participantCountRows] = await connection.query<RowDataPacket[]>(
+        `
+          SELECT COUNT(DISTINCT participant_id) AS participant_count
+          FROM submissions
+          WHERE test_session_id = ?
+        `,
+        [sessionRow.session_id],
+      );
+
+      const participantCount = Number(participantCountRows[0]?.participant_count ?? 0);
+      if (participantCount >= settings.participantLimit) {
+        throw new HttpError(409, 'Participant limit reached for this session');
+      }
+    }
+
     const identitySnapshot = JSON.stringify({
       fullName: participant.fullName,
       email: participant.email,
@@ -505,7 +524,7 @@ export async function loadSubmissionScoringContext(submissionId: number) {
   const answerMap = new Map<number, SubmissionAnswerInput>();
 
   for (const row of answerRows) {
-    const current = answerMap.get(row.question_id) ?? { questionId: row.question_id };
+    const current: SubmissionAnswerInput = answerMap.get(row.question_id) ?? { questionId: row.question_id };
 
     if (row.answer_role === 'most') {
       current.mostOptionId = row.selected_option_id ?? undefined;

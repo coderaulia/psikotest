@@ -12,6 +12,7 @@ import {
   formatDateTime,
   formatResultHeadline,
   formatResultSummary,
+  formatTestTypeLabel,
   formatTokenLabel,
 } from '@/lib/formatters';
 
@@ -83,7 +84,7 @@ export function ResultDetailPage() {
       <SectionHeading
         eyebrow="Result Detail"
         title={result.participant.fullName}
-        description={`${result.testType.toUpperCase()} assessment • ${formatDateTime(result.submittedAt)}`}
+        description={`${formatTestTypeLabel(result.testType)} assessment • ${formatDateTime(result.submittedAt)}`}
         actions={
           <div className="flex flex-wrap gap-3">
             <Button variant="outline" asChild><Link to={`/admin/test-sessions/${result.session.id}`}>Open session</Link></Button>

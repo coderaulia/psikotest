@@ -55,12 +55,12 @@ export function AdminLoginPage() {
             <CardContent className="mt-8 p-0">
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-600">Email</label>
-                  <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" />
+                  <label htmlFor="admin-email" className="text-sm font-medium text-slate-600">Email</label>
+                  <Input id="admin-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-600">Password</label>
-                  <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" />
+                  <label htmlFor="admin-password" className="text-sm font-medium text-slate-600">Password</label>
+                  <Input id="admin-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" />
                 </div>
                 {errorMessage ? <p className="text-sm text-red-600">{errorMessage}</p> : null}
                 <Button className="mt-3 w-full" size="lg" type="submit" disabled={isSubmitting}>
@@ -74,3 +74,4 @@ export function AdminLoginPage() {
     </div>
   );
 }
+

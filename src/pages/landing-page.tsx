@@ -36,23 +36,23 @@ const problemPoints = [
 const workflowSteps = [
   {
     step: '01',
-    title: 'Create an assessment',
-    description: 'Choose the type of psychological test you want to administer and define the assessment purpose.',
+    title: 'Try demo or sign up',
+    description: 'Start with a public demo flow or create a customer workspace for your organization or research project.',
   },
   {
     step: '02',
-    title: 'Share the participant link',
-    description: 'Invite candidates, students, or participants through a secure assessment link.',
+    title: 'Create the first assessment',
+    description: 'Choose the test type, clarify the purpose, and configure the first assessment draft.',
   },
   {
     step: '03',
-    title: 'Participants complete the test online',
-    description: 'Participants answer questions through a clean and distraction-free interface.',
+    title: 'Preview the participant experience',
+    description: 'Inspect the consent-first participant journey before wider distribution.',
   },
   {
     step: '04',
-    title: 'Receive structured reports',
-    description: 'Results are calculated automatically and presented in organized assessment reports.',
+    title: 'Upgrade to share',
+    description: 'Move from draft setup to participant distribution when the assessment is ready.',
   },
 ];
 
@@ -72,12 +72,18 @@ const assessmentTypes: IconCardItem[] = [
     description: 'Measure perceived mental workload and work pressure.',
     icon: ChartColumn,
   },
+  {
+    title: 'Custom Psychological Research Tests',
+    description: 'Build and run structured questionnaires or scale instruments for psychology research and academic data collection.',
+    icon: FileText,
+  },
 ];
 
 const assessmentUseCases = [
   'Often used for recruitment screening and academic evaluation.',
   'Useful for recruitment, team development, and leadership assessment.',
   'Useful for organizational wellbeing programs and academic research.',
+  'Suitable for undergraduate studies, thesis work, psychology experiments, and new scale development.',
 ];
 
 const audienceCards: IconCardItem[] = [
@@ -186,27 +192,26 @@ export function LandingPage() {
             </Badge>
             <div className="space-y-5">
               <h1 className="max-w-4xl text-5xl font-semibold tracking-tight text-slate-950 sm:text-6xl">
-                Digital Psychological Assessments for Organizations and Education
+                Digital Psychological Assessments for Organizations, Researchers, and Education
               </h1>
               <p className="max-w-3xl text-lg leading-8 text-slate-600">
-                Run IQ, personality, and workload assessments online with a structured and ethical workflow.
+                Run IQ, personality, workload, and custom research assessments online through a structured, calm, and compliance-aware workflow.
               </p>
               <p className="max-w-3xl text-base leading-8 text-slate-500">
-                Vanaila Psikotest helps HR teams, universities, and organizations conduct psychological assessments
-                more efficiently - from test administration to automated scoring and professional reports.
+                Vanaila Psikotest helps HR teams, universities, researchers, and organizations move from manual testing to guided digital assessment setup, participant delivery, automated scoring, and professional reporting.
               </p>
               <p className="max-w-3xl text-base leading-8 text-slate-500">
-                Create an assessment, share it with participants, and receive structured results in minutes.
+                Start with a demo or sign up for a workspace, then build your first assessment draft before you share it.
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button size="lg" className="gap-2" asChild>
-                <Link to="/admin/login">
-                  Start an Assessment <ArrowRight className="h-4 w-4" />
+                <Link to="/signup">
+                  Sign Up to Build <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
               <Button variant="secondary" size="lg" asChild>
-                <a href="#how-it-works">View How It Works</a>
+                <Link to="/t/disc-batch-a">Try Demo</Link>
               </Button>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
@@ -330,7 +335,7 @@ export function LandingPage() {
         <SectionHeading
           eyebrow="Assessment Types"
           title="Multiple assessment tools in one platform"
-          description="Choose the tool that matches the screening, development, wellbeing, or research objective."
+          description="Choose the tool that matches screening, development, wellbeing, or psychology research needs."
         />
         <div className="mt-10 grid gap-6 lg:grid-cols-3">
           {assessmentTypes.map((category, index) => {
@@ -511,20 +516,20 @@ export function LandingPage() {
         <Card className="overflow-hidden bg-slate-950 text-white">
           <CardContent className="grid gap-8 p-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
             <div className="space-y-4">
-              <p className="text-sm uppercase tracking-[0.24em] text-white/60">Start Today</p>
+              <p className="text-sm uppercase tracking-[0.24em] text-white/60">Start With a Workspace</p>
               <h2 className="text-3xl font-semibold tracking-tight">
-                Start running structured psychological assessments today
+                Sign up and build your first assessment draft today
               </h2>
               <p className="max-w-2xl text-sm leading-7 text-white/75">
-                Replace manual testing with a faster and more organized system.
+                Start with a self-serve workspace for your company or research project, then prepare the participant journey before rollout.
               </p>
               <p className="max-w-2xl text-sm leading-7 text-white/75">Create your first assessment in minutes.</p>
             </div>
             <div className="rounded-[28px] border border-white/10 bg-white/10 p-6 backdrop-blur">
-              <p className="text-sm text-white/60">Get started</p>
+              <p className="text-sm text-white/60">Customer onboarding</p>
               <p className="mt-3 text-2xl font-semibold">Create your first assessment</p>
               <p className="mt-3 text-sm leading-7 text-white/75">
-                Move your workflow from manual administration to structured digital reporting.
+                Use the four-step onboarding flow to choose a test type, configure settings, preview the experience, and prepare the participant link.
               </p>
               <Button
                 variant="secondary"
@@ -532,7 +537,7 @@ export function LandingPage() {
                 className="mt-6 w-full justify-center bg-white text-slate-950 hover:bg-white/90"
                 asChild
               >
-                <Link to="/admin/login">Create Your First Assessment</Link>
+                <Link to="/signup">Create Your First Assessment</Link>
               </Button>
             </div>
           </CardContent>
@@ -541,3 +546,5 @@ export function LandingPage() {
     </main>
   );
 }
+
+

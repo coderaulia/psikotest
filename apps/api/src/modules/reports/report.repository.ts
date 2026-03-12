@@ -64,7 +64,7 @@ export async function fetchAverageScoresByTestType() {
       FROM results r
       INNER JOIN test_types tt ON tt.id = r.test_type_id
       GROUP BY tt.code
-      ORDER BY FIELD(tt.code, 'iq', 'disc', 'workload')
+      ORDER BY FIELD(tt.code, 'iq', 'disc', 'workload', 'custom'), tt.code ASC
     `,
   );
 

@@ -5,7 +5,7 @@ import type {
   ParticipantResultMode,
 } from '../test-sessions/session-settings.js';
 
-export type PublicTestTypeCode = 'iq' | 'disc' | 'workload';
+export type PublicTestTypeCode = 'iq' | 'disc' | 'workload' | 'custom';
 export type PublicQuestionType = 'single_choice' | 'forced_choice' | 'likert';
 
 export interface AssessmentOption {
@@ -32,6 +32,7 @@ export interface PublicSessionComplianceMeta {
   administrationMode: AdministrationMode;
   interpretationMode: InterpretationMode;
   participantResultMode: ParticipantResultMode;
+  participantLimit: number | null;
   consentStatement: string;
   privacyStatement: string;
   contactPerson: string;

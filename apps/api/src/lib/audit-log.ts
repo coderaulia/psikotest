@@ -14,7 +14,9 @@ export interface AuditEventInput {
 }
 
 export async function createAuditEvent(input: AuditEventInput, connection?: PoolConnection) {
-  const executor = connection ?? getDbPool();
+  const executor = (connection ?? getDbPool()) as {
+    query<T = any>(sql: string, values?: unknown[]): Promise<[T, unknown[]]>;
+  };
   const [result] = await executor.query<ResultSetHeader>(
     `
       INSERT INTO audit_logs (

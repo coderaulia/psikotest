@@ -99,7 +99,7 @@ export function ReportsPage() {
           <CardTitle>Average score by test type</CardTitle>
           <CardDescription>Operational benchmark for each assessment module using stored result totals.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
+        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {data.averagesByTestType.length === 0 ? (
             <p className="text-sm text-slate-500">No scored results available yet.</p>
           ) : (
@@ -151,3 +151,4 @@ export function ReportsPage() {
     </div>
   );
 }
+

@@ -45,6 +45,7 @@ export function TestSessionDetailPage() {
     startsAt: '',
     endsAt: '',
     timeLimitMinutes: '',
+    participantLimit: '',
     status: 'active',
     assessmentPurpose: 'recruitment',
     administrationMode: 'remote_unsupervised',
@@ -68,6 +69,7 @@ export function TestSessionDetailPage() {
         startsAt: toDateTimeLocal(detail.startsAt),
         endsAt: toDateTimeLocal(detail.endsAt),
         timeLimitMinutes: detail.timeLimitMinutes ? String(detail.timeLimitMinutes) : '',
+        participantLimit: detail.settings.participantLimit ? String(detail.settings.participantLimit) : '',
         status: detail.status,
         assessmentPurpose: detail.settings.assessmentPurpose,
         administrationMode: detail.settings.administrationMode,
@@ -117,6 +119,7 @@ export function TestSessionDetailPage() {
           assessmentPurpose: form.assessmentPurpose as UpdateTestSessionPayload['settings']['assessmentPurpose'],
           administrationMode: form.administrationMode as UpdateTestSessionPayload['settings']['administrationMode'],
           interpretationMode: form.interpretationMode as UpdateTestSessionPayload['settings']['interpretationMode'],
+          participantLimit: form.participantLimit ? Number(form.participantLimit) : null,
           contactPerson: form.contactPerson.trim(),
           consentStatement: form.consentStatement.trim(),
           privacyStatement: form.privacyStatement.trim(),
@@ -220,6 +223,10 @@ export function TestSessionDetailPage() {
                   <Input type="number" min={1} max={180} value={form.timeLimitMinutes} onChange={(event) => setForm((current) => ({ ...current, timeLimitMinutes: event.target.value }))} />
                 </div>
                 <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-600">Participant limit</label>
+                  <Input type="number" min={1} max={50000} value={form.participantLimit} onChange={(event) => setForm((current) => ({ ...current, participantLimit: event.target.value }))} placeholder="Optional" />
+                </div>
+                <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-600">Contact person</label>
                   <Input value={form.contactPerson} onChange={(event) => setForm((current) => ({ ...current, contactPerson: event.target.value }))} />
                 </div>
@@ -285,6 +292,7 @@ export function TestSessionDetailPage() {
               <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Purpose</p><p className="mt-2 font-medium text-slate-950">{formatTokenLabel(session.settings.assessmentPurpose)}</p></div>
               <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Administration</p><p className="mt-2 font-medium text-slate-950">{formatTokenLabel(session.settings.administrationMode)}</p></div>
               <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Interpretation</p><p className="mt-2 font-medium text-slate-950">{formatTokenLabel(session.settings.interpretationMode)}</p></div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Participant Limit</p><p className="mt-2 font-medium text-slate-950">{session.settings.participantLimit ?? 'Open'}</p></div>
               <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Access Token</p><p className="mt-2 font-medium text-slate-950">{session.accessToken}</p></div>
               <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Start Time</p><p className="mt-2 font-medium text-slate-950">{formatDateTime(session.startsAt)}</p></div>
               <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Time Limit</p><p className="mt-2 font-medium text-slate-950">{session.timeLimitMinutes ? `${session.timeLimitMinutes} minutes` : 'Not set'}</p></div>

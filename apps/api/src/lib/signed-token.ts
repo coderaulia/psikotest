@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { env } from '../config/env.js';
 
 interface SignedTokenPayloadBase {
-  type: 'admin' | 'submission';
+  type: 'admin' | 'customer' | 'submission';
   exp: number;
 }
 
@@ -18,6 +18,13 @@ export interface SubmissionAccessClaims extends SignedTokenPayloadBase {
   type: 'submission';
   submissionId: number;
   participantId: number;
+}
+
+export interface CustomerSessionClaims extends SignedTokenPayloadBase {
+  type: 'customer';
+  accountId: number;
+  email: string;
+  accountType: 'business' | 'researcher';
 }
 
 function encodePayload<T extends SignedTokenPayloadBase>(payload: T) {
@@ -92,6 +99,30 @@ export function verifyAdminSessionToken(token: string) {
   }
 
   return payload as AdminSessionClaims;
+}
+
+export function createCustomerSessionToken(input: {
+  accountId: number;
+  email: string;
+  accountType: 'business' | 'researcher';
+}) {
+  return signToken<CustomerSessionClaims>({
+    type: 'customer',
+    accountId: input.accountId,
+    email: input.email,
+    accountType: input.accountType,
+    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7,
+  });
+}
+
+export function verifyCustomerSessionToken(token: string) {
+  const payload = verifyToken(token);
+
+  if (!payload || payload.type !== 'customer') {
+    return null;
+  }
+
+  return payload as CustomerSessionClaims;
 }
 
 export function createSubmissionAccessToken(input: {

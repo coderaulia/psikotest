@@ -1,4 +1,4 @@
-export type TestTypeCode = 'iq' | 'disc' | 'workload';
+export type TestTypeCode = 'iq' | 'disc' | 'workload' | 'custom';
 export type QuestionType = 'single_choice' | 'forced_choice' | 'likert';
 export type AssessmentPurpose = 'recruitment' | 'employee_development' | 'academic_evaluation' | 'research' | 'self_assessment';
 export type AdministrationMode = 'supervised' | 'remote_unsupervised';
@@ -12,6 +12,7 @@ export interface TestSessionComplianceSettings {
   administrationMode: AdministrationMode;
   interpretationMode: InterpretationMode;
   participantResultMode: ParticipantResultMode;
+  participantLimit: number | null;
   consentStatement: string;
   privacyStatement: string;
   contactPerson: string;
@@ -21,6 +22,7 @@ export interface SessionSettingsPayload {
   assessmentPurpose: AssessmentPurpose;
   administrationMode: AdministrationMode;
   interpretationMode: InterpretationMode;
+  participantLimit: number | null;
   consentStatement: string;
   privacyStatement: string;
   contactPerson: string;
@@ -102,6 +104,51 @@ export interface AdminUser {
 export interface AdminLoginResponse {
   token: string;
   admin: AdminUser;
+}
+
+export type CustomerAccountType = 'business' | 'researcher';
+export type CustomerAssessmentResultVisibility = 'participant_summary' | 'review_required';
+
+export interface CustomerUser {
+  id: number;
+  fullName: string;
+  email: string;
+  accountType: CustomerAccountType;
+  organizationName: string;
+}
+
+export interface CustomerAuthResponse {
+  token: string;
+  account: CustomerUser;
+}
+
+export interface CustomerAssessmentItem {
+  assessmentId: number;
+  sessionId: number;
+  title: string;
+  organizationName: string;
+  testType: TestTypeCode;
+  assessmentPurpose: AssessmentPurpose;
+  administrationMode: AdministrationMode;
+  resultVisibility: CustomerAssessmentResultVisibility;
+  timeLimitMinutes: number | null;
+  participantLimit: number | null;
+  sessionStatus: 'draft' | 'active' | 'completed' | 'archived';
+  planStatus: 'trial' | 'upgraded';
+  participantLink: string;
+  previewDemoLink: string;
+  createdAt: string;
+}
+
+export interface CreateCustomerAssessmentPayload {
+  testType: TestTypeCode;
+  title: string;
+  purpose: AssessmentPurpose;
+  organizationName: string;
+  administrationMode: AdministrationMode;
+  timeLimitMinutes: number | null;
+  participantLimit: number | null;
+  resultVisibility: CustomerAssessmentResultVisibility;
 }
 
 export interface DashboardSummaryCard {
@@ -383,3 +430,4 @@ export interface SettingsOverviewResponse {
   sessionDefaults: SessionDefaultsSettings;
   auditFeed: AuditFeedItem[];
 }
+

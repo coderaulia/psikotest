@@ -10,6 +10,7 @@ function createBaseCompliance() {
     administrationMode: 'remote_unsupervised' as const,
     interpretationMode: 'professional_review' as const,
     participantResultMode: 'review_required' as const,
+    participantLimit: null,
     consentStatement: 'Consent statement for testing purposes.',
     privacyStatement: 'Privacy statement for testing purposes.',
     contactPerson: 'Testing Admin',
@@ -121,4 +122,44 @@ test('Workload scoring aggregates category totals and workload band', () => {
   assert.equal(result.scoreBand, 'moderate_workload');
   assert.equal(result.interpretationKey, 'moderate_workload');
   assert.equal(result.summaries.at(-1)?.score, 3);
+});
+
+test('Custom research scoring aggregates questionnaire totals', () => {
+  const context: ScoreAssessmentContext = {
+    participantId: 31,
+    definition: {
+      session: {
+        id: 4,
+        title: 'Research Pilot',
+        testType: 'custom',
+        instructions: [],
+        estimatedMinutes: 12,
+        status: 'active',
+        compliance: {
+          ...createBaseCompliance(),
+          assessmentPurpose: 'research',
+          interpretationMode: 'self_assessment',
+          participantResultMode: 'instant_summary',
+          participantLimit: 100,
+        },
+      },
+      questions: [
+        { id: 401, code: 'CUSTOM_1', questionType: 'likert', dimensionKey: 'self_regulation', options: [{ id: 4001, key: '1', label: '1', value: 1 }, { id: 4002, key: '5', label: '5', value: 5 }] },
+        { id: 402, code: 'CUSTOM_2', questionType: 'likert', dimensionKey: 'self_regulation', options: [{ id: 4003, key: '1', label: '1', value: 1 }, { id: 4004, key: '4', label: '4', value: 4 }] },
+        { id: 403, code: 'CUSTOM_3', questionType: 'likert', dimensionKey: 'mental_fatigue', options: [{ id: 4005, key: '2', label: '2', value: 2 }, { id: 4006, key: '3', label: '3', value: 3 }] },
+      ],
+    },
+    answers: [
+      { questionId: 401, selectedOptionId: 4002, value: 5 },
+      { questionId: 402, selectedOptionId: 4004, value: 4 },
+      { questionId: 403, selectedOptionId: 4006, value: 3 },
+    ],
+  };
+
+  const result = scoreAssessment(context);
+
+  assert.equal(result.scoreTotal, 12);
+  assert.equal(result.scoreBand, 'high_response');
+  assert.equal(result.interpretationKey, 'custom_high_response');
+  assert.equal(result.summaries.find((item) => item.metricKey === 'self_regulation')?.score, 9);
 });

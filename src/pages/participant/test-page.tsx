@@ -16,6 +16,7 @@ import type {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { formatTestTypeLabel } from '@/lib/formatters';
 
 function isQuestionAnswered(question: AssessmentQuestion, answer?: SubmissionAnswerInput) {
   if (!answer) {
@@ -182,7 +183,7 @@ export function ParticipantTestPage() {
         <CardHeader>
           <CardTitle>{session.session.title}</CardTitle>
           <CardDescription>
-            {session.session.testType.toUpperCase()} assessment • {answeredCount} of {session.questions.length} questions answered
+            {formatTestTypeLabel(session.session.testType)} assessment • {answeredCount} of {session.questions.length} questions answered
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -292,4 +293,3 @@ export function ParticipantTestPage() {
     </div>
   );
 }
-

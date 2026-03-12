@@ -11,16 +11,21 @@ import {
   updateTestSession,
 } from './test-session.service.js';
 
+const testTypeSchema = z.enum(['iq', 'disc', 'workload', 'custom']);
+
 const querySchema = z.object({
   search: z.string().optional(),
-  testType: z.enum(['iq', 'disc', 'workload']).optional(),
+  testType: testTypeSchema.optional(),
   status: z.enum(['draft', 'active', 'completed', 'archived']).optional(),
 });
+
+const participantLimitSchema = z.coerce.number().int().positive().max(50000).nullable().optional();
 
 const settingsSchema = z.object({
   assessmentPurpose: z.enum(['recruitment', 'employee_development', 'academic_evaluation', 'research', 'self_assessment']),
   administrationMode: z.enum(['supervised', 'remote_unsupervised']),
   interpretationMode: z.enum(['self_assessment', 'professional_review']),
+  participantLimit: participantLimitSchema,
   consentStatement: z.string().min(20).max(2000),
   privacyStatement: z.string().min(20).max(2000),
   contactPerson: z.string().min(3).max(255),
@@ -28,7 +33,7 @@ const settingsSchema = z.object({
 
 const createSessionSchema = z.object({
   title: z.string().min(3),
-  testType: z.enum(['iq', 'disc', 'workload']),
+  testType: testTypeSchema,
   description: z.string().max(2000).optional(),
   instructions: z.string().max(4000).optional(),
   startsAt: z.string().datetime().optional().nullable(),
@@ -81,8 +86,16 @@ testSessionRoutes.post(
       throw new HttpError(401, 'Admin session is required');
     }
 
-    const session = await createTestSession({
+    const normalizedPayload = {
       ...payload,
+      settings: {
+        ...payload.settings,
+        participantLimit: payload.settings.participantLimit ?? null,
+      },
+    };
+
+    const session = await createTestSession({
+      ...normalizedPayload,
       createdByAdminId: request.adminSession.adminId,
     });
 
@@ -93,9 +106,10 @@ testSessionRoutes.post(
       entityId: session?.id ?? null,
       action: 'test_session.created',
       metadata: {
-        testType: payload.testType,
-        status: payload.status,
-        assessmentPurpose: payload.settings.assessmentPurpose,
+        testType: normalizedPayload.testType,
+        status: normalizedPayload.status,
+        assessmentPurpose: normalizedPayload.settings.assessmentPurpose,
+        participantLimit: normalizedPayload.settings.participantLimit,
       },
     });
 
@@ -112,7 +126,15 @@ testSessionRoutes.patch(
       throw new HttpError(401, 'Admin session is required');
     }
 
-    const session = await updateTestSession(Number(request.params.id), payload);
+    const normalizedPayload = {
+      ...payload,
+      settings: {
+        ...payload.settings,
+        participantLimit: payload.settings.participantLimit ?? null,
+      },
+    };
+
+    const session = await updateTestSession(Number(request.params.id), normalizedPayload);
 
     if (!session) {
       throw new HttpError(404, 'Test session not found');
@@ -125,8 +147,9 @@ testSessionRoutes.patch(
       entityId: session.id,
       action: 'test_session.updated',
       metadata: {
-        status: payload.status,
-        interpretationMode: payload.settings.interpretationMode,
+        status: normalizedPayload.status,
+        interpretationMode: normalizedPayload.settings.interpretationMode,
+        participantLimit: normalizedPayload.settings.participantLimit,
       },
     });
 
