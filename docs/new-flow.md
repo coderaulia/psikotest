@@ -1,189 +1,207 @@
-1. Improving the App Workflow (Psychological Assessment Standard)
+# Target Product Flow
 
-Your current flow:
+This document defines the intended end-to-end workflow for Vanaila Psikotest after the MVP.
 
-company → pay → create test → share link → results → send report
+It should be read together with:
 
-Technically correct, but psychological assessment has additional required stages that your system should reflect.
+- `docs/compliance.md`
+- `docs/development-phases.md`
 
-A proper psychological assessment workflow usually includes:
+## Product Direction
+
+The platform has two major operating modes:
+
+- business and HR assessments
+- academic or psychological research assessments
+
+Both modes share the same core assessment pipeline, but professional interpretation, result visibility, and release rules can differ.
+
+## Core Assessment Workflow
+
+The product should model psychological assessment as a process, not only as a scoring engine.
+
+### Target flow
 
 Purpose clarification
 ↓
 Assessment design
 ↓
-Participant consent
+Consent and privacy disclosure
+↓
+Participant validation
 ↓
 Test administration
 ↓
-Scoring
+Automated scoring
 ↓
-Interpretation
+Professional review when required
 ↓
-Professional report
+Released report or summary
 ↓
-Feedback / recommendation
+Feedback and recommendation
 
-This structure is important because psychological testing is not just scoring questions — it is an assessment process.
+## Customer and Researcher Onboarding Flow
 
-Recommended App Workflow
+The public business flow stays:
 
-1. Assessment Setup (Purpose)
+Landing Page
+↓
+Try Demo / Sign Up
+↓
+Create First Assessment
+↓
+Preview Experience / Demo Test
+↓
+Upgrade to Share
 
-Before creating a test, require users to define the purpose.
+### Onboarding steps
 
-Example:
+#### Step 1
 
-Assessment Purpose
+What type of assessment do you want to create?
 
-Recruitment
-Employee development
-Academic evaluation
-Research
-Self assessment
+- IQ Test
+- DISC Personality
+- Workload / Stress Test
+- Custom Assessment
 
-Why this matters:
+#### Step 2
 
-Interpretation depends on context.
+Assessment Information
 
-Example:
+- Assessment Name
+- Purpose
+- Organization Name
 
-IQ for recruitment ≠ IQ for academic research
+#### Step 3
 
-2. Test Configuration
+Configure Settings
 
-Allow user to select:
+- Time limit
+- Number of participants
+- Result visibility
 
-Test type
-Participant limit
-Time limit
-Administration mode
+#### Step 4
 
-Administration mode is important:
+Generate participant link
 
-Supervised
-Remote unsupervised
+## Participant Flow
 
-Because remote testing may affect validity.
+### Current baseline
 
-3. Informed Consent Page (Required)
+Public link
+↓
+Consent page
+↓
+Identity page
+↓
+Instructions
+↓
+Assessment
+↓
+Submit
+↓
+Completion state
 
-Before participants start the test, show:
+### Required future behavior
 
-Purpose of the test
-Estimated duration
-Data privacy statement
-Voluntary participation
-Contact person
+- consent is always shown before test start
+- identity fields reflect assessment purpose and context
+- participants should not automatically receive final professional interpretation
+- result visibility depends on session policy and review status
 
-Participants must click:
+## Professional Review Flow
 
-I agree to participate in this psychological assessment
+This flow applies when the session requires professional interpretation.
 
-Why this is critical:
-
-HIMPSI requires informed consent in psychological services and research contexts.
-
-4. Participant Identity Validation
-
-Add participant information:
-
-Name
-Age
-Education
-Position applied
-Email
-
-This is important because psychological interpretation often considers demographic context.
-
-5. Test Administration
-
-Participant takes the test.
-
-Important UX rules:
-
-clean interface
-timer if needed
-no distractions
-prevent skipping rules if required
-
-6. Automated Scoring (System)
-
-Your system calculates raw scores.
-
-But do not show interpretation directly yet.
-
-Instead:
-
-Raw Score → Norm Conversion → Psychological Interpretation
-
-Example:
-
-Raw score: 27
-Percentile: 68
-Category: Above average 7. Psychologist Review (Important)
-
-If used for professional HR decisions, results ideally go through:
-
-Psychologist review
-
-Workflow:
-
-Participant completes test
+Participant submits assessment
 ↓
 System generates preliminary score
 ↓
-Psychologist review
+Result enters reviewer queue
 ↓
-Final report generated
+Reviewer interprets and edits draft report
+↓
+Reviewer approves report
+↓
+Report is released to allowed audiences
 
-This protects ethical standards.
+### Status model
 
-8. Professional Psychological Report
+- `scored_preliminary`
+- `in_review`
+- `reviewed`
+- `released`
 
-The report should include:
+### Visibility principle
 
-participant identity
+- preliminary score is operational data, not the final report
+- reviewed output is professional interpretation
+- released output is the only version that should be treated as deliverable
 
-test used
+## Result Distribution Flow
 
-date of administration
+The platform should support these result policies:
 
-score
+- HR only
+- participant summary
+- full report with consent
 
-interpretation
+### Rules
 
-limitations
+- do not release full psychological interpretation automatically
+- participant visibility must follow consent and session policy
+- research studies may choose to suppress participant-facing results entirely
+- HR should not see draft reviewer notes before release
 
-recommendation
+## Research Flow
 
-Example structure:
+Custom research assessments should remain structured and compliance-aware.
 
-Assessment Report
+Researcher signs up
+↓
+Creates custom assessment
+↓
+Configures participant limit and visibility
+↓
+Shares participant link
+↓
+Collects responses
+↓
+Exports structured dataset
 
-Test Used
-DISC Personality Assessment
+### Research-specific notes
 
-Participant
-Budi Santoso
+- custom assessments may not need participant result delivery
+- export structure should be suitable for statistical analysis
+- privacy wording and contact person details must remain visible in consent flow
 
-Results
-Dominance (High)
+## Reporting Flow
 
-Interpretation
-Shows strong leadership tendencies and decisive decision making.
+### Business or HR use
 
-Recommendation
-Suitable for roles requiring initiative and leadership. 9. Result Distribution
+Assessment completed
+↓
+Preliminary score generated
+↓
+Reviewer validates interpretation
+↓
+Released report shared to HR or participant according to policy
 
-Your current idea is good.
+### Research use
 
-Options:
+Responses collected
+↓
+Data cleaned and exported
+↓
+No professional interpretation is required unless the study defines it
 
-Send to HR only
-Send summary to participant
-Send full report
+## Workflow Update Rule
 
-Important rule:
+Whenever the implementation changes any of the following, this document should be updated:
 
-Do not automatically send full psychological interpretation without consent.
+- onboarding steps
+- participant flow
+- reviewer flow
+- result release flow
+- research export flow

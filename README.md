@@ -7,6 +7,7 @@ The repository root is the frontend project for Hostinger Git import. The fronte
 - `src/`: frontend app source
 - `apps/api/`: separate backend API source
 - `deploy/`: API manual-upload artifacts
+- `docs/`: workflow, compliance, and phased delivery notes
 
 ## Frontend deployment
 
@@ -46,3 +47,9 @@ Assessment seed SQL and private bootstrap data are intentionally not versioned i
 - Store a long `JWT_SECRET` only in the API environment.
 - Admin login is validated against the `admins` table in MySQL.
 - Participant answer save and submit endpoints require a signed submission access token.
+
+## Product planning docs
+
+- `docs/new-flow.md`
+- `docs/compliance.md`
+- `docs/development-phases.md`

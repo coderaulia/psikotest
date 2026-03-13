@@ -1,113 +1,162 @@
-HIMPSI Compliance for Psikotest App
+# Compliance Implementation Notes
 
-Indonesia has strict ethical guidelines for psychological services.
+This document maps ethical and compliance expectations into product and engineering requirements for Vanaila Psikotest.
 
-HIMPSI defines standards for:
+It should be read together with:
 
-test usage
-interpretation
-confidentiality
-professional responsibility
+- `docs/new-flow.md`
+- `docs/development-phases.md`
 
-The HIMPSI code of ethics requires psychological services to follow principles such as respect for human dignity, professional competence, and integrity.
+## Compliance Basis
 
-Your platform must respect these.
+Indonesia has strict ethical guidelines for psychological services. HIMPSI standards and the general handling expectations for sensitive personal data should influence how the product is built.
 
-Key HIMPSI Compliance Areas
+The platform should treat psychological assessment as a protected service workflow, not as a generic form builder.
 
-1. Test Validity and Reliability
+## Core Compliance Areas
 
-Psychological tests must be scientifically validated instruments.
+### 1. Test validity and reliability
 
-HIMPSI requires psychological tools to be valid and reliable before use.
+Psychological tests used for professional decisions should be scientifically grounded and used within the right context.
 
-Meaning:
+Implications for the product:
 
-You cannot just create random personality questions.
+- validated instruments must be distinguished from custom research instruments
+- result interpretation must be context-aware
+- test purpose should be captured before administration
+- the system should not imply clinical or professional validity for dummy or unvalidated content
 
-Your tests must have:
+### 2. Competence requirement
 
-Construct validity
-Reliability
-Standardization
-Norms
+Certain psychological services require qualified professional oversight.
 
-For example:
+Implications for the product:
 
-DISC questionnaires must follow validated frameworks.
+- the system must distinguish:
+  - self-assessment mode
+  - professional review mode
+  - research data collection mode
+- professional interpretation should require reviewer or psychologist workflow
+- preliminary machine scoring must not be framed as the final professional conclusion
 
-2. Competence Requirement
-
-Certain psychological services must be performed by qualified psychologists.
-
-HIMPSI emphasizes that psychological assessment should be conducted according to professional competence and authority.
-
-Your system should clarify:
-
-Self assessment mode
-Professional assessment mode
-
-Example:
-
-Professional interpretation requires licensed psychologist review. 3. Confidentiality of Data
+### 3. Confidentiality of data
 
 Psychological data is sensitive personal data.
 
-HIMPSI requires protection of:
+Implications for the product:
 
-test instruments
+- access to participant data and results must be role-controlled
+- result visibility must be policy-driven
+- audit logging should record review and release actions
+- data retention and export actions should be trackable
 
-participant data
+### 4. Protection of test materials
 
-assessment results
+Psychological test materials should not be casually exposed or redistributed.
 
-Your app must include:
+Implications for the product:
 
-Encrypted storage
-Restricted access
-Admin permissions
-Data retention policy
+- question banks must remain admin-only
+- participant delivery should minimize full item exposure
+- protected sessions should support progressive item delivery
+- anti-copy posture should be considered for professional tests
 
-Example:
+### 5. Interpretation responsibility
 
-Only authorized HR or psychologist can access reports. 4. Protection of Test Materials
+Interpretation must be done responsibly and within the operator's competence.
 
-Psychological test items should not be publicly exposed.
+Implications for the product:
 
-Meaning:
+- automated interpretation must be labeled as indicative or preliminary
+- professional interpretation requires reviewer validation
+- released reports should clearly identify whether they are summary-only or professionally reviewed
 
-Avoid:
+## Product Requirements Derived from Compliance
 
-question bank publicly visible
-test content shareable
+### Consent
 
-Instead:
+Mandatory before test start.
 
-server-side question rendering
-anti-copy system 5. Interpretation Responsibility
+Required content:
 
-HIMPSI guidelines emphasize that interpretation must be done responsibly and within professional competence.
+- purpose of assessment
+- estimated duration
+- privacy statement
+- voluntary participation wording
+- contact person
 
-So your app should clearly state:
+### Role model
 
-Automated interpretation is indicative only.
-Professional interpretation requires a psychologist.
-Recommended Compliance Features for Your App
-Role-based system
-Admin
-Psychologist
-HR user
-Participant
-Professional review option
-Enable psychologist verification
-Ethical consent
+The long-term role model should include:
 
-Mandatory before starting test.
+- `super_admin`
+- `admin`
+- `psychologist_reviewer`
+- `hr_user`
+- `participant`
+- `customer_owner` or equivalent workspace owner
 
-Data protection
+### Result release
 
-Participant results must be private.
+Only released reports should be treated as final deliverables.
 
-Test security
+Operational states:
 
-Questions should not be downloadable.
+- preliminary
+- in review
+- reviewed
+- released
+
+### Result visibility
+
+Supported policy directions:
+
+- HR only
+- participant summary
+- full report with consent
+
+### Research mode
+
+Research assessments should support:
+
+- structured questionnaire collection
+- participant limits
+- privacy-focused consent flow
+- dataset export without implying professional interpretation
+
+## Phase Mapping
+
+### Phase 1
+
+Implements:
+
+- reviewer-specific workflow
+- preliminary versus reviewed report separation
+- review and release audit trail
+
+### Phase 2
+
+Implements:
+
+- stronger question security
+- progressive delivery for protected tests
+- result distribution enforcement
+
+### Phase 3
+
+Implements:
+
+- export and handoff controls
+- delivery logging
+- final report operationalization
+
+## Current Gaps To Close
+
+- reviewer-specific permissions are not yet fully modeled
+- full result distribution policy enforcement is not yet complete
+- question exposure is still broader than ideal for protected tests
+- final report export and delivery workflows are still deferred
+
+## Documentation Rule
+
+Any change to consent handling, reviewer flow, result visibility, or export policy should update this document before release.
