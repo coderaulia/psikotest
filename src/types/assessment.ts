@@ -4,7 +4,7 @@ export type AssessmentPurpose = 'recruitment' | 'employee_development' | 'academ
 export type AdministrationMode = 'supervised' | 'remote_unsupervised';
 export type InterpretationMode = 'self_assessment' | 'professional_review';
 export type ParticipantResultMode = 'instant_summary' | 'review_required';
-export type ResultReviewStatus = 'preliminary' | 'reviewed';
+export type ResultReviewStatus = 'scored_preliminary' | 'in_review' | 'reviewed' | 'released';
 export type QuestionStatus = 'draft' | 'active' | 'archived';
 
 export interface TestSessionComplianceSettings {
@@ -98,7 +98,7 @@ export interface AdminUser {
   id: number;
   fullName: string;
   email: string;
-  role: 'super_admin' | 'admin';
+  role: 'super_admin' | 'admin' | 'psychologist_reviewer';
 }
 
 export interface AdminLoginResponse {
@@ -329,8 +329,16 @@ export interface StoredResultRecord {
   profileCode: string | null;
   interpretationKey: string | null;
   reviewStatus: ResultReviewStatus;
+  reviewStartedAt: string | null;
   reviewedAt: string | null;
   reviewedByAdminId: number | null;
+  reviewerAdminId: number | null;
+  releasedAt: string | null;
+  releasedByAdminId: number | null;
+  professionalSummary: string | null;
+  recommendation: string | null;
+  limitations: string | null;
+  reviewerNotes: string | null;
   resultPayload: Record<string, unknown>;
   summaries: StoredResultSummary[];
 }
@@ -411,7 +419,7 @@ export interface AdminProfileSettings {
   id: number;
   fullName: string;
   email: string;
-  role: 'super_admin' | 'admin';
+  role: 'super_admin' | 'admin' | 'psychologist_reviewer';
   lastLoginAt: string | null;
   createdAt: string | null;
 }
@@ -440,5 +448,8 @@ export interface SettingsOverviewResponse {
   sessionDefaults: SessionDefaultsSettings;
   auditFeed: AuditFeedItem[];
 }
+
+
+
 
 

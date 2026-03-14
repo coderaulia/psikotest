@@ -25,11 +25,27 @@ function assertSubmissionAccess(submissionId: number, submissionAccessToken: str
   return claims;
 }
 
+function createReviewNote(reviewStatus: StoredResultDetailRecord['reviewStatus']) {
+  if (reviewStatus === 'released') {
+    return null;
+  }
+
+  if (reviewStatus === 'reviewed') {
+    return 'Your responses have been reviewed and are awaiting formal release.';
+  }
+
+  if (reviewStatus === 'in_review') {
+    return 'Your responses are currently being reviewed by an authorized psychologist or reviewer.';
+  }
+
+  return 'Your responses have been recorded. Final interpretation will be available after professional review.';
+}
+
 function sanitizeParticipantResult(
   result: StoredResultDetailRecord,
   participantResultMode: 'instant_summary' | 'review_required',
 ) {
-  if (participantResultMode === 'instant_summary' || result.reviewStatus === 'reviewed') {
+  if (participantResultMode === 'instant_summary' || result.reviewStatus === 'released') {
     return result;
   }
 
@@ -41,10 +57,14 @@ function sanitizeParticipantResult(
     secondaryType: null,
     profileCode: null,
     interpretationKey: null,
+    professionalSummary: null,
+    recommendation: null,
+    limitations: null,
+    reviewerNotes: null,
     summaries: [],
     resultPayload: {
       reviewStatus: result.reviewStatus,
-      note: 'Your responses have been recorded. Final interpretation will be available after professional review.',
+      note: createReviewNote(result.reviewStatus),
     },
   } satisfies StoredResultDetailRecord;
 }
@@ -168,4 +188,3 @@ export async function submitPublicSubmission(
     ),
   };
 }
-

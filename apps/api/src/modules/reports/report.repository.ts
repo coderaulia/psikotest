@@ -3,6 +3,7 @@ import type { RowDataPacket } from 'mysql2/promise';
 import { getDbPool } from '../../database/mysql.js';
 import { fetchDiscDistribution, fetchWorkloadDistribution } from '../dashboard/dashboard.repository.js';
 import type { PublicTestTypeCode } from '../public-sessions/public-session.types.js';
+import type { ResultReviewStatus } from '../results/result.service.js';
 
 interface SummaryCountRow extends RowDataPacket {
   value: number | null;
@@ -23,10 +24,12 @@ interface RecentCompletionRow extends RowDataPacket {
   score_band: string | null;
   profile_code: string | null;
   review_status: string | null;
+  released_at: string | null;
 }
 
 interface ReviewStatusRow extends RowDataPacket {
   review_status: string | null;
+  released_at: string | null;
   value: number;
 }
 
@@ -36,6 +39,39 @@ function toIsoString(value: string | Date | null) {
   }
 
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function normalizeReviewStatus(rawStatus: string | null, releasedAt: string | null): ResultReviewStatus {
+  if (releasedAt) {
+    return 'released';
+  }
+
+  if (rawStatus === 'released') {
+    return 'released';
+  }
+
+  if (rawStatus === 'reviewed') {
+    return 'reviewed';
+  }
+
+  if (rawStatus === 'in_review') {
+    return 'in_review';
+  }
+
+  return 'scored_preliminary';
+}
+
+function formatDistributionLabel(status: ResultReviewStatus) {
+  switch (status) {
+    case 'released':
+      return 'Released';
+    case 'reviewed':
+      return 'Reviewed';
+    case 'in_review':
+      return 'In Review';
+    default:
+      return 'Preliminary';
+  }
 }
 
 export async function fetchReportOverviewCounts() {
@@ -81,16 +117,20 @@ export async function fetchReviewStatusDistribution() {
     `
       SELECT
         JSON_UNQUOTE(JSON_EXTRACT(COALESCE(r.result_payload_json, JSON_OBJECT()), '$.reviewStatus')) AS review_status,
+        JSON_UNQUOTE(JSON_EXTRACT(COALESCE(r.result_payload_json, JSON_OBJECT()), '$.releasedAt')) AS released_at,
         COUNT(*) AS value
       FROM results r
-      GROUP BY review_status
+      GROUP BY review_status, released_at
     `,
   );
 
-  return rows.map((row) => ({
-    label: row.review_status === 'reviewed' ? 'Reviewed' : 'Preliminary',
-    value: Number(row.value ?? 0),
-  }));
+  return rows.map((row) => {
+    const normalizedStatus = normalizeReviewStatus(row.review_status, row.released_at);
+    return {
+      label: formatDistributionLabel(normalizedStatus),
+      value: Number(row.value ?? 0),
+    };
+  });
 }
 
 export async function fetchRecentCompletions(limit = 8) {
@@ -106,7 +146,8 @@ export async function fetchRecentCompletions(limit = 8) {
         COALESCE(s.submitted_at, r.created_at) AS submitted_at,
         r.score_band,
         r.profile_code,
-        JSON_UNQUOTE(JSON_EXTRACT(COALESCE(r.result_payload_json, JSON_OBJECT()), '$.reviewStatus')) AS review_status
+        JSON_UNQUOTE(JSON_EXTRACT(COALESCE(r.result_payload_json, JSON_OBJECT()), '$.reviewStatus')) AS review_status,
+        JSON_UNQUOTE(JSON_EXTRACT(COALESCE(r.result_payload_json, JSON_OBJECT()), '$.releasedAt')) AS released_at
       FROM results r
       INNER JOIN submissions s ON s.id = r.submission_id
       INNER JOIN participants p ON p.id = s.participant_id
@@ -124,7 +165,7 @@ export async function fetchRecentCompletions(limit = 8) {
     testType: row.test_type,
     submittedAt: toIsoString(row.submitted_at),
     summary: row.profile_code ?? row.score_band ?? 'Scored assessment',
-    reviewStatus: row.review_status === 'reviewed' ? 'reviewed' : 'preliminary',
+    reviewStatus: normalizeReviewStatus(row.review_status, row.released_at),
   }));
 }
 

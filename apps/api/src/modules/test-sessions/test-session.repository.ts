@@ -9,7 +9,7 @@ import {
 } from './session-settings.js';
 
 export type TestSessionStatus = 'draft' | 'active' | 'completed' | 'archived';
-export type ResultReviewStatus = 'preliminary' | 'reviewed';
+export type ResultReviewStatus = 'scored_preliminary' | 'in_review' | 'reviewed' | 'released';
 
 export interface TestSessionListFilters {
   search?: string;
@@ -134,14 +134,30 @@ function parseInstructions(instructions: string | null) {
 
 function parseReviewStatus(payload: string | Record<string, unknown> | null): ResultReviewStatus {
   if (!payload) {
-    return 'preliminary';
+    return 'scored_preliminary';
   }
 
   const normalized = typeof payload === 'string'
     ? (JSON.parse(payload) as Record<string, unknown>)
     : payload;
 
-  return normalized.reviewStatus === 'reviewed' ? 'reviewed' : 'preliminary';
+  if (typeof normalized.releasedAt === 'string' && normalized.releasedAt.length > 0) {
+    return 'released';
+  }
+
+  if (normalized.reviewStatus === 'released') {
+    return 'released';
+  }
+
+  if (normalized.reviewStatus === 'reviewed') {
+    return 'reviewed';
+  }
+
+  if (normalized.reviewStatus === 'in_review') {
+    return 'in_review';
+  }
+
+  return 'scored_preliminary';
 }
 
 function mapSessionSummary(row: SessionSummaryRow): TestSessionListItem {
@@ -437,3 +453,4 @@ export async function updateTestSessionRecord(id: number, input: UpdateTestSessi
 
   return fetchTestSessionById(id);
 }
+

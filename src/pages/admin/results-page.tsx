@@ -9,13 +9,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { fetchResults } from '@/services/admin-data';
-import type { StoredResultRecord, TestTypeCode } from '@/types/assessment';
+import type { ResultReviewStatus, StoredResultRecord, TestTypeCode } from '@/types/assessment';
 import { formatDate, formatResultHeadline, formatResultSummary, formatTestTypeLabel, formatTokenLabel } from '@/lib/formatters';
 
 export function ResultsPage() {
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
   const [testType, setTestType] = useState<'all' | TestTypeCode>('all');
+  const [reviewStatus, setReviewStatus] = useState<'all' | ResultReviewStatus>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [results, setResults] = useState<StoredResultRecord[]>([]);
@@ -31,6 +32,7 @@ export function ResultsPage() {
         await fetchResults({
           search: deferredSearch.trim(),
           testType,
+          reviewStatus,
           dateFrom: dateFrom || undefined,
           dateTo: dateTo || undefined,
         }),
@@ -44,14 +46,14 @@ export function ResultsPage() {
 
   useEffect(() => {
     void loadResults();
-  }, [deferredSearch, testType, dateFrom, dateTo]);
+  }, [deferredSearch, testType, reviewStatus, dateFrom, dateTo]);
 
   return (
     <div className="space-y-8">
       <SectionHeading
         eyebrow="Results"
         title="Assessment results"
-        description="Search by participant, filter by test type or date, and open result details for review-ready reporting."
+        description="Search by participant, filter by test type or review state, and open result details for reviewer-led release workflow."
       />
       <Card className="bg-white/80">
         <CardContent className="space-y-5 p-5">
@@ -60,13 +62,20 @@ export function ResultsPage() {
               <Search className="pointer-events-none absolute left-4 top-3.5 h-4 w-4 text-slate-400" />
               <Input className="pl-10" placeholder="Search participant or session" value={search} onChange={(event) => setSearch(event.target.value)} />
             </div>
-            <div className="grid gap-3 md:grid-cols-3 xl:w-[560px]">
+            <div className="grid gap-3 md:grid-cols-4 xl:w-[760px]">
               <Select value={testType} onChange={(event) => setTestType(event.target.value as 'all' | TestTypeCode)}>
                 <option value="all">All test types</option>
                 <option value="disc">DISC</option>
                 <option value="iq">IQ</option>
                 <option value="workload">Workload</option>
                 <option value="custom">Custom Research</option>
+              </Select>
+              <Select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value as 'all' | ResultReviewStatus)}>
+                <option value="all">All review states</option>
+                <option value="scored_preliminary">Preliminary</option>
+                <option value="in_review">In review</option>
+                <option value="reviewed">Reviewed</option>
+                <option value="released">Released</option>
               </Select>
               <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
               <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
@@ -81,7 +90,7 @@ export function ResultsPage() {
           <div className="overflow-hidden rounded-2xl border border-slate-200">
             {isLoading ? (
               <div className="p-6">
-                <StateCard title="Loading results" description="Pulling scored assessments and summaries from MySQL." />
+                <StateCard title="Loading results" description="Pulling scored assessments and review workflow states from MySQL." />
               </div>
             ) : error ? (
               <div className="p-6">

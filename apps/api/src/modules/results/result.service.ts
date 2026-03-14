@@ -3,17 +3,19 @@ import type { ResultSummaryItem, ScoredAssessmentResult } from '../scoring/scori
 import {
   fetchResultById,
   fetchResults,
-  updateResultReviewStatusRecord,
+  fetchReviewerQueueRecords,
+  saveResultReviewRecord,
   upsertResultRecord,
 } from './result.repository.js';
 
-export type ResultReviewStatus = 'preliminary' | 'reviewed';
+export type ResultReviewStatus = 'scored_preliminary' | 'in_review' | 'reviewed' | 'released';
 
 export interface ResultListFilters {
   search?: string;
   testType?: PublicTestTypeCode;
   dateFrom?: string;
   dateTo?: string;
+  reviewStatus?: ResultReviewStatus;
   limit?: number;
 }
 
@@ -37,8 +39,16 @@ export interface StoredResultRecord {
   profileCode: string | null;
   interpretationKey: string | null;
   reviewStatus: ResultReviewStatus;
+  reviewStartedAt: string | null;
   reviewedAt: string | null;
   reviewedByAdminId: number | null;
+  reviewerAdminId: number | null;
+  releasedAt: string | null;
+  releasedByAdminId: number | null;
+  professionalSummary: string | null;
+  recommendation: string | null;
+  limitations: string | null;
+  reviewerNotes: string | null;
   resultPayload: Record<string, unknown>;
   summaries: ResultSummaryItem[];
 }
@@ -60,16 +70,28 @@ export interface StoredResultDetailRecord extends StoredResultRecord {
   };
 }
 
+export interface ResultReviewUpdateInput {
+  reviewStatus?: ResultReviewStatus;
+  professionalSummary?: string | null;
+  recommendation?: string | null;
+  limitations?: string | null;
+  reviewerNotes?: string | null;
+}
+
 export async function listResults(filters: ResultListFilters = {}) {
   return fetchResults(filters);
+}
+
+export async function listReviewerQueue(limit?: number) {
+  return fetchReviewerQueueRecords(limit);
 }
 
 export async function getResultById(id: number) {
   return fetchResultById(id);
 }
 
-export async function updateResultReviewStatus(id: number, reviewStatus: ResultReviewStatus, adminId: number) {
-  return updateResultReviewStatusRecord(id, reviewStatus, adminId);
+export async function updateResultReview(id: number, input: ResultReviewUpdateInput, adminId: number) {
+  return saveResultReviewRecord(id, input, adminId);
 }
 
 export async function storeResult(input: {

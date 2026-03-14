@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react';
 
-import { FileCog, FileStack, LayoutGrid, LineChart, LogOut, Settings, Users } from 'lucide-react';
+import { ClipboardList, FileCog, FileStack, LayoutGrid, LineChart, LogOut, Settings, Users } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 
 import { clearAdminSession, loadAdminSession } from '@/lib/admin-session';
 import { cn } from '@/lib/cn';
+import { formatTokenLabel } from '@/lib/formatters';
 
-const navItems = [
+const baseNavItems = [
   { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutGrid },
   { to: '/admin/participants', label: 'Participants', icon: Users },
   { to: '/admin/test-sessions', label: 'Test Sessions', icon: FileStack },
@@ -16,9 +17,15 @@ const navItems = [
   { to: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
+const reviewerNavItem = { to: '/admin/reviewer-queue', label: 'Reviewer Queue', icon: ClipboardList };
+
 export function AdminShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const adminSession = loadAdminSession();
+  const canReview = ['super_admin', 'psychologist_reviewer'].includes(adminSession?.admin.role ?? '');
+  const navItems = canReview
+    ? [...baseNavItems.slice(0, 5), reviewerNavItem, ...baseNavItems.slice(5)]
+    : baseNavItems;
 
   function handleLogout() {
     clearAdminSession();
@@ -65,6 +72,11 @@ export function AdminShell({ children }: { children: ReactNode }) {
               <div className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-sm text-slate-500 md:block">
                 {adminSession?.admin.email ?? 'Protected workspace'}
               </div>
+              {adminSession ? (
+                <div className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-sm text-slate-500 lg:block">
+                  {formatTokenLabel(adminSession.admin.role)}
+                </div>
+              ) : null}
               <button
                 type="button"
                 onClick={handleLogout}
@@ -81,4 +93,3 @@ export function AdminShell({ children }: { children: ReactNode }) {
     </div>
   );
 }
-

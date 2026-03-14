@@ -7,7 +7,7 @@ interface AdminRow extends RowDataPacket {
   full_name: string;
   email: string;
   password_hash: string;
-  role: 'super_admin' | 'admin';
+  role: 'super_admin' | 'admin' | 'psychologist_reviewer';
   status: 'active' | 'inactive';
 }
 
@@ -37,3 +37,4 @@ export async function markAdminLogin(adminId: number) {
     [adminId],
   );
 }
+

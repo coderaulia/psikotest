@@ -81,14 +81,21 @@ export async function fetchResults(filters: {
   testType?: TestTypeCode | 'all';
   dateFrom?: string;
   dateTo?: string;
+  reviewStatus?: ResultReviewStatus | 'all';
 } = {}) {
   const query = buildQuery({
     search: filters.search,
     testType: filters.testType && filters.testType !== 'all' ? filters.testType : undefined,
     dateFrom: filters.dateFrom,
     dateTo: filters.dateTo,
+    reviewStatus: filters.reviewStatus && filters.reviewStatus !== 'all' ? filters.reviewStatus : undefined,
   });
   const payload = await adminFetchJson<{ items: StoredResultRecord[] }>(`/results${query}`);
+  return payload.items;
+}
+
+export async function fetchReviewerQueue() {
+  const payload = await adminFetchJson<{ items: StoredResultRecord[] }>('/results/reviewer-queue');
   return payload.items;
 }
 
@@ -100,6 +107,19 @@ export async function updateAdminResultReviewStatus(id: number, reviewStatus: Re
   return adminFetchJson<StoredResultDetailRecord>(`/results/${id}/review-status`, {
     method: 'PATCH',
     body: JSON.stringify({ reviewStatus }),
+  });
+}
+
+export async function updateAdminResultReview(id: number, payload: {
+  reviewStatus?: ResultReviewStatus;
+  professionalSummary?: string | null;
+  recommendation?: string | null;
+  limitations?: string | null;
+  reviewerNotes?: string | null;
+}) {
+  return adminFetchJson<StoredResultDetailRecord>(`/results/${id}/review`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
   });
 }
 
@@ -152,4 +172,3 @@ export async function updateSessionDefaults(payload: SettingsOverviewResponse['s
     body: JSON.stringify(payload),
   });
 }
-

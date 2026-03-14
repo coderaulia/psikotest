@@ -11,7 +11,7 @@ export interface AdminSessionClaims extends SignedTokenPayloadBase {
   type: 'admin';
   adminId: number;
   email: string;
-  role: 'super_admin' | 'admin';
+  role: 'super_admin' | 'admin' | 'psychologist_reviewer';
 }
 
 export interface SubmissionAccessClaims extends SignedTokenPayloadBase {
@@ -80,7 +80,7 @@ function verifyToken(token: string) {
 export function createAdminSessionToken(input: {
   adminId: number;
   email: string;
-  role: 'super_admin' | 'admin';
+  role: 'super_admin' | 'admin' | 'psychologist_reviewer';
 }) {
   return signToken<AdminSessionClaims>({
     type: 'admin',
@@ -146,3 +146,4 @@ export function verifySubmissionAccessToken(token: string) {
 
   return payload as SubmissionAccessClaims;
 }
+

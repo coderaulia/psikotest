@@ -7,7 +7,7 @@ interface FakeAdmin {
   full_name: string;
   email: string;
   password_hash: string;
-  role: 'super_admin' | 'admin';
+  role: 'super_admin' | 'admin' | 'psychologist_reviewer';
   status: 'active' | 'inactive';
   last_login_at: string | null;
 }
@@ -516,3 +516,4 @@ export class FakeDbPool implements DbPoolLike {
     throw new Error(`Unsupported fake DB query: ${sql}`);
   }
 }
+

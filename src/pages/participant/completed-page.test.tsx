@@ -8,7 +8,7 @@ describe('ParticipantCompletedPage', () => {
     window.sessionStorage.clear();
   });
 
-  it('hides detailed results when professional review is still required', async () => {
+  it('hides detailed results until a review-required report is released', async () => {
     window.sessionStorage.setItem(
       'psikotest:participant:disc-batch-a',
       JSON.stringify({
@@ -43,12 +43,20 @@ describe('ParticipantCompletedPage', () => {
           secondaryType: null,
           profileCode: null,
           interpretationKey: null,
-          reviewStatus: 'preliminary',
-          reviewedAt: null,
-          reviewedByAdminId: null,
+          reviewStatus: 'reviewed',
+          reviewStartedAt: new Date().toISOString(),
+          reviewedAt: new Date().toISOString(),
+          reviewedByAdminId: 1,
+          reviewerAdminId: 1,
+          releasedAt: null,
+          releasedByAdminId: null,
+          professionalSummary: 'Reviewed summary waiting release.',
+          recommendation: null,
+          limitations: null,
+          reviewerNotes: null,
           resultPayload: {
-            reviewStatus: 'preliminary',
-            note: 'Your responses have been recorded. Final interpretation will be available after professional review.',
+            reviewStatus: 'reviewed',
+            note: 'Your responses have been reviewed and are awaiting formal release.',
           },
           summaries: [],
         },
@@ -62,6 +70,70 @@ describe('ParticipantCompletedPage', () => {
 
     expect(await screen.findByText('Professional review required')).toBeInTheDocument();
     expect(screen.queryByText(/primary result/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/final interpretation will be available after an authorized reviewer/i)).toBeInTheDocument();
+    expect(screen.getByText(/awaiting authorized release/i)).toBeInTheDocument();
+  });
+
+  it('shows detailed results after release', async () => {
+    window.sessionStorage.setItem(
+      'psikotest:participant:disc-batch-a',
+      JSON.stringify({
+        submissionId: 1,
+        participantId: 2,
+        token: 'disc-batch-a',
+        submissionAccessToken: 'submission-token',
+        testType: 'disc',
+        participantResultMode: 'review_required',
+        participant: {
+          fullName: 'Nadia Pratama',
+          email: 'nadia@example.com',
+          consentAccepted: true,
+          consentAcceptedAt: new Date().toISOString(),
+        },
+        result: {
+          id: 99,
+          submissionId: 1,
+          participantId: 2,
+          participantName: 'Nadia Pratama',
+          participantEmail: 'nadia@example.com',
+          department: null,
+          positionTitle: null,
+          sessionId: 10,
+          sessionTitle: 'Graduate Hiring Batch',
+          accessToken: 'disc-batch-a',
+          testType: 'disc',
+          submittedAt: new Date().toISOString(),
+          scoreTotal: 0,
+          scoreBand: null,
+          primaryType: 'I',
+          secondaryType: 'D',
+          profileCode: 'I/D',
+          interpretationKey: 'disc_profile',
+          reviewStatus: 'released',
+          reviewStartedAt: new Date().toISOString(),
+          reviewedAt: new Date().toISOString(),
+          reviewedByAdminId: 1,
+          reviewerAdminId: 1,
+          releasedAt: new Date().toISOString(),
+          releasedByAdminId: 1,
+          professionalSummary: 'Strongly persuasive and proactive profile.',
+          recommendation: 'Suitable for collaborative leadership roles.',
+          limitations: 'Interpret with other assessment inputs.',
+          reviewerNotes: null,
+          resultPayload: {
+            reviewStatus: 'released',
+          },
+          summaries: [{ metricKey: 'I', metricLabel: 'Influence', score: 10, band: null }],
+        },
+      }),
+    );
+
+    renderWithRoute(<ParticipantCompletedPage />, {
+      route: '/t/disc-batch-a/completed',
+      path: '/t/:token/completed',
+    });
+
+    expect(await screen.findByText(/primary result/i)).toBeInTheDocument();
+    expect(screen.getByText('Strongly persuasive and proactive profile.')).toBeInTheDocument();
+    expect(screen.getByText('Suitable for collaborative leadership roles.')).toBeInTheDocument();
   });
 });

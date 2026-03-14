@@ -19,6 +19,15 @@ function createFakeState(passwordHash: string): FakeDbState {
         status: 'active',
         last_login_at: null,
       },
+      {
+        id: 2,
+        full_name: 'Operations Admin',
+        email: 'ops@example.com',
+        password_hash: passwordHash,
+        role: 'admin',
+        status: 'active',
+        last_login_at: null,
+      },
     ],
     customerAccounts: [],
     customerAssessments: [],
@@ -331,6 +340,7 @@ export async function runApiIntegrationTests() {
     setDbPoolForTests(null);
   }
 }
+
 
 
 

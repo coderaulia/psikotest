@@ -5,12 +5,24 @@ import { formatTokenLabel } from '@/lib/formatters';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
+function getReviewStatusMessage(reviewStatus: string | null | undefined) {
+  if (reviewStatus === 'reviewed') {
+    return 'Your result has been reviewed and is awaiting authorized release.';
+  }
+
+  if (reviewStatus === 'in_review') {
+    return 'Your responses are currently being reviewed by an authorized psychologist or reviewer.';
+  }
+
+  return 'Your responses have been recorded. Final interpretation will be available after an authorized reviewer completes the assessment review and release.';
+}
+
 export function ParticipantCompletedPage() {
   const { token = 'assessment-token' } = useParams();
   const storedSession = loadParticipantSession(token);
   const result = storedSession?.result;
   const note = typeof result?.resultPayload.note === 'string' ? result.resultPayload.note : null;
-  const isReviewRequired = storedSession?.participantResultMode === 'review_required' && result?.reviewStatus !== 'reviewed';
+  const isReviewRequired = storedSession?.participantResultMode === 'review_required' && result?.reviewStatus !== 'released';
 
   return (
     <Card className="mx-auto w-full max-w-3xl bg-white/82 text-center">
@@ -25,7 +37,7 @@ export function ParticipantCompletedPage() {
             <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Review status</p>
               <p className="mt-2 text-base font-medium text-slate-950">Professional review required</p>
-              <p className="mt-2 text-sm text-slate-500">Your responses have been recorded. Final interpretation will be available after an authorized reviewer completes the assessment review.</p>
+              <p className="mt-2 text-sm text-slate-500">{getReviewStatusMessage(result?.reviewStatus)}</p>
             </div>
           ) : result ? (
             <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -38,7 +50,7 @@ export function ParticipantCompletedPage() {
               <div className="rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Interpretation</p>
                 <p className="mt-2 text-base font-medium text-slate-950">
-                  {formatTokenLabel(result.scoreBand ?? result.interpretationKey)}
+                  {result.professionalSummary ?? formatTokenLabel(result.scoreBand ?? result.interpretationKey)}
                 </p>
               </div>
             </div>
@@ -48,15 +60,34 @@ export function ParticipantCompletedPage() {
         </div>
 
         {!isReviewRequired && result ? (
-          <div className="grid gap-3 text-left md:grid-cols-2">
-            {result.summaries.map((summary) => (
-              <div key={summary.metricKey} className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
-                <p className="font-medium text-slate-950">{summary.metricLabel}</p>
-                <p className="mt-2 text-2xl font-semibold text-slate-950">{summary.score}</p>
-                {summary.band ? <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-400">{formatTokenLabel(summary.band)}</p> : null}
+          <>
+            <div className="grid gap-3 text-left md:grid-cols-2">
+              {result.summaries.map((summary) => (
+                <div key={summary.metricKey} className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+                  <p className="font-medium text-slate-950">{summary.metricLabel}</p>
+                  <p className="mt-2 text-2xl font-semibold text-slate-950">{summary.score}</p>
+                  {summary.band ? <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-400">{formatTokenLabel(summary.band)}</p> : null}
+                </div>
+              ))}
+            </div>
+
+            {result.recommendation || result.limitations ? (
+              <div className="grid gap-3 text-left md:grid-cols-2">
+                {result.recommendation ? (
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+                    <p className="font-medium text-slate-950">Recommendation</p>
+                    <p className="mt-2">{result.recommendation}</p>
+                  </div>
+                ) : null}
+                {result.limitations ? (
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+                    <p className="font-medium text-slate-950">Limitations</p>
+                    <p className="mt-2">{result.limitations}</p>
+                  </div>
+                ) : null}
               </div>
-            ))}
-          </div>
+            ) : null}
+          </>
         ) : null}
 
         {note ? (

@@ -9,7 +9,7 @@ interface AdminProfileRow extends RowDataPacket {
   id: number;
   full_name: string;
   email: string;
-  role: 'super_admin' | 'admin';
+  role: 'super_admin' | 'admin' | 'psychologist_reviewer';
   last_login_at: Date | string | null;
   created_at: Date | string;
 }
@@ -221,3 +221,4 @@ export async function fetchAuditLogFeed(limit = 12) {
     createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
   }));
 }
+

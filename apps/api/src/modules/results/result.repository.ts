@@ -6,6 +6,7 @@ import type { ResultSummaryItem, ScoredAssessmentResult } from '../scoring/scori
 import type {
   ResultListFilters,
   ResultReviewStatus,
+  ResultReviewUpdateInput,
   StoredResultDetailRecord,
   StoredResultRecord,
 } from './result.service.js';
@@ -41,6 +42,20 @@ interface ResultSummaryRow extends RowDataPacket {
   band: string | null;
 }
 
+interface ReviewState {
+  reviewStatus: ResultReviewStatus;
+  reviewStartedAt: string | null;
+  reviewedAt: string | null;
+  reviewedByAdminId: number | null;
+  reviewerAdminId: number | null;
+  releasedAt: string | null;
+  releasedByAdminId: number | null;
+  professionalSummary: string | null;
+  recommendation: string | null;
+  limitations: string | null;
+  reviewerNotes: string | null;
+}
+
 function normalizePayload(payload: string | Record<string, unknown> | null) {
   if (!payload) {
     return {};
@@ -73,16 +88,49 @@ function toIsoString(value: string | Date | null) {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
-function readReviewState(payload: Record<string, unknown>) {
+function readOptionalString(payload: Record<string, unknown>, key: string) {
+  return typeof payload[key] === 'string' ? String(payload[key]) : null;
+}
+
+function readOptionalNumber(payload: Record<string, unknown>, key: string) {
+  return typeof payload[key] === 'number' ? Number(payload[key]) : null;
+}
+
+function normalizeReviewStatus(payload: Record<string, unknown>): ResultReviewStatus {
+  if (typeof payload.releasedAt === 'string' && payload.releasedAt.length > 0) {
+    return 'released';
+  }
+
+  const rawStatus = typeof payload.reviewStatus === 'string' ? payload.reviewStatus : null;
+
+  if (rawStatus === 'released') {
+    return 'released';
+  }
+
+  if (rawStatus === 'reviewed') {
+    return 'reviewed';
+  }
+
+  if (rawStatus === 'in_review') {
+    return 'in_review';
+  }
+
+  return 'scored_preliminary';
+}
+
+function readReviewState(payload: Record<string, unknown>): ReviewState {
   return {
-    reviewStatus: payload.reviewStatus === 'reviewed' ? 'reviewed' : 'preliminary',
-    reviewedAt: typeof payload.reviewedAt === 'string' ? payload.reviewedAt : null,
-    reviewedByAdminId:
-      typeof payload.reviewedByAdminId === 'number' ? payload.reviewedByAdminId : null,
-  } satisfies {
-    reviewStatus: ResultReviewStatus;
-    reviewedAt: string | null;
-    reviewedByAdminId: number | null;
+    reviewStatus: normalizeReviewStatus(payload),
+    reviewStartedAt: readOptionalString(payload, 'reviewStartedAt'),
+    reviewedAt: readOptionalString(payload, 'reviewedAt'),
+    reviewedByAdminId: readOptionalNumber(payload, 'reviewedByAdminId'),
+    reviewerAdminId: readOptionalNumber(payload, 'reviewerAdminId'),
+    releasedAt: readOptionalString(payload, 'releasedAt'),
+    releasedByAdminId: readOptionalNumber(payload, 'releasedByAdminId'),
+    professionalSummary: readOptionalString(payload, 'professionalSummary'),
+    recommendation: readOptionalString(payload, 'recommendation'),
+    limitations: readOptionalString(payload, 'limitations'),
+    reviewerNotes: readOptionalString(payload, 'reviewerNotes'),
   };
 }
 
@@ -131,8 +179,16 @@ function attachSummaries(rows: ResultListRow[], summaryRows: ResultSummaryRow[])
       profileCode: row.profile_code,
       interpretationKey: row.interpretation_key,
       reviewStatus: reviewState.reviewStatus,
+      reviewStartedAt: reviewState.reviewStartedAt,
       reviewedAt: reviewState.reviewedAt,
       reviewedByAdminId: reviewState.reviewedByAdminId,
+      reviewerAdminId: reviewState.reviewerAdminId,
+      releasedAt: reviewState.releasedAt,
+      releasedByAdminId: reviewState.releasedByAdminId,
+      professionalSummary: reviewState.professionalSummary,
+      recommendation: reviewState.recommendation,
+      limitations: reviewState.limitations,
+      reviewerNotes: reviewState.reviewerNotes,
       resultPayload,
       summaries: summaryRows
         .filter((summary) => summary.result_id === row.id)
@@ -144,6 +200,31 @@ function attachSummaries(rows: ResultListRow[], summaryRows: ResultSummaryRow[])
         })),
     };
   });
+}
+
+function buildReviewStatusCondition(reviewStatus: ResultReviewStatus) {
+  if (reviewStatus === 'released') {
+    return `(
+      JSON_UNQUOTE(JSON_EXTRACT(COALESCE(r.result_payload_json, JSON_OBJECT()), '$.reviewStatus')) = 'released'
+      OR JSON_UNQUOTE(JSON_EXTRACT(COALESCE(r.result_payload_json, JSON_OBJECT()), '$.releasedAt')) IS NOT NULL
+    )`;
+  }
+
+  if (reviewStatus === 'reviewed') {
+    return `(
+      JSON_UNQUOTE(JSON_EXTRACT(COALESCE(r.result_payload_json, JSON_OBJECT()), '$.reviewStatus')) = 'reviewed'
+      AND JSON_UNQUOTE(JSON_EXTRACT(COALESCE(r.result_payload_json, JSON_OBJECT()), '$.releasedAt')) IS NULL
+    )`;
+  }
+
+  if (reviewStatus === 'in_review') {
+    return `JSON_UNQUOTE(JSON_EXTRACT(COALESCE(r.result_payload_json, JSON_OBJECT()), '$.reviewStatus')) = 'in_review'`;
+  }
+
+  return `(
+    JSON_UNQUOTE(JSON_EXTRACT(COALESCE(r.result_payload_json, JSON_OBJECT()), '$.reviewStatus')) IS NULL
+    OR JSON_UNQUOTE(JSON_EXTRACT(COALESCE(r.result_payload_json, JSON_OBJECT()), '$.reviewStatus')) IN ('preliminary', 'scored_preliminary')
+  )`;
 }
 
 function buildResultQuery(filters: ResultListFilters = {}) {
@@ -170,6 +251,10 @@ function buildResultQuery(filters: ResultListFilters = {}) {
   if (filters.dateTo) {
     conditions.push('DATE(COALESCE(s.submitted_at, r.created_at)) <= ?');
     params.push(filters.dateTo);
+  }
+
+  if (filters.reviewStatus) {
+    conditions.push(buildReviewStatusCondition(filters.reviewStatus));
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -217,6 +302,11 @@ export async function fetchResults(filters: ResultListFilters = {}) {
   const [rows] = await pool.query<ResultListRow[]>(query, params);
   const summaries = await loadSummariesForResultIds(rows.map((row) => row.id));
   return attachSummaries(rows, summaries);
+}
+
+export async function fetchReviewerQueueRecords(limit = 50) {
+  const items = await fetchResults({ limit: Math.max(1, Math.min(limit, 100)) });
+  return items.filter((item) => item.reviewStatus !== 'released');
 }
 
 export async function fetchResultById(id: number) {
@@ -282,9 +372,17 @@ export async function fetchResultById(id: number) {
   } satisfies StoredResultDetailRecord;
 }
 
-export async function updateResultReviewStatusRecord(
+function applyReviewValue(currentPayload: Record<string, unknown>, key: string, value: string | null | undefined) {
+  if (value === undefined) {
+    return currentPayload[key] ?? null;
+  }
+
+  return value && value.trim().length > 0 ? value.trim() : null;
+}
+
+export async function saveResultReviewRecord(
   id: number,
-  reviewStatus: ResultReviewStatus,
+  input: ResultReviewUpdateInput,
   adminId: number,
 ) {
   const pool = getDbPool();
@@ -300,13 +398,64 @@ export async function updateResultReviewStatusRecord(
   const currentPayload = normalizePayload(
     (rows[0].result_payload_json as string | Record<string, unknown> | null) ?? null,
   );
+  const currentState = readReviewState(currentPayload);
+  const hasReviewContentUpdate = [
+    input.professionalSummary,
+    input.recommendation,
+    input.limitations,
+    input.reviewerNotes,
+  ].some((value) => value !== undefined);
+  const now = new Date().toISOString();
+
+  let nextStatus = input.reviewStatus ?? currentState.reviewStatus;
+  if (!input.reviewStatus && hasReviewContentUpdate && currentState.reviewStatus === 'scored_preliminary') {
+    nextStatus = 'in_review';
+  }
 
   const nextPayload: Record<string, unknown> = {
     ...currentPayload,
-    reviewStatus,
-    reviewedAt: reviewStatus === 'reviewed' ? new Date().toISOString() : null,
-    reviewedByAdminId: reviewStatus === 'reviewed' ? adminId : null,
+    professionalSummary: applyReviewValue(currentPayload, 'professionalSummary', input.professionalSummary),
+    recommendation: applyReviewValue(currentPayload, 'recommendation', input.recommendation),
+    limitations: applyReviewValue(currentPayload, 'limitations', input.limitations),
+    reviewerNotes: applyReviewValue(currentPayload, 'reviewerNotes', input.reviewerNotes),
+    reviewStatus: nextStatus,
   };
+
+  if (nextStatus === 'scored_preliminary') {
+    nextPayload.reviewStartedAt = null;
+    nextPayload.reviewedAt = null;
+    nextPayload.reviewedByAdminId = null;
+    nextPayload.reviewerAdminId = null;
+    nextPayload.releasedAt = null;
+    nextPayload.releasedByAdminId = null;
+  }
+
+  if (nextStatus === 'in_review') {
+    nextPayload.reviewStartedAt = currentState.reviewStartedAt ?? now;
+    nextPayload.reviewerAdminId = currentState.reviewerAdminId ?? adminId;
+    nextPayload.reviewedAt = null;
+    nextPayload.reviewedByAdminId = null;
+    nextPayload.releasedAt = null;
+    nextPayload.releasedByAdminId = null;
+  }
+
+  if (nextStatus === 'reviewed') {
+    nextPayload.reviewStartedAt = currentState.reviewStartedAt ?? now;
+    nextPayload.reviewerAdminId = currentState.reviewerAdminId ?? adminId;
+    nextPayload.reviewedAt = now;
+    nextPayload.reviewedByAdminId = adminId;
+    nextPayload.releasedAt = null;
+    nextPayload.releasedByAdminId = null;
+  }
+
+  if (nextStatus === 'released') {
+    nextPayload.reviewStartedAt = currentState.reviewStartedAt ?? now;
+    nextPayload.reviewerAdminId = currentState.reviewerAdminId ?? adminId;
+    nextPayload.reviewedAt = currentState.reviewedAt ?? now;
+    nextPayload.reviewedByAdminId = currentState.reviewedByAdminId ?? adminId;
+    nextPayload.releasedAt = now;
+    nextPayload.releasedByAdminId = adminId;
+  }
 
   await pool.query(
     `
@@ -346,9 +495,17 @@ export async function upsertResultRecord(input: {
 
     const resultPayload = {
       ...input.scoredResult.payload,
-      reviewStatus: 'preliminary',
+      reviewStatus: 'scored_preliminary',
+      reviewStartedAt: null,
       reviewedAt: null,
       reviewedByAdminId: null,
+      reviewerAdminId: null,
+      releasedAt: null,
+      releasedByAdminId: null,
+      professionalSummary: null,
+      recommendation: null,
+      limitations: null,
+      reviewerNotes: null,
     };
 
     await connection.query(

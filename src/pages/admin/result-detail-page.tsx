@@ -1,13 +1,15 @@
-import { Link, useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 
 import { StateCard } from '@/components/common/state-card';
 import { SectionHeading } from '@/components/common/section-heading';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { fetchResultDetail, updateAdminResultReviewStatus } from '@/services/admin-data';
-import type { StoredResultDetailRecord } from '@/types/assessment';
+import { Textarea } from '@/components/ui/textarea';
+import { loadAdminSession } from '@/lib/admin-session';
+import { fetchResultDetail, updateAdminResultReview } from '@/services/admin-data';
+import type { ResultReviewStatus, StoredResultDetailRecord } from '@/types/assessment';
 import {
   formatDateTime,
   formatResultHeadline,
@@ -16,12 +18,36 @@ import {
   formatTokenLabel,
 } from '@/lib/formatters';
 
+interface ReviewFormState {
+  professionalSummary: string;
+  recommendation: string;
+  limitations: string;
+  reviewerNotes: string;
+}
+
+function createFormState(result: StoredResultDetailRecord): ReviewFormState {
+  return {
+    professionalSummary: result.professionalSummary ?? '',
+    recommendation: result.recommendation ?? '',
+    limitations: result.limitations ?? '',
+    reviewerNotes: result.reviewerNotes ?? '',
+  };
+}
+
 export function ResultDetailPage() {
   const { id } = useParams();
   const resultId = Number(id);
+  const adminSession = loadAdminSession();
+  const canReview = ['super_admin', 'psychologist_reviewer'].includes(adminSession?.admin.role ?? '');
   const [result, setResult] = useState<StoredResultDetailRecord | null>(null);
+  const [form, setForm] = useState<ReviewFormState>({
+    professionalSummary: '',
+    recommendation: '',
+    limitations: '',
+    reviewerNotes: '',
+  });
   const [isLoading, setIsLoading] = useState(true);
-  const [isUpdatingReview, setIsUpdatingReview] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function loadResult() {
@@ -29,7 +55,9 @@ export function ResultDetailPage() {
     setError(null);
 
     try {
-      setResult(await fetchResultDetail(resultId));
+      const record = await fetchResultDetail(resultId);
+      setResult(record);
+      setForm(createFormState(record));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to load result detail');
     } finally {
@@ -43,21 +71,30 @@ export function ResultDetailPage() {
     }
   }, [resultId]);
 
-  async function handleReviewToggle() {
-    if (!result) {
+  async function saveReview(reviewStatus?: ResultReviewStatus) {
+    if (!result || !canReview) {
       return;
     }
 
-    setIsUpdatingReview(true);
+    setIsSaving(true);
     setError(null);
 
     try {
-      const nextStatus = result.reviewStatus === 'reviewed' ? 'preliminary' : 'reviewed';
-      setResult(await updateAdminResultReviewStatus(result.id, nextStatus));
+      const nextStatus = reviewStatus
+        ?? (result.reviewStatus === 'scored_preliminary' ? 'in_review' : undefined);
+      const updated = await updateAdminResultReview(result.id, {
+        reviewStatus: nextStatus,
+        professionalSummary: form.professionalSummary,
+        recommendation: form.recommendation,
+        limitations: form.limitations,
+        reviewerNotes: form.reviewerNotes,
+      });
+      setResult(updated);
+      setForm(createFormState(updated));
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to update review state');
+      setError(requestError instanceof Error ? requestError.message : 'Unable to save review changes');
     } finally {
-      setIsUpdatingReview(false);
+      setIsSaving(false);
     }
   }
 
@@ -66,7 +103,7 @@ export function ResultDetailPage() {
   }
 
   if (isLoading && !result) {
-    return <StateCard title="Loading result" description="Pulling participant details and scoring summaries." />;
+    return <StateCard title="Loading result" description="Pulling participant details and reviewer workflow data." />;
   }
 
   if (error && !result) {
@@ -88,22 +125,37 @@ export function ResultDetailPage() {
         actions={
           <div className="flex flex-wrap gap-3">
             <Button variant="outline" asChild><Link to={`/admin/test-sessions/${result.session.id}`}>Open session</Link></Button>
-            <Button onClick={() => void handleReviewToggle()} disabled={isUpdatingReview}>
-              {isUpdatingReview
-                ? 'Updating...'
-                : result.reviewStatus === 'reviewed'
-                  ? 'Mark as preliminary'
-                  : 'Mark as reviewed'}
-            </Button>
+            {canReview ? (
+              <>
+                <Button variant="outline" onClick={() => void saveReview('scored_preliminary')} disabled={isSaving}>
+                  Reset to preliminary
+                </Button>
+                <Button variant="secondary" onClick={() => void saveReview()} disabled={isSaving}>
+                  {isSaving ? 'Saving...' : 'Save review draft'}
+                </Button>
+                <Button variant="secondary" onClick={() => void saveReview('reviewed')} disabled={isSaving}>
+                  Mark reviewed
+                </Button>
+                <Button onClick={() => void saveReview('released')} disabled={isSaving}>
+                  Release report
+                </Button>
+              </>
+            ) : null}
           </div>
         }
       />
+
+      {!canReview ? (
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
+          This result is read-only for your role. Reviewer actions are limited to psychologist reviewers and super admins.
+        </div>
+      ) : null}
 
       {error ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">{error}</div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <Card className="bg-white/80">
           <CardHeader>
             <CardDescription>Primary result</CardDescription>
@@ -137,9 +189,15 @@ export function ResultDetailPage() {
             <CardTitle>{result.reviewedAt ? formatDateTime(result.reviewedAt) : '-'}</CardTitle>
           </CardHeader>
         </Card>
+        <Card className="bg-white/80">
+          <CardHeader>
+            <CardDescription>Released At</CardDescription>
+            <CardTitle>{result.releasedAt ? formatDateTime(result.releasedAt) : '-'}</CardTitle>
+          </CardHeader>
+        </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+      <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
         <Card className="bg-white/80">
           <CardHeader>
             <CardTitle>Participant profile</CardTitle>
@@ -150,6 +208,7 @@ export function ResultDetailPage() {
             <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Employee Code</p><p className="mt-2 font-medium text-slate-950">{result.participant.employeeCode ?? '-'}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Department</p><p className="mt-2 font-medium text-slate-950">{result.participant.department ?? '-'}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Position</p><p className="mt-2 font-medium text-slate-950">{result.participant.positionTitle ?? '-'}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Reviewer Assigned</p><p className="mt-2 font-medium text-slate-950">{result.reviewerAdminId ?? '-'}</p></div>
           </CardContent>
         </Card>
 
@@ -167,6 +226,52 @@ export function ResultDetailPage() {
                   {summary.band ? <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">{formatTokenLabel(summary.band)}</p> : null}
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card className="bg-white/80">
+          <CardHeader>
+            <CardTitle>Professional interpretation</CardTitle>
+            <CardDescription>Reviewer-facing narrative that separates professional output from machine scoring.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <p className="mb-2 text-sm font-medium text-slate-950">Professional summary</p>
+              <Textarea disabled={!canReview} value={form.professionalSummary} onChange={(event) => setForm((current) => ({ ...current, professionalSummary: event.target.value }))} placeholder="Write the reviewed interpretation summary." />
+            </div>
+            <div>
+              <p className="mb-2 text-sm font-medium text-slate-950">Recommendation</p>
+              <Textarea disabled={!canReview} value={form.recommendation} onChange={(event) => setForm((current) => ({ ...current, recommendation: event.target.value }))} placeholder="Add role-fit or follow-up recommendation." />
+            </div>
+            <div>
+              <p className="mb-2 text-sm font-medium text-slate-950">Limitations</p>
+              <Textarea disabled={!canReview} value={form.limitations} onChange={(event) => setForm((current) => ({ ...current, limitations: event.target.value }))} placeholder="Record constraints, caveats, or validity notes." />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white/80">
+          <CardHeader>
+            <CardTitle>Reviewer notes</CardTitle>
+            <CardDescription>Internal notes and workflow context.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <p className="mb-2 text-sm font-medium text-slate-950">Internal reviewer notes</p>
+              <Textarea disabled={!canReview} value={form.reviewerNotes} onChange={(event) => setForm((current) => ({ ...current, reviewerNotes: event.target.value }))} placeholder="Capture reviewer observations, follow-ups, or release notes." />
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Review started</p>
+                <p className="mt-2 font-medium text-slate-950">{result.reviewStartedAt ? formatDateTime(result.reviewStartedAt) : '-'}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Released by</p>
+                <p className="mt-2 font-medium text-slate-950">{result.releasedByAdminId ?? '-'}</p>
+              </div>
             </div>
           </CardContent>
         </Card>
