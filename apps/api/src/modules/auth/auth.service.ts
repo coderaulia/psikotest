@@ -1,6 +1,7 @@
-import { createAdminSessionToken } from '../../lib/signed-token.js';
+import { env } from '../../config/env.js';
 import { verifyPassword } from '../../lib/password.js';
-import { findAdminByEmail, markAdminLogin } from './auth.repository.js';
+import { createAdminSessionToken } from '../../lib/signed-token.js';
+import { findAdminByEmail, markAdminLogin, revokeAdminSessions } from './auth.repository.js';
 
 export async function loginAdmin(email: string, password: string) {
   const admin = await findAdminByEmail(email);
@@ -17,8 +18,10 @@ export async function loginAdmin(email: string, password: string) {
 
   try {
     await markAdminLogin(admin.id);
-  } catch (error) {
-    console.warn('[auth] Failed to update admin last_login_at', error);
+  } catch {
+    if (env.NODE_ENV !== 'test') {
+      console.warn('[auth] Failed to update admin login audit metadata');
+    }
   }
 
   return {
@@ -26,6 +29,7 @@ export async function loginAdmin(email: string, password: string) {
       adminId: admin.id,
       email: admin.email,
       role: admin.role,
+      sessionVersion: admin.session_version,
     }),
     admin: {
       id: admin.id,
@@ -34,4 +38,8 @@ export async function loginAdmin(email: string, password: string) {
       role: admin.role,
     },
   };
+}
+
+export async function logoutAdmin(adminId: number) {
+  await revokeAdminSessions(adminId);
 }

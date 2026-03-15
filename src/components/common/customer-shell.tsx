@@ -3,8 +3,9 @@ import type { ReactNode } from 'react';
 import { ArrowRight, LogOut, Sparkles } from 'lucide-react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 
-import { clearCustomerSession, loadCustomerSession } from '@/lib/customer-session';
+import { loadCustomerSession } from '@/lib/customer-session';
 import { cn } from '@/lib/cn';
+import { logoutCustomerSession } from '@/services/customer-api';
 
 const navItems = [
   { to: '/workspace', label: 'Workspace' },
@@ -15,8 +16,8 @@ export function CustomerShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const customerSession = loadCustomerSession();
 
-  function handleLogout() {
-    clearCustomerSession();
+  async function handleLogout() {
+    await logoutCustomerSession();
     navigate('/login', { replace: true });
   }
 
@@ -53,7 +54,9 @@ export function CustomerShell({ children }: { children: ReactNode }) {
             </div>
             <button
               type="button"
-              onClick={handleLogout}
+              onClick={() => {
+                void handleLogout();
+              }}
               className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 transition hover:border-slate-300 hover:text-slate-950"
             >
               <LogOut className="h-4 w-4" />

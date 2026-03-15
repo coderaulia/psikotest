@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS admins (
   role ENUM('super_admin', 'admin', 'psychologist_reviewer') NOT NULL DEFAULT 'admin',
   status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
   last_login_at DATETIME NULL,
+  session_version INT UNSIGNED NOT NULL DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -24,6 +25,7 @@ CREATE TABLE IF NOT EXISTS customer_accounts (
   organization_name VARCHAR(190) NOT NULL,
   status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
   last_login_at DATETIME NULL,
+  session_version INT UNSIGNED NOT NULL DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -273,6 +275,9 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+
+
 
 
 

@@ -100,7 +100,8 @@ $upgradeFiles = @(
   '002_submission_compliance_fields.sql',
   '003_operational_settings_and_audit.sql',
   '004_customer_accounts_and_assessments.sql',
-  '005_result_review_workflow.sql'
+  '005_result_review_workflow.sql',
+  '006_session_security.sql'
 ) | ForEach-Object { Join-Path $migrationsDir $_ }
 
 $upgradeBundle = @()
@@ -140,3 +141,4 @@ $zipPaths = @(
 Compress-Archive -Path $zipPaths -DestinationPath $zipPath -Force
 
 Write-Host "Generated $zipPath"
+

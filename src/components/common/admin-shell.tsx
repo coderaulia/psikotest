@@ -3,9 +3,10 @@ import type { ReactNode } from 'react';
 import { ClipboardList, FileCog, FileStack, LayoutGrid, LineChart, LogOut, Settings, Users } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 
-import { clearAdminSession, loadAdminSession } from '@/lib/admin-session';
+import { loadAdminSession } from '@/lib/admin-session';
 import { cn } from '@/lib/cn';
 import { formatTokenLabel } from '@/lib/formatters';
+import { logoutAdminSession } from '@/services/admin-api';
 
 const baseNavItems = [
   { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutGrid },
@@ -27,8 +28,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
     ? [...baseNavItems.slice(0, 5), reviewerNavItem, ...baseNavItems.slice(5)]
     : baseNavItems;
 
-  function handleLogout() {
-    clearAdminSession();
+  async function handleLogout() {
+    await logoutAdminSession();
     navigate('/admin/login', { replace: true });
   }
 
@@ -79,7 +80,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
               ) : null}
               <button
                 type="button"
-                onClick={handleLogout}
+                onClick={() => {
+                  void handleLogout();
+                }}
                 className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 transition hover:border-slate-300 hover:text-slate-950"
               >
                 <LogOut className="h-4 w-4" />

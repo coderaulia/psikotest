@@ -179,6 +179,8 @@ export async function runApiIntegrationTests() {
     const loginPayload = await readJson(loginResponse);
     assert.equal(typeof loginPayload?.token, 'string');
     assert.equal(loginPayload?.admin && typeof loginPayload.admin === 'object' ? (loginPayload.admin as Record<string, unknown>).email : null, 'admin@example.com');
+    assert.equal(loginResponse.headers.get('cache-control'), 'no-store, no-cache, must-revalidate, private');
+    assert.equal(loginResponse.headers.get('x-powered-by'), null);
     assert.ok(state.admins[0]?.last_login_at);
 
     const protectedResponse = await fetch(`${baseUrl}/api/dashboard/summary`);
@@ -279,6 +281,11 @@ export async function runApiIntegrationTests() {
     assert.equal(sessionResponse.status, 200);
     const sessionPayload = await readJson(sessionResponse);
     assert.equal(sessionPayload?.session && typeof sessionPayload.session === 'object' ? (sessionPayload.session as Record<string, unknown>).title : null, 'DISC Hiring Session');
+    assert.equal(sessionResponse.headers.get('cache-control'), 'no-store, no-cache, must-revalidate, private');
+    const questions = Array.isArray(sessionPayload?.questions) ? (sessionPayload.questions as Array<Record<string, unknown>>) : [];
+    const firstQuestion = questions[0] ?? null;
+    const firstOptions = firstQuestion && Array.isArray(firstQuestion.options) ? (firstQuestion.options as Array<Record<string, unknown>>) : [];
+    assert.equal(firstOptions.some((option) => Object.hasOwn(option, 'isCorrect')), false);
 
     const invalidStart = await fetch(`${baseUrl}/api/public/session/disc-batch-a/start`, {
       method: 'POST',
@@ -340,6 +347,8 @@ export async function runApiIntegrationTests() {
     setDbPoolForTests(null);
   }
 }
+
+
 
 
 

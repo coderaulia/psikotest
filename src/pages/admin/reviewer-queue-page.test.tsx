@@ -15,10 +15,11 @@ describe('ReviewerQueuePage', () => {
   beforeEach(() => {
     fetchReviewerQueueMock.mockReset();
     window.localStorage.clear();
+    window.sessionStorage.clear();
   });
 
   it('loads reviewer queue items for reviewer roles', async () => {
-    window.localStorage.setItem(
+    window.sessionStorage.setItem(
       'psikotest:admin-session',
       JSON.stringify({
         token: 'admin-token',

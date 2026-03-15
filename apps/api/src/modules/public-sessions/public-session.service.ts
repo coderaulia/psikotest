@@ -25,6 +25,20 @@ function assertSubmissionAccess(submissionId: number, submissionAccessToken: str
   return claims;
 }
 
+function sanitizePublicSessionDefinition(definition: Awaited<ReturnType<typeof findPublicSessionByToken>>) {
+  if (!definition) {
+    return null;
+  }
+
+  return {
+    ...definition,
+    questions: definition.questions.map((question) => ({
+      ...question,
+      options: question.options.map(({ isCorrect: _isCorrect, ...option }) => option),
+    })),
+  };
+}
+
 function createReviewNote(reviewStatus: StoredResultDetailRecord['reviewStatus']) {
   if (reviewStatus === 'released') {
     return null;
@@ -76,7 +90,7 @@ export async function getPublicSession(token: string) {
     throw new HttpError(404, 'Public session not found');
   }
 
-  return session;
+  return sanitizePublicSessionDefinition(session);
 }
 
 export async function startPublicSubmission(token: string, participant: ParticipantIdentityInput) {
@@ -131,6 +145,23 @@ export async function submitPublicSubmission(
 
   if (!context) {
     throw new HttpError(404, 'Submission not found');
+  }
+
+  if (context.status === 'scored' && context.existingResult) {
+    return {
+      submissionId: context.submissionId,
+      participantId: context.participantId,
+      status: 'scored' as const,
+      resultId: context.existingResult.id,
+      result: sanitizeParticipantResult(
+        context.existingResult,
+        context.definition.session.compliance.participantResultMode,
+      ),
+    };
+  }
+
+  if (context.status !== 'in_progress') {
+    throw new HttpError(409, 'Submission is already finalized');
   }
 
   if (context.answers.length === 0) {

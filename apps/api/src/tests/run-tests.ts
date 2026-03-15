@@ -180,6 +180,7 @@ async function testSecurityUtilities() {
     adminId: 11,
     email: 'admin@example.com',
     role: 'super_admin',
+  sessionVersion: 1,
   });
   const adminClaims = verifyAdminSessionToken(adminToken);
   assert.ok(adminClaims);
@@ -192,6 +193,7 @@ async function testSecurityUtilities() {
     accountId: 5,
     email: 'owner@example.com',
     accountType: 'researcher',
+    sessionVersion: 1,
   });
   const customerClaims = verifyCustomerSessionToken(customerToken);
   assert.ok(customerClaims);
@@ -222,5 +224,9 @@ main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
+
+
+
+
 
 

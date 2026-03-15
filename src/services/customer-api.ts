@@ -18,7 +18,7 @@ async function readErrorMessage(response: Response) {
   return payload?.error ?? 'Request failed';
 }
 
-export async function customerFetchJson<T>(path: string, init: RequestInit = {}) {
+export async function customerFetch(path: string, init: RequestInit = {}) {
   const session = loadCustomerSession();
 
   if (!session?.token) {
@@ -50,6 +50,11 @@ export async function customerFetchJson<T>(path: string, init: RequestInit = {})
     throw new CustomerApiError(message, response.status);
   }
 
+  return response;
+}
+
+export async function customerFetchJson<T>(path: string, init: RequestInit = {}) {
+  const response = await customerFetch(path, init);
   return (await response.json()) as T;
 }
 
@@ -57,4 +62,14 @@ export async function refreshCustomerProfile() {
   const payload = await customerFetchJson<{ account: CustomerUser }>('/site-auth/me');
   updateStoredCustomerProfile(payload.account);
   return payload.account;
+}
+
+export async function logoutCustomerSession() {
+  try {
+    await customerFetch('/site-auth/logout', {
+      method: 'POST',
+    });
+  } finally {
+    clearCustomerSession();
+  }
 }

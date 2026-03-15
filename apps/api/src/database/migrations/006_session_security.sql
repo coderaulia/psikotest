@@ -1,0 +1,5 @@
+ALTER TABLE admins
+  ADD COLUMN IF NOT EXISTS session_version INT UNSIGNED NOT NULL DEFAULT 1 AFTER last_login_at;
+
+ALTER TABLE customer_accounts
+  ADD COLUMN IF NOT EXISTS session_version INT UNSIGNED NOT NULL DEFAULT 1 AFTER last_login_at;

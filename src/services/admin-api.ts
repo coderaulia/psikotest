@@ -16,7 +16,7 @@ async function readErrorMessage(response: Response) {
   return payload?.error ?? 'Request failed';
 }
 
-export async function adminFetchJson<T>(path: string, init: RequestInit = {}) {
+export async function adminFetch(path: string, init: RequestInit = {}) {
   const session = loadAdminSession();
 
   if (!session?.token) {
@@ -48,5 +48,20 @@ export async function adminFetchJson<T>(path: string, init: RequestInit = {}) {
     throw new AdminApiError(message, response.status);
   }
 
+  return response;
+}
+
+export async function adminFetchJson<T>(path: string, init: RequestInit = {}) {
+  const response = await adminFetch(path, init);
   return (await response.json()) as T;
+}
+
+export async function logoutAdminSession() {
+  try {
+    await adminFetch('/auth/logout', {
+      method: 'POST',
+    });
+  } finally {
+    clearAdminSession();
+  }
 }

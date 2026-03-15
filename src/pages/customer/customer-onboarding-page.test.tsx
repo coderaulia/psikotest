@@ -16,6 +16,7 @@ vi.mock('@/services/customer-onboarding', () => ({
 describe('CustomerOnboardingPage', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
     createCustomerAssessmentMock.mockReset();
     saveCustomerSession({
       token: 'customer-token',

@@ -16,6 +16,7 @@ vi.mock('@/services/customer-auth', () => ({
 describe('CustomerSignupPage', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
     signupCustomerMock.mockReset();
   });
 
@@ -61,5 +62,7 @@ describe('CustomerSignupPage', () => {
         email: 'owner@example.com',
       },
     });
+    expect(window.localStorage.getItem('psikotest:customer-session')).toBeNull();
+    expect(window.sessionStorage.getItem('psikotest:customer-session')).not.toBeNull();
   });
 });

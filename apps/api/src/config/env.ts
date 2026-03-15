@@ -1,9 +1,10 @@
 import { config } from 'dotenv';
 import { z } from 'zod';
 
-config();
+config({ quiet: true });
 
 const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   API_PORT: z.coerce.number().default(3000),
   APP_ORIGIN: z.string().default('http://localhost:5173'),
   MYSQL_HOST: z.string().default('127.0.0.1'),
@@ -15,6 +16,7 @@ const envSchema = z.object({
 });
 
 const rawEnv = {
+  NODE_ENV: process.env.NODE_ENV,
   API_PORT: process.env.PORT ?? process.env.API_PORT,
   APP_ORIGIN: process.env.APP_ORIGIN,
   MYSQL_HOST: process.env.DB_HOST ?? process.env.MYSQL_HOST,
@@ -26,3 +28,4 @@ const rawEnv = {
 };
 
 export const env = envSchema.parse(rawEnv);
+

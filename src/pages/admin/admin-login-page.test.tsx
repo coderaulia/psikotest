@@ -2,9 +2,10 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
-import { AdminLoginPage } from './admin-login-page';
 import { loadAdminSession } from '@/lib/admin-session';
 import { renderWithRoute } from '@/test/render';
+
+import { AdminLoginPage } from './admin-login-page';
 
 const loginAdminMock = vi.fn();
 
@@ -15,6 +16,7 @@ vi.mock('@/services/admin-auth', () => ({
 describe('AdminLoginPage', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
     loginAdminMock.mockReset();
   });
 
@@ -51,6 +53,8 @@ describe('AdminLoginPage', () => {
         email: 'admin@example.com',
       },
     });
+    expect(window.localStorage.getItem('psikotest:admin-session')).toBeNull();
+    expect(window.sessionStorage.getItem('psikotest:admin-session')).not.toBeNull();
   });
 
   it('shows the API error when login fails', async () => {

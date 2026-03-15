@@ -11,6 +11,7 @@ export interface CustomerAccountRecord {
   organization_name: string;
   status: 'active' | 'inactive';
   last_login_at: string | null;
+  session_version: number;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -21,22 +22,26 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+const baseSelect = `
+  SELECT
+    id,
+    full_name,
+    email,
+    password_hash,
+    account_type,
+    organization_name,
+    status,
+    last_login_at,
+    session_version,
+    created_at,
+    updated_at
+  FROM customer_accounts
+`;
+
 export async function findCustomerByEmail(email: string) {
   const pool = getDbPool();
   const [rows] = await pool.query<CustomerAccountRow[]>(
-    `
-      SELECT
-        id,
-        full_name,
-        email,
-        password_hash,
-        account_type,
-        organization_name,
-        status,
-        last_login_at,
-        created_at,
-        updated_at
-      FROM customer_accounts
+    `${baseSelect}
       WHERE email = ?
       LIMIT 1
     `,
@@ -49,20 +54,22 @@ export async function findCustomerByEmail(email: string) {
 export async function findCustomerById(id: number) {
   const pool = getDbPool();
   const [rows] = await pool.query<CustomerAccountRow[]>(
-    `
-      SELECT
-        id,
-        full_name,
-        email,
-        password_hash,
-        account_type,
-        organization_name,
-        status,
-        last_login_at,
-        created_at,
-        updated_at
-      FROM customer_accounts
+    `${baseSelect}
       WHERE id = ?
+      LIMIT 1
+    `,
+    [id],
+  );
+
+  return rows[0] ?? null;
+}
+
+export async function findActiveCustomerById(id: number) {
+  const pool = getDbPool();
+  const [rows] = await pool.query<CustomerAccountRow[]>(
+    `${baseSelect}
+      WHERE id = ?
+        AND status = 'active'
       LIMIT 1
     `,
     [id],
@@ -88,9 +95,10 @@ export async function createCustomerAccount(input: {
         account_type,
         organization_name,
         status,
-        last_login_at
+        last_login_at,
+        session_version
       )
-      VALUES (?, ?, ?, ?, ?, 'active', NOW())
+      VALUES (?, ?, ?, ?, ?, 'active', NOW(), 1)
     `,
     [
       input.fullName.trim(),
@@ -108,6 +116,19 @@ export async function markCustomerLogin(id: number) {
   const pool = getDbPool();
   await pool.query(
     'UPDATE customer_accounts SET last_login_at = NOW() WHERE id = ?',
+    [id],
+  );
+}
+
+export async function revokeCustomerSessions(id: number) {
+  const pool = getDbPool();
+  await pool.query<ResultSetHeader>(
+    `
+      UPDATE customer_accounts
+      SET session_version = session_version + 1,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `,
     [id],
   );
 }

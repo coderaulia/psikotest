@@ -22,6 +22,7 @@ test('admin session token preserves claims and rejects tampering', () => {
     adminId: 11,
     email: 'admin@example.com',
     role: 'super_admin',
+  sessionVersion: 1,
   });
 
   const claims = verifyAdminSessionToken(token);
@@ -43,3 +44,7 @@ test('submission access token preserves participant and submission ids', () => {
   assert.equal(claims?.submissionId, 55);
   assert.equal(claims?.participantId, 77);
 });
+
+
+
+

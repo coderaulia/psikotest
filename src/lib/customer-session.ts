@@ -4,37 +4,66 @@ const CUSTOMER_SESSION_KEY = 'psikotest:customer-session';
 
 export interface StoredCustomerSession extends CustomerAuthResponse {}
 
-export function loadCustomerSession() {
+function getSessionStorage() {
   if (typeof window === 'undefined') {
     return null;
   }
 
-  const raw = window.localStorage.getItem(CUSTOMER_SESSION_KEY);
-  return raw ? (JSON.parse(raw) as StoredCustomerSession) : null;
+  return window.sessionStorage;
+}
+
+function getLegacyStorage() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  return window.localStorage;
+}
+
+export function loadCustomerSession() {
+  const sessionStorage = getSessionStorage();
+  if (!sessionStorage) {
+    return null;
+  }
+
+  const activeValue = sessionStorage.getItem(CUSTOMER_SESSION_KEY);
+  if (activeValue) {
+    return JSON.parse(activeValue) as StoredCustomerSession;
+  }
+
+  const legacyStorage = getLegacyStorage();
+  const legacyValue = legacyStorage?.getItem(CUSTOMER_SESSION_KEY);
+  if (!legacyValue) {
+    return null;
+  }
+
+  sessionStorage.setItem(CUSTOMER_SESSION_KEY, legacyValue);
+  legacyStorage?.removeItem(CUSTOMER_SESSION_KEY);
+  return JSON.parse(legacyValue) as StoredCustomerSession;
 }
 
 export function saveCustomerSession(session: CustomerAuthResponse) {
-  if (typeof window === 'undefined') {
+  const sessionStorage = getSessionStorage();
+  if (!sessionStorage) {
     return;
   }
 
-  window.localStorage.setItem(CUSTOMER_SESSION_KEY, JSON.stringify(session));
+  sessionStorage.setItem(CUSTOMER_SESSION_KEY, JSON.stringify(session));
+  getLegacyStorage()?.removeItem(CUSTOMER_SESSION_KEY);
 }
 
 export function updateStoredCustomerProfile(account: CustomerUser) {
   const current = loadCustomerSession();
+  const sessionStorage = getSessionStorage();
 
-  if (!current || typeof window === 'undefined') {
+  if (!current || !sessionStorage) {
     return;
   }
 
-  window.localStorage.setItem(CUSTOMER_SESSION_KEY, JSON.stringify({ ...current, account }));
+  sessionStorage.setItem(CUSTOMER_SESSION_KEY, JSON.stringify({ ...current, account }));
 }
 
 export function clearCustomerSession() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.removeItem(CUSTOMER_SESSION_KEY);
+  getSessionStorage()?.removeItem(CUSTOMER_SESSION_KEY);
+  getLegacyStorage()?.removeItem(CUSTOMER_SESSION_KEY);
 }

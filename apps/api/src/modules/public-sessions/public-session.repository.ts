@@ -2,6 +2,7 @@ import type { PoolConnection, RowDataPacket } from 'mysql2/promise';
 
 import { getDbPool } from '../../database/mysql.js';
 import { HttpError } from '../../lib/http-error.js';
+import { fetchResultBySubmissionId } from '../results/result.repository.js';
 import {
   getParticipantResultMode,
   parseTestSessionSettings,
@@ -50,6 +51,7 @@ interface SubmissionContextRow extends RowDataPacket {
   participant_name: string;
   session_id: number;
   test_type_code: PublicTestTypeCode;
+  submission_status: 'not_started' | 'in_progress' | 'submitted' | 'scored';
 }
 
 interface StoredAnswerRow extends RowDataPacket {
@@ -64,6 +66,54 @@ function parseInstructions(instructions: string | null) {
     .split(/\r?\n/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function validateSubmissionAnswers(
+  questions: Awaited<ReturnType<typeof loadQuestionsByTestType>>,
+  answers: SubmissionAnswerInput[],
+) {
+  if (answers.length > questions.length) {
+    throw new HttpError(400, 'Answer payload exceeds available questions for this session');
+  }
+
+  const questionMap = new Map(questions.map((question) => [question.id, question]));
+  const seenQuestionIds = new Set<number>();
+
+  for (const answer of answers) {
+    if (seenQuestionIds.has(answer.questionId)) {
+      throw new HttpError(400, 'Duplicate answers for the same question are not allowed');
+    }
+
+    seenQuestionIds.add(answer.questionId);
+    const question = questionMap.get(answer.questionId);
+
+    if (!question) {
+      throw new HttpError(400, 'Answer contains an invalid question reference');
+    }
+
+    const allowedOptionIds = new Set(question.options.map((option) => option.id));
+    const assertOptionId = (optionId: number | undefined, label: string) => {
+      if (optionId !== undefined && !allowedOptionIds.has(optionId)) {
+        throw new HttpError(400, 'Answer contains an invalid ' + label + ' option reference');
+      }
+    };
+
+    assertOptionId(answer.selectedOptionId, 'selected');
+    assertOptionId(answer.mostOptionId, 'most');
+    assertOptionId(answer.leastOptionId, 'least');
+
+    if (question.questionType !== 'forced_choice' && (answer.mostOptionId !== undefined || answer.leastOptionId !== undefined)) {
+      throw new HttpError(400, 'Forced-choice answers are only allowed for DISC-style questions');
+    }
+
+    if (question.questionType === 'forced_choice' && answer.mostOptionId !== undefined && answer.mostOptionId === answer.leastOptionId) {
+      throw new HttpError(400, 'The same option cannot be selected as both most and least representative');
+    }
+
+    if (question.questionType === 'likert' && answer.value !== undefined && answer.selectedOptionId === undefined) {
+      throw new HttpError(400, 'Scale answers must reference a valid option');
+    }
+  }
 }
 
 async function loadSessionRowByToken(token: string) {
@@ -393,13 +443,27 @@ export async function replaceSubmissionAnswers(submissionId: number, answers: Su
     await connection.beginTransaction();
 
     const [submissionRows] = await connection.query<RowDataPacket[]>(
-      'SELECT id FROM submissions WHERE id = ? LIMIT 1',
+      `
+        SELECT s.id, s.status, ts.test_type_id
+        FROM submissions s
+        INNER JOIN test_sessions ts ON ts.id = s.test_session_id
+        WHERE s.id = ?
+        LIMIT 1
+      `,
       [submissionId],
     );
 
-    if (!submissionRows[0]) {
+    const submissionRow = submissionRows[0];
+    if (!submissionRow) {
       throw new Error('Submission not found');
     }
+
+    if (submissionRow.status !== 'in_progress') {
+      throw new HttpError(409, 'Submission is already finalized');
+    }
+
+    const questions = await loadQuestionsByTestType(Number(submissionRow.test_type_id));
+    validateSubmissionAnswers(questions, answers);
 
     await connection.query('DELETE FROM answers WHERE submission_id = ?', [submissionId]);
 
@@ -481,7 +545,8 @@ export async function loadSubmissionScoringContext(submissionId: number) {
         s.participant_id,
         p.full_name AS participant_name,
         ts.id AS session_id,
-        tt.code AS test_type_code
+        tt.code AS test_type_code,
+        s.status AS submission_status
       FROM submissions s
       INNER JOIN participants p ON p.id = s.participant_id
       INNER JOIN test_sessions ts ON ts.id = s.test_session_id
@@ -506,6 +571,8 @@ export async function loadSubmissionScoringContext(submissionId: number) {
   if (!definition) {
     return null;
   }
+
+  const existingResult = await fetchResultBySubmissionId(submissionId);
 
   const [answerRows] = await pool.query<StoredAnswerRow[]>(
     `
@@ -551,8 +618,14 @@ export async function loadSubmissionScoringContext(submissionId: number) {
     participantId: contextRow.participant_id,
     participantName: contextRow.participant_name,
     testType: contextRow.test_type_code,
+    status: contextRow.submission_status,
     definition,
     answers: [...answerMap.values()],
+    existingResult,
   };
 }
+
+
+
+
 

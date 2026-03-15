@@ -12,6 +12,7 @@ export interface AdminSessionClaims extends SignedTokenPayloadBase {
   adminId: number;
   email: string;
   role: 'super_admin' | 'admin' | 'psychologist_reviewer';
+  sessionVersion: number;
 }
 
 export interface SubmissionAccessClaims extends SignedTokenPayloadBase {
@@ -25,6 +26,7 @@ export interface CustomerSessionClaims extends SignedTokenPayloadBase {
   accountId: number;
   email: string;
   accountType: 'business' | 'researcher';
+  sessionVersion: number;
 }
 
 function encodePayload<T extends SignedTokenPayloadBase>(payload: T) {
@@ -81,12 +83,14 @@ export function createAdminSessionToken(input: {
   adminId: number;
   email: string;
   role: 'super_admin' | 'admin' | 'psychologist_reviewer';
+  sessionVersion: number;
 }) {
   return signToken<AdminSessionClaims>({
     type: 'admin',
     adminId: input.adminId,
     email: input.email,
     role: input.role,
+    sessionVersion: input.sessionVersion,
     exp: Math.floor(Date.now() / 1000) + 60 * 60 * 12,
   });
 }
@@ -105,12 +109,14 @@ export function createCustomerSessionToken(input: {
   accountId: number;
   email: string;
   accountType: 'business' | 'researcher';
+  sessionVersion: number;
 }) {
   return signToken<CustomerSessionClaims>({
     type: 'customer',
     accountId: input.accountId,
     email: input.email,
     accountType: input.accountType,
+    sessionVersion: input.sessionVersion,
     exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7,
   });
 }
@@ -146,4 +152,3 @@ export function verifySubmissionAccessToken(token: string) {
 
   return payload as SubmissionAccessClaims;
 }
-

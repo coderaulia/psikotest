@@ -309,6 +309,29 @@ export async function fetchReviewerQueueRecords(limit = 50) {
   return items.filter((item) => item.reviewStatus !== 'released');
 }
 
+async function buildResultDetail(row: ResultListRow) {
+  const summaries = await loadSummariesForResultIds([row.id]);
+  const base = attachSummaries([row], summaries)[0];
+
+  return {
+    ...base,
+    participant: {
+      id: row.participant_id,
+      fullName: row.participant_name,
+      email: row.participant_email,
+      employeeCode: row.employee_code,
+      department: row.department,
+      positionTitle: row.position_title,
+    },
+    session: {
+      id: row.session_id,
+      title: row.session_title,
+      accessToken: row.access_token,
+      testType: row.test_type,
+    },
+  } satisfies StoredResultDetailRecord;
+}
+
 export async function fetchResultById(id: number) {
   const pool = getDbPool();
   const [rows] = await pool.query<ResultListRow[]>(
@@ -350,26 +373,51 @@ export async function fetchResultById(id: number) {
     return null;
   }
 
-  const summaries = await loadSummariesForResultIds([row.id]);
-  const base = attachSummaries([row], summaries)[0];
+  return buildResultDetail(row);
+}
 
-  return {
-    ...base,
-    participant: {
-      id: row.participant_id,
-      fullName: row.participant_name,
-      email: row.participant_email,
-      employeeCode: row.employee_code,
-      department: row.department,
-      positionTitle: row.position_title,
-    },
-    session: {
-      id: row.session_id,
-      title: row.session_title,
-      accessToken: row.access_token,
-      testType: row.test_type,
-    },
-  } satisfies StoredResultDetailRecord;
+export async function fetchResultBySubmissionId(submissionId: number) {
+  const pool = getDbPool();
+  const [rows] = await pool.query<ResultListRow[]>(
+    `
+      SELECT
+        r.id,
+        r.submission_id,
+        s.participant_id,
+        p.full_name AS participant_name,
+        p.email AS participant_email,
+        p.employee_code,
+        p.department,
+        p.position_title,
+        ts.id AS session_id,
+        ts.title AS session_title,
+        ts.access_token,
+        tt.code AS test_type,
+        COALESCE(s.submitted_at, r.created_at) AS submitted_at,
+        r.score_total,
+        r.score_band,
+        r.primary_type,
+        r.secondary_type,
+        r.profile_code,
+        r.interpretation_key,
+        r.result_payload_json
+      FROM results r
+      INNER JOIN submissions s ON s.id = r.submission_id
+      INNER JOIN participants p ON p.id = s.participant_id
+      INNER JOIN test_sessions ts ON ts.id = s.test_session_id
+      INNER JOIN test_types tt ON tt.id = r.test_type_id
+      WHERE r.submission_id = ?
+      LIMIT 1
+    `,
+    [submissionId],
+  );
+
+  const row = rows[0];
+  if (!row) {
+    return null;
+  }
+
+  return buildResultDetail(row);
 }
 
 function applyReviewValue(currentPayload: Record<string, unknown>, key: string, value: string | null | undefined) {
@@ -493,19 +541,29 @@ export async function upsertResultRecord(input: {
       throw new Error(`Unknown test type: ${input.testType}`);
     }
 
+    const [existingResultRows] = await connection.query<RowDataPacket[]>(
+      'SELECT id, result_payload_json FROM results WHERE submission_id = ? LIMIT 1',
+      [input.submissionId],
+    );
+
+    const existingPayload = normalizePayload(
+      (existingResultRows[0]?.result_payload_json as string | Record<string, unknown> | null) ?? null,
+    );
+    const existingReviewState = readReviewState(existingPayload);
     const resultPayload = {
+      ...existingPayload,
       ...input.scoredResult.payload,
-      reviewStatus: 'scored_preliminary',
-      reviewStartedAt: null,
-      reviewedAt: null,
-      reviewedByAdminId: null,
-      reviewerAdminId: null,
-      releasedAt: null,
-      releasedByAdminId: null,
-      professionalSummary: null,
-      recommendation: null,
-      limitations: null,
-      reviewerNotes: null,
+      reviewStatus: existingReviewState.reviewStatus,
+      reviewStartedAt: existingReviewState.reviewStartedAt,
+      reviewedAt: existingReviewState.reviewedAt,
+      reviewedByAdminId: existingReviewState.reviewedByAdminId,
+      reviewerAdminId: existingReviewState.reviewerAdminId,
+      releasedAt: existingReviewState.releasedAt,
+      releasedByAdminId: existingReviewState.releasedByAdminId,
+      professionalSummary: existingReviewState.professionalSummary,
+      recommendation: existingReviewState.recommendation,
+      limitations: existingReviewState.limitations,
+      reviewerNotes: existingReviewState.reviewerNotes,
     };
 
     await connection.query(
@@ -598,3 +656,4 @@ export async function upsertResultRecord(input: {
     connection.release();
   }
 }
+

@@ -1,11 +1,14 @@
+import { env } from '../../config/env.js';
 import { HttpError } from '../../lib/http-error.js';
 import { hashPassword, verifyPassword } from '../../lib/password.js';
 import { createCustomerSessionToken } from '../../lib/signed-token.js';
 import {
   createCustomerAccount,
+  findActiveCustomerById,
   findCustomerByEmail,
   findCustomerById,
   markCustomerLogin,
+  revokeCustomerSessions,
   type CustomerAccountRecord,
 } from './site-auth.repository.js';
 
@@ -36,6 +39,7 @@ function createSessionResponse(record: CustomerAccountRecord): CustomerSessionRe
       accountId: record.id,
       email: record.email,
       accountType: record.account_type,
+      sessionVersion: record.session_version,
     }),
     account: mapAccount(record),
   };
@@ -85,19 +89,31 @@ export async function loginCustomer(email: string, password: string) {
 
   try {
     await markCustomerLogin(record.id);
-  } catch (error) {
-    console.warn('[site-auth] Failed to update customer last_login_at', error);
+  } catch {
+    if (env.NODE_ENV !== 'test') {
+      console.warn('[site-auth] Failed to update customer login audit metadata');
+    }
   }
 
   return createSessionResponse(record);
 }
 
 export async function getCustomerSessionProfile(accountId: number) {
-  const record = await findCustomerById(accountId);
+  const record = await findActiveCustomerById(accountId);
 
-  if (!record || record.status !== 'active') {
+  if (!record) {
     return null;
   }
 
   return mapAccount(record);
+}
+
+export async function logoutCustomer(accountId: number) {
+  const record = await findCustomerById(accountId);
+
+  if (!record) {
+    return;
+  }
+
+  await revokeCustomerSessions(accountId);
 }

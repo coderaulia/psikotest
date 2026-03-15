@@ -4,38 +4,66 @@ const ADMIN_SESSION_KEY = 'psikotest:admin-session';
 
 export interface StoredAdminSession extends AdminLoginResponse {}
 
-export function loadAdminSession() {
+function getSessionStorage() {
   if (typeof window === 'undefined') {
     return null;
   }
 
-  const raw = window.localStorage.getItem(ADMIN_SESSION_KEY);
-  return raw ? (JSON.parse(raw) as StoredAdminSession) : null;
+  return window.sessionStorage;
+}
+
+function getLegacyStorage() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  return window.localStorage;
+}
+
+export function loadAdminSession() {
+  const sessionStorage = getSessionStorage();
+  if (!sessionStorage) {
+    return null;
+  }
+
+  const activeValue = sessionStorage.getItem(ADMIN_SESSION_KEY);
+  if (activeValue) {
+    return JSON.parse(activeValue) as StoredAdminSession;
+  }
+
+  const legacyStorage = getLegacyStorage();
+  const legacyValue = legacyStorage?.getItem(ADMIN_SESSION_KEY);
+  if (!legacyValue) {
+    return null;
+  }
+
+  sessionStorage.setItem(ADMIN_SESSION_KEY, legacyValue);
+  legacyStorage?.removeItem(ADMIN_SESSION_KEY);
+  return JSON.parse(legacyValue) as StoredAdminSession;
 }
 
 export function saveAdminSession(session: AdminLoginResponse) {
-  if (typeof window === 'undefined') {
+  const sessionStorage = getSessionStorage();
+  if (!sessionStorage) {
     return;
   }
 
-  window.localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
+  sessionStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
+  getLegacyStorage()?.removeItem(ADMIN_SESSION_KEY);
 }
 
 export function updateStoredAdminProfile(admin: StoredAdminSession['admin']) {
   const current = loadAdminSession();
+  const sessionStorage = getSessionStorage();
 
-  if (!current || typeof window === 'undefined') {
+  if (!current || !sessionStorage) {
     return;
   }
 
-  window.localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ ...current, admin }));
+  sessionStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ ...current, admin }));
 }
 
 export function clearAdminSession() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.removeItem(ADMIN_SESSION_KEY);
+  getSessionStorage()?.removeItem(ADMIN_SESSION_KEY);
+  getLegacyStorage()?.removeItem(ADMIN_SESSION_KEY);
 }
-

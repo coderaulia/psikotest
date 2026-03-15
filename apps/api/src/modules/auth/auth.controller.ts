@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 
 import { HttpError } from '../../lib/http-error.js';
-import { loginAdmin } from './auth.service.js';
+import { loginAdmin, logoutAdmin } from './auth.service.js';
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -20,6 +20,11 @@ export async function login(request: Request, response: Response) {
   response.json(result);
 }
 
-export function logout(_request: Request, response: Response) {
+export async function logout(request: Request, response: Response) {
+  if (!request.adminSession) {
+    throw new HttpError(401, 'Admin session is required');
+  }
+
+  await logoutAdmin(request.adminSession.adminId);
   response.status(204).send();
 }
