@@ -13,6 +13,18 @@ npm run package:api-deploy
 
 That command rebuilds the API and writes a new ZIP to `deploy/api2-codeyourcareer-api.zip`.
 
+For database setup, generate the install bundle with:
+
+```bash
+npm run package:db-deploy
+```
+
+That command prepares:
+
+- `deploy/install/` for a fresh database
+- `deploy/upgrade/` for an older database that needs upgrading
+- `deploy/api2-codeyourcareer-database.zip` as a portable package
+
 ## 1. Create the MySQL database
 
 In Hostinger hPanel:
@@ -27,11 +39,16 @@ In Hostinger hPanel:
 
 ## 2. Import the schema
 
-Import the schema migration using phpMyAdmin:
+For a fresh install, import these files in order through phpMyAdmin:
 
-1. `apps/api/src/database/migrations/001_init_schema.sql`
+1. `deploy/install/01_schema_current.sql`
+2. `deploy/install/02_seed_test_catalog.sql`
+3. `deploy/install/03_seed_assessment_questions.sql`
+4. `deploy/install/04_seed_demo_sessions.sql` if you want demo data
 
-Assessment content, question banks, demo sessions, and any bootstrap seed data should be managed outside this repository. They are intentionally not versioned here.
+For an older existing database, import:
+
+1. `deploy/upgrade/01_upgrade_legacy_to_current.sql`
 
 ## 3. API app settings
 

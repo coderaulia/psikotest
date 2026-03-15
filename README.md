@@ -6,7 +6,7 @@ The repository root is the frontend project for Hostinger Git import. The fronte
 
 - `src/`: frontend app source
 - `apps/api/`: separate backend API source
-- `deploy/`: API manual-upload artifacts
+- `deploy/`: API manual-upload artifacts and database install bundles
 - `docs/`: workflow, compliance, and phased delivery notes
 
 ## Frontend deployment
@@ -39,7 +39,19 @@ The backend stays separate and should not be served on the main domain.
 - API upload artifacts: `deploy/`
 - API domain: `https://api.your-app-domain.com/api`
 
-Assessment seed SQL and private bootstrap data are intentionally not versioned in this repository.
+## Database bundle
+
+Generate the database install bundle with:
+
+```bash
+npm run package:db-deploy
+```
+
+That produces:
+
+- `deploy/install/` for fresh installs
+- `deploy/upgrade/` for older database upgrades
+- `deploy/api2-codeyourcareer-database.zip` as a portable package
 
 ## Security notes
 
@@ -53,3 +65,4 @@ Assessment seed SQL and private bootstrap data are intentionally not versioned i
 - `docs/new-flow.md`
 - `docs/compliance.md`
 - `docs/development-phases.md`
+- `docs/database-installation.md`

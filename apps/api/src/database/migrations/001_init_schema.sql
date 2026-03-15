@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS admins (
   full_name VARCHAR(150) NOT NULL,
   email VARCHAR(190) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
-  role ENUM('super_admin', 'admin') NOT NULL DEFAULT 'admin',
+  role ENUM('super_admin', 'admin', 'psychologist_reviewer') NOT NULL DEFAULT 'admin',
   status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
   last_login_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -158,6 +158,9 @@ CREATE TABLE IF NOT EXISTS submissions (
   attempt_no INT UNSIGNED NOT NULL DEFAULT 1,
   status ENUM('not_started', 'in_progress', 'submitted', 'scored') NOT NULL DEFAULT 'in_progress',
   started_at DATETIME NULL,
+  consent_given_at DATETIME NULL,
+  consent_payload_json JSON NULL,
+  identity_snapshot_json JSON NULL,
   submitted_at DATETIME NULL,
   time_spent_seconds INT UNSIGNED NULL,
   raw_score DECIMAL(10,2) NULL,
@@ -242,7 +245,35 @@ CREATE TABLE IF NOT EXISTS result_summaries (
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS app_settings (
+  setting_key VARCHAR(100) NOT NULL,
+  setting_value_json JSON NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (setting_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  actor_type ENUM('admin', 'participant', 'system') NOT NULL DEFAULT 'system',
+  actor_admin_id BIGINT UNSIGNED NULL,
+  entity_type VARCHAR(50) NOT NULL,
+  entity_id BIGINT UNSIGNED NULL,
+  action VARCHAR(100) NOT NULL,
+  metadata_json JSON NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_audit_logs_entity (entity_type, entity_id),
+  KEY idx_audit_logs_action (action),
+  KEY idx_audit_logs_created_at (created_at),
+  KEY idx_audit_logs_actor_admin (actor_admin_id),
+  CONSTRAINT fk_audit_logs_admin
+    FOREIGN KEY (actor_admin_id) REFERENCES admins (id)
+    ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
+
 
 
 

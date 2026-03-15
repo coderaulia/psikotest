@@ -1,0 +1,142 @@
+param()
+
+$ErrorActionPreference = 'Stop'
+
+$root = Split-Path -Parent $PSScriptRoot
+$deployDir = Join-Path $root 'deploy'
+$installDir = Join-Path $deployDir 'install'
+$upgradeDir = Join-Path $deployDir 'upgrade'
+$sourceDir = Join-Path $deployDir 'source'
+$zipPath = Join-Path $deployDir 'api2-codeyourcareer-database.zip'
+$migrationsDir = Join-Path $root 'apps/api/src/database/migrations'
+
+$seedSourceFiles = @(
+  '001_seed_test_types.sql',
+  '002_seed_disc_questions.sql',
+  '003_seed_iq_questions.sql',
+  '004_seed_workload_questions.sql',
+  '005_seed_demo_sessions.sql',
+  '008_seed_custom_research_questions.sql',
+  '009_seed_custom_demo_session.sql'
+)
+
+$legacyRootFiles = @(
+  '001_init_schema.sql',
+  '006_submission_compliance_fields.sql',
+  '007_operational_settings_and_audit.sql',
+  '010_customer_accounts_and_assessments.sql',
+  '011_result_review_workflow.sql'
+)
+
+New-Item -ItemType Directory -Force -Path $deployDir, $installDir, $upgradeDir, $sourceDir | Out-Null
+
+foreach ($fileName in $legacyRootFiles) {
+  $rootFile = Join-Path $deployDir $fileName
+  if (Test-Path $rootFile) {
+    Remove-Item $rootFile -Force
+  }
+}
+
+foreach ($fileName in $seedSourceFiles) {
+  $rootFile = Join-Path $deployDir $fileName
+  $sourceFile = Join-Path $sourceDir $fileName
+
+  if ((Test-Path $rootFile) -and -not (Test-Path $sourceFile)) {
+    Move-Item $rootFile $sourceFile
+  }
+}
+
+Copy-Item (Join-Path $migrationsDir '001_init_schema.sql') (Join-Path $installDir '01_schema_current.sql') -Force
+Copy-Item (Join-Path $sourceDir '001_seed_test_types.sql') (Join-Path $installDir '02_seed_test_catalog.sql') -Force
+
+$questionSeedFiles = @(
+  '002_seed_disc_questions.sql',
+  '003_seed_iq_questions.sql',
+  '004_seed_workload_questions.sql',
+  '008_seed_custom_research_questions.sql'
+) | ForEach-Object { Join-Path $sourceDir $_ }
+
+$demoSeedFiles = @(
+  '005_seed_demo_sessions.sql',
+  '009_seed_custom_demo_session.sql'
+) | ForEach-Object { Join-Path $sourceDir $_ }
+
+$questionBundle = @()
+foreach ($file in $questionSeedFiles) {
+  $questionBundle += "-- Source: $(Split-Path $file -Leaf)"
+  $questionBundle += Get-Content $file
+  $questionBundle += ""
+}
+Set-Content (Join-Path $installDir '03_seed_assessment_questions.sql') ($questionBundle -join [Environment]::NewLine)
+
+$demoBundle = @()
+foreach ($file in $demoSeedFiles) {
+  $demoBundle += "-- Source: $(Split-Path $file -Leaf)"
+  $demoBundle += Get-Content $file
+  $demoBundle += ""
+}
+Set-Content (Join-Path $installDir '04_seed_demo_sessions.sql') ($demoBundle -join [Environment]::NewLine)
+
+$installReadme = @"
+# Database Install Bundle
+
+Use this folder for a fresh database setup.
+
+Run the files in this order:
+
+1. `01_schema_current.sql`
+2. `02_seed_test_catalog.sql`
+3. `03_seed_assessment_questions.sql`
+4. `04_seed_demo_sessions.sql` (optional demo data)
+
+Notes:
+
+- `01_schema_current.sql` already includes the current schema, including consent fields, audit tables, customer account tables, and reviewer role support.
+- `04_seed_demo_sessions.sql` is optional. Skip it in production if you do not want demo sessions and tokens.
+"@
+Set-Content (Join-Path $installDir 'README.md') $installReadme
+
+$upgradeFiles = @(
+  '002_submission_compliance_fields.sql',
+  '003_operational_settings_and_audit.sql',
+  '004_customer_accounts_and_assessments.sql',
+  '005_result_review_workflow.sql'
+) | ForEach-Object { Join-Path $migrationsDir $_ }
+
+$upgradeBundle = @()
+foreach ($file in $upgradeFiles) {
+  $upgradeBundle += "-- Source: $(Split-Path $file -Leaf)"
+  $upgradeBundle += Get-Content $file
+  $upgradeBundle += ""
+}
+Set-Content (Join-Path $upgradeDir '01_upgrade_legacy_to_current.sql') ($upgradeBundle -join [Environment]::NewLine)
+
+$upgradeReadme = @"
+# Database Upgrade Bundle
+
+Use this folder only if you already have an older Psikotest database and need to bring it up to the current schema.
+
+Recommended order:
+
+1. `01_upgrade_legacy_to_current.sql`
+
+This bundled upgrade adds:
+
+- submission consent and identity snapshot fields
+- app settings and audit log tables
+- customer account and customer assessment tables for old installs
+- reviewer role support on the `admins` table
+"@
+Set-Content (Join-Path $upgradeDir 'README.md') $upgradeReadme
+
+if (Test-Path $zipPath) {
+  Remove-Item $zipPath -Force
+}
+
+$zipPaths = @(
+  (Join-Path $installDir '*'),
+  (Join-Path $upgradeDir '*')
+)
+Compress-Archive -Path $zipPaths -DestinationPath $zipPath -Force
+
+Write-Host "Generated $zipPath"
