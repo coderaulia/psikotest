@@ -1,13 +1,25 @@
 import { lazy, Suspense, type ComponentType, type ReactElement } from 'react';
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter, isRouteErrorResponse, Link, Navigate, useRouteError } from 'react-router-dom';
+import { Home, RotateCcw } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { isChunkLoadError, tryRecoverFromChunkError } from '@/lib/chunk-load-recovery';
 
 function lazyNamed<TProps extends object = object>(
   loader: () => Promise<Record<string, unknown>>,
   exportName: string,
 ) {
   return lazy(async () => {
-    const module = await loader();
-    return { default: module[exportName] as ComponentType<TProps> };
+    try {
+      const module = await loader();
+      return { default: module[exportName] as ComponentType<TProps> };
+    } catch (error) {
+      if (isChunkLoadError(error) && tryRecoverFromChunkError()) {
+        return new Promise<never>(() => undefined);
+      }
+
+      throw error;
+    }
   });
 }
 
@@ -20,6 +32,46 @@ function RouteFallback() {
           <div className="h-32 animate-pulse rounded-[28px] bg-slate-100" />
           <div className="h-32 animate-pulse rounded-[28px] bg-slate-100" />
           <div className="h-28 animate-pulse rounded-[28px] bg-slate-100 md:col-span-2" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RouteErrorPage() {
+  const error = useRouteError();
+  const chunkError = isChunkLoadError(error);
+
+  let title = 'Something went wrong while loading this page';
+  let description = 'Please try again. If the problem continues, return to the homepage and retry the flow.';
+
+  if (chunkError) {
+    title = 'The app was updated while this page was open';
+    description = 'The current page is trying to load an older asset bundle. Reload once to sync with the latest deployment.';
+  } else if (isRouteErrorResponse(error)) {
+    title = `${error.status} ${error.statusText}`;
+    description = typeof error.data === 'string' ? error.data : description;
+  } else if (error instanceof Error && error.message) {
+    description = error.message;
+  }
+
+  return (
+    <div className="min-h-screen bg-[linear-gradient(180deg,#fdfdfd_0%,#f5f6f8_40%,#eef2f7_100%)] px-6 py-16 text-slate-950">
+      <div className="mx-auto max-w-3xl rounded-[32px] border border-white/80 bg-white/88 p-8 shadow-sm backdrop-blur">
+        <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Application error</p>
+        <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">{title}</h1>
+        <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">{description}</p>
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          <Button size="lg" className="gap-2" onClick={() => window.location.reload()}>
+            <RotateCcw className="h-4 w-4" />
+            Reload App
+          </Button>
+          <Button variant="secondary" size="lg" className="gap-2" asChild>
+            <Link to="/">
+              <Home className="h-4 w-4" />
+              Go to Homepage
+            </Link>
+          </Button>
         </div>
       </div>
     </div>
@@ -60,66 +112,76 @@ const ParticipantTestPage = lazyNamed(() => import('@/pages/participant/test-pag
 const ParticipantCompletedPage = lazyNamed(() => import('@/pages/participant/completed-page'), 'ParticipantCompletedPage');
 const NotFoundPage = lazyNamed(() => import('@/pages/not-found-page'), 'NotFoundPage');
 
+const routeErrorElement = <RouteErrorPage />;
+
 export const router = createBrowserRouter([
   {
     path: '/',
     element: withSuspense(<MarketingLayout />),
+    errorElement: routeErrorElement,
     children: [
-      { index: true, element: withSuspense(<LandingPage />) },
-      { path: 'manual', element: withSuspense(<ManualPage />) },
-      { path: 'white-label', element: withSuspense(<WhiteLabelPage />) },
+      { index: true, element: withSuspense(<LandingPage />), errorElement: routeErrorElement },
+      { path: 'manual', element: withSuspense(<ManualPage />), errorElement: routeErrorElement },
+      { path: 'white-label', element: withSuspense(<WhiteLabelPage />), errorElement: routeErrorElement },
     ],
   },
   {
     path: '/signup',
     element: withSuspense(<CustomerSignupPage />),
+    errorElement: routeErrorElement,
   },
   {
     path: '/login',
     element: withSuspense(<CustomerLoginPage />),
+    errorElement: routeErrorElement,
   },
   {
     path: '/admin/login',
     element: withSuspense(<AdminLoginPage />),
+    errorElement: routeErrorElement,
   },
   {
     path: '/workspace',
     element: withSuspense(<CustomerLayout />),
+    errorElement: routeErrorElement,
     children: [
-      { index: true, element: withSuspense(<CustomerWorkspacePage />) },
-      { path: 'create', element: withSuspense(<CustomerOnboardingPage />) },
-      { path: 'assessments/:assessmentId', element: withSuspense(<CustomerAssessmentDetailPage />) },
+      { index: true, element: withSuspense(<CustomerWorkspacePage />), errorElement: routeErrorElement },
+      { path: 'create', element: withSuspense(<CustomerOnboardingPage />), errorElement: routeErrorElement },
+      { path: 'assessments/:assessmentId', element: withSuspense(<CustomerAssessmentDetailPage />), errorElement: routeErrorElement },
     ],
   },
   {
     path: '/admin',
     element: withSuspense(<AdminLayout />),
+    errorElement: routeErrorElement,
     children: [
-      { index: true, element: <Navigate to="/admin/dashboard" replace /> },
-      { path: 'dashboard', element: withSuspense(<DashboardPage />) },
-      { path: 'participants', element: withSuspense(<ParticipantsPage />) },
-      { path: 'test-sessions', element: withSuspense(<TestSessionsPage />) },
-      { path: 'question-bank', element: withSuspense(<QuestionBankPage />) },
-      { path: 'test-sessions/:id', element: withSuspense(<TestSessionDetailPage />) },
-      { path: 'results', element: withSuspense(<ResultsPage />) },
-      { path: 'results/:id', element: withSuspense(<ResultDetailPage />) },
-      { path: 'reports', element: withSuspense(<ReportsPage />) },
-      { path: 'settings', element: withSuspense(<SettingsPage />) },
+      { index: true, element: <Navigate to="/admin/dashboard" replace />, errorElement: routeErrorElement },
+      { path: 'dashboard', element: withSuspense(<DashboardPage />), errorElement: routeErrorElement },
+      { path: 'participants', element: withSuspense(<ParticipantsPage />), errorElement: routeErrorElement },
+      { path: 'test-sessions', element: withSuspense(<TestSessionsPage />), errorElement: routeErrorElement },
+      { path: 'question-bank', element: withSuspense(<QuestionBankPage />), errorElement: routeErrorElement },
+      { path: 'test-sessions/:id', element: withSuspense(<TestSessionDetailPage />), errorElement: routeErrorElement },
+      { path: 'results', element: withSuspense(<ResultsPage />), errorElement: routeErrorElement },
+      { path: 'results/:id', element: withSuspense(<ResultDetailPage />), errorElement: routeErrorElement },
+      { path: 'reports', element: withSuspense(<ReportsPage />), errorElement: routeErrorElement },
+      { path: 'settings', element: withSuspense(<SettingsPage />), errorElement: routeErrorElement },
     ],
   },
   {
     path: '/t/:token',
     element: withSuspense(<ParticipantLayout />),
+    errorElement: routeErrorElement,
     children: [
-      { index: true, element: withSuspense(<ParticipantConsentPage />) },
-      { path: 'identity', element: withSuspense(<ParticipantIdentityPage />) },
-      { path: 'instructions', element: withSuspense(<ParticipantInstructionsPage />) },
-      { path: 'test', element: withSuspense(<ParticipantTestPage />) },
-      { path: 'completed', element: withSuspense(<ParticipantCompletedPage />) },
+      { index: true, element: withSuspense(<ParticipantConsentPage />), errorElement: routeErrorElement },
+      { path: 'identity', element: withSuspense(<ParticipantIdentityPage />), errorElement: routeErrorElement },
+      { path: 'instructions', element: withSuspense(<ParticipantInstructionsPage />), errorElement: routeErrorElement },
+      { path: 'test', element: withSuspense(<ParticipantTestPage />), errorElement: routeErrorElement },
+      { path: 'completed', element: withSuspense(<ParticipantCompletedPage />), errorElement: routeErrorElement },
     ],
   },
   {
     path: '*',
     element: withSuspense(<NotFoundPage />),
+    errorElement: routeErrorElement,
   },
 ]);
