@@ -311,7 +311,7 @@ export function LandingPage() {
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Button size="lg" className="gap-2" asChild>
                 <Link to="/signup">
                   Create Workspace <ArrowRight className="h-4 w-4" />
@@ -319,6 +319,9 @@ export function LandingPage() {
               </Button>
               <Button variant="secondary" size="lg" asChild>
                 <Link to="/t/disc-batch-a">Preview Demo</Link>
+              </Button>
+              <Button variant="outline" size="lg" className="border-slate-200 bg-white/80 text-slate-700 hover:bg-white" asChild>
+                <Link to="/white-label">Explore White-label</Link>
               </Button>
             </div>
 
@@ -897,43 +900,64 @@ export function LandingPage() {
 
       <MotionSection id="final-cta" className="mx-auto max-w-7xl px-6 py-16">
         <Card className="overflow-hidden bg-slate-950 text-white">
-          <CardContent className="grid gap-8 p-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <CardContent className="grid gap-8 p-8 lg:grid-cols-[1.02fr_0.98fr] lg:items-center">
             <div className="space-y-4">
-              <p className="text-sm uppercase tracking-[0.24em] text-white/60">Start With a Workspace</p>
+              <p className="text-sm uppercase tracking-[0.24em] text-white/60">Choose your model</p>
               <h2 className="text-3xl font-semibold tracking-tight">
-                Sign up and build your first assessment draft today
+                Start as SaaS or position it as your own white-label assessment platform
               </h2>
               <p className="max-w-2xl text-sm leading-7 text-white/75">
-                Start with a self-serve workspace for your company or research project, then prepare the participant journey before rollout.
+                Use the self-serve workspace if you want to launch quickly, or explore the white-label model if the platform needs to feel fully native to your company, consultancy, or research program.
               </p>
-              <p className="max-w-2xl text-sm leading-7 text-white/75">Create your first assessment in minutes.</p>
             </div>
-            <motion.div
-              className="rounded-[28px] border border-white/10 bg-white/10 p-6 backdrop-blur"
-              whileInView={{ opacity: [0.9, 1, 0.9], y: [0, -4, 0] }}
-              viewport={{ once: true }}
-              transition={{ duration: 4.6, repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut' }}
-            >
-              <p className="text-sm text-white/60">Customer onboarding</p>
-              <p className="mt-3 text-2xl font-semibold">Create your first assessment</p>
-              <p className="mt-3 text-sm leading-7 text-white/75">
-                Use the four-step onboarding flow to choose a test type, configure settings, preview the experience, and prepare the participant link.
-              </p>
-              <Button
-                variant="secondary"
-                size="lg"
-                className="mt-6 w-full justify-center bg-white text-slate-950 hover:bg-white/90"
-                asChild
+            <div className="grid gap-4 lg:grid-cols-2">
+              <motion.div
+                className="rounded-[28px] border border-white/10 bg-white/10 p-6 backdrop-blur"
+                whileInView={{ opacity: [0.9, 1, 0.9], y: [0, -4, 0] }}
+                viewport={{ once: true }}
+                transition={{ duration: 4.6, repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut' }}
               >
-                <Link to="/signup">Create Your First Assessment</Link>
-              </Button>
-            </motion.div>
+                <p className="text-sm text-white/60">SaaS workspace</p>
+                <p className="mt-3 text-2xl font-semibold">Create your first assessment</p>
+                <p className="mt-3 text-sm leading-7 text-white/75">
+                  Use the guided onboarding flow to choose a test type, configure settings, preview the experience, and prepare the participant link.
+                </p>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  className="mt-6 w-full justify-center bg-white text-slate-950 hover:bg-white/90"
+                  asChild
+                >
+                  <Link to="/signup">Start With SaaS</Link>
+                </Button>
+              </motion.div>
+              <motion.div
+                className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur"
+                whileInView={{ opacity: [0.88, 1, 0.88], y: [0, -3, 0] }}
+                viewport={{ once: true }}
+                transition={{ duration: 5.2, repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut', delay: 0.3 }}
+              >
+                <p className="text-sm text-white/60">White-label deployment</p>
+                <p className="mt-3 text-2xl font-semibold">Sell or run it under your own brand</p>
+                <p className="mt-3 text-sm leading-7 text-white/75">
+                  Explore how the same platform can become a private branded assessment product for client delivery, internal talent operations, or academic research programs.
+                </p>
+                <Button
+                  size="lg"
+                  className="mt-6 w-full justify-center border border-white/15 bg-white/10 text-white hover:bg-white/15"
+                  asChild
+                >
+                  <Link to="/white-label">Explore White-label</Link>
+                </Button>
+              </motion.div>
+            </div>
           </CardContent>
         </Card>
       </MotionSection>
     </main>
   );
 }
+
 
 
 

@@ -36,6 +36,8 @@ const AdminLayout = lazyNamed(() => import('@/layouts/admin-layout'), 'AdminLayo
 const ParticipantLayout = lazyNamed(() => import('@/layouts/participant-layout'), 'ParticipantLayout');
 
 const LandingPage = lazyNamed(() => import('@/pages/landing-page'), 'LandingPage');
+const ManualPage = lazyNamed(() => import('@/pages/manual-page'), 'ManualPage');
+const WhiteLabelPage = lazyNamed(() => import('@/pages/white-label-page'), 'WhiteLabelPage');
 const CustomerSignupPage = lazyNamed(() => import('@/pages/customer/customer-signup-page'), 'CustomerSignupPage');
 const CustomerLoginPage = lazyNamed(() => import('@/pages/customer/customer-login-page'), 'CustomerLoginPage');
 const CustomerWorkspacePage = lazyNamed(() => import('@/pages/customer/customer-workspace-page'), 'CustomerWorkspacePage');
@@ -62,7 +64,11 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: withSuspense(<MarketingLayout />),
-    children: [{ index: true, element: withSuspense(<LandingPage />) }],
+    children: [
+      { index: true, element: withSuspense(<LandingPage />) },
+      { path: 'manual', element: withSuspense(<ManualPage />) },
+      { path: 'white-label', element: withSuspense(<WhiteLabelPage />) },
+    ],
   },
   {
     path: '/signup',
@@ -117,4 +123,3 @@ export const router = createBrowserRouter([
     element: withSuspense(<NotFoundPage />),
   },
 ]);
-
