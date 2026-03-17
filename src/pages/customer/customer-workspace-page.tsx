@@ -72,9 +72,12 @@ export function CustomerWorkspacePage() {
           <CardTitle>No assessment drafts yet</CardTitle>
           <CardDescription>Create your first guided assessment draft to generate a participant link and preview experience.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-3 sm:flex-row">
           <Button asChild>
             <Link to="/workspace/create">Create first assessment</Link>
+          </Button>
+          <Button variant="secondary" asChild>
+            <Link to="/workspace/settings">Review workspace settings</Link>
           </Button>
         </CardContent>
       </Card>
@@ -83,14 +86,19 @@ export function CustomerWorkspacePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-sm text-slate-500">Your assessment drafts and active links</p>
           <h2 className="text-2xl font-semibold tracking-tight">Review before sharing, then activate deliberately</h2>
         </div>
-        <Button asChild>
-          <Link to="/workspace/create">Create another assessment</Link>
-        </Button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Button variant="secondary" asChild>
+            <Link to="/workspace/settings">Workspace settings</Link>
+          </Button>
+          <Button asChild>
+            <Link to="/workspace/create">Create another assessment</Link>
+          </Button>
+        </div>
       </div>
 
       {successMessage ? <p className="text-sm text-emerald-700">{successMessage}</p> : null}

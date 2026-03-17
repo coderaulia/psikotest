@@ -122,6 +122,40 @@ export interface CustomerAuthResponse {
   account: CustomerUser;
 }
 
+export interface CustomerWorkspaceSettings {
+  brandName: string;
+  brandTagline: string;
+  supportEmail: string;
+  contactPerson: string;
+  defaultAssessmentPurpose: AssessmentPurpose;
+  defaultAdministrationMode: AdministrationMode;
+  defaultResultVisibility: CustomerAssessmentResultVisibility;
+  defaultParticipantLimit: number | null;
+  defaultTimeLimitMinutes: number | null;
+  defaultConsentStatement: string;
+  defaultPrivacyStatement: string;
+}
+
+export interface CustomerWorkspaceSettingsResponse {
+  account: CustomerUser;
+  settings: CustomerWorkspaceSettings;
+}
+
+export interface UpdateCustomerWorkspaceSettingsPayload {
+  organizationName: string;
+  brandName: string;
+  brandTagline: string;
+  supportEmail: string;
+  contactPerson: string;
+  defaultAssessmentPurpose: AssessmentPurpose;
+  defaultAdministrationMode: AdministrationMode;
+  defaultResultVisibility: CustomerAssessmentResultVisibility;
+  defaultParticipantLimit: number | null;
+  defaultTimeLimitMinutes: number | null;
+  defaultConsentStatement: string;
+  defaultPrivacyStatement: string;
+}
+
 export interface CustomerAssessmentItem {
   assessmentId: number;
   sessionId: number;

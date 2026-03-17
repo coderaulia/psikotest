@@ -67,6 +67,7 @@ If you want to keep extending the bilingual UI cleanly, translate in this order:
    - `src/pages/customer/customer-signup-page.tsx`
    - `src/pages/customer/customer-login-page.tsx`
    - `src/pages/customer/customer-onboarding-page.tsx`
+   - `src/pages/customer/customer-workspace-settings-page.tsx`
 3. Participant flow pages
    - `src/pages/participant/consent-page.tsx`
    - `src/pages/participant/identity-page.tsx`

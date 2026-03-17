@@ -101,7 +101,8 @@ $upgradeFiles = @(
   '003_operational_settings_and_audit.sql',
   '004_customer_accounts_and_assessments.sql',
   '005_result_review_workflow.sql',
-  '006_session_security.sql'
+  '006_session_security.sql',
+  '007_customer_workspace_settings.sql'
 ) | ForEach-Object { Join-Path $migrationsDir $_ }
 
 $upgradeBundle = @()
@@ -127,6 +128,7 @@ This bundled upgrade adds:
 - app settings and audit log tables
 - customer account and customer assessment tables for old installs
 - reviewer role support on the `admins` table
+- customer workspace settings storage on `customer_accounts`
 "@
 Set-Content (Join-Path $upgradeDir 'README.md') $upgradeReadme
 

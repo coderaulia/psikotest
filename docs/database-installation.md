@@ -27,6 +27,13 @@ If an older Psikotest database already exists, use:
 
 This bundled upgrade adds the later schema changes that are not present in older installs.
 
+The current upgrade path includes:
+- submission consent and identity snapshot fields
+- app settings and audit logs
+- customer accounts and customer assessments
+- reviewer workflow support
+- customer workspace settings JSON storage
+
 ## Maintenance rule
 
 - `apps/api/src/database/migrations/001_init_schema.sql` should always describe the current full schema for fresh installs.

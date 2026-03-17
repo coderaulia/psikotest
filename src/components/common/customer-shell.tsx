@@ -16,6 +16,7 @@ const copy = {
     nav: {
       workspace: 'Workspace',
       createAssessment: 'Create Assessment',
+      settings: 'Settings',
       signOut: 'Sign out',
     },
     hero: {
@@ -36,6 +37,7 @@ const copy = {
     nav: {
       workspace: 'Workspace',
       createAssessment: 'Buat Asesmen',
+      settings: 'Pengaturan',
       signOut: 'Keluar',
     },
     hero: {
@@ -61,6 +63,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
   const navItems = [
     { to: '/workspace', label: t.nav.workspace },
     { to: '/workspace/create', label: t.nav.createAssessment },
+    { to: '/workspace/settings', label: t.nav.settings },
   ];
 
   async function handleLogout() {

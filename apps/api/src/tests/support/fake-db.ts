@@ -19,8 +19,10 @@ interface FakeCustomerAccount {
   password_hash: string;
   account_type: 'business' | 'researcher';
   organization_name: string;
+  settings_json: string | null;
   status: 'active' | 'inactive';
   last_login_at: string | null;
+  session_version: number;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -250,8 +252,10 @@ export class FakeDbPool implements DbPoolLike {
         password_hash: String(params[2] ?? ''),
         account_type: params[3] as FakeCustomerAccount['account_type'],
         organization_name: String(params[4] ?? ''),
+        settings_json: null,
         status: 'active',
         last_login_at: now,
+        session_version: 1,
         created_at: now,
         updated_at: now,
       };
@@ -259,11 +263,34 @@ export class FakeDbPool implements DbPoolLike {
       return [{ insertId: account.id }, []] as unknown as [any, any];
     }
 
+    if (normalized.startsWith('update customer_accounts set session_version = session_version + 1,')) {
+      const accountId = Number(params[0]);
+      const account = this.state.customerAccounts.find((item) => item.id === accountId);
+      if (account) {
+        account.session_version += 1;
+        account.updated_at = new Date().toISOString();
+      }
+      return [[{ affectedRows: account ? 1 : 0 }], []] as unknown as [any, any];
+    }
+
     if (normalized.startsWith('update customer_accounts set last_login_at = now()')) {
       const accountId = Number(params[0]);
       const account = this.state.customerAccounts.find((item) => item.id === accountId);
       if (account) {
         account.last_login_at = new Date().toISOString();
+      }
+      return [[{ affectedRows: account ? 1 : 0 }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('update customer_accounts set organization_name = ?, settings_json = ?, updated_at = current_timestamp where id = ?')) {
+      const organizationName = String(params[0] ?? '');
+      const settingsJson = String(params[1] ?? '{}');
+      const accountId = Number(params[2]);
+      const account = this.state.customerAccounts.find((item) => item.id === accountId);
+      if (account) {
+        account.organization_name = organizationName;
+        account.settings_json = settingsJson;
+        account.updated_at = new Date().toISOString();
       }
       return [[{ affectedRows: account ? 1 : 0 }], []] as unknown as [any, any];
     }
@@ -516,4 +543,8 @@ export class FakeDbPool implements DbPoolLike {
     throw new Error(`Unsupported fake DB query: ${sql}`);
   }
 }
+
+
+
+
 

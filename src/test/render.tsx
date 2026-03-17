@@ -3,6 +3,8 @@ import type { ReactElement } from 'react';
 import { render } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
+import { LanguageProvider } from '@/lib/language';
+
 interface RenderRouteOptions {
   route?: string;
   path?: string;
@@ -21,11 +23,13 @@ export function renderWithRoute(element: ReactElement, options: RenderRouteOptio
   } = options;
 
   return render(
-    <MemoryRouter initialEntries={[{ pathname: route, state }]}>
-      <Routes>
-        <Route path={path} element={element} />
-        <Route path={nextPath} element={nextElement} />
-      </Routes>
-    </MemoryRouter>,
+    <LanguageProvider>
+      <MemoryRouter initialEntries={[{ pathname: route, state }]}>
+        <Routes>
+          <Route path={path} element={element} />
+          <Route path={nextPath} element={nextElement} />
+        </Routes>
+      </MemoryRouter>
+    </LanguageProvider>,
   );
 }

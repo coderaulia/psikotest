@@ -1,14 +1,9 @@
 import { createAuditEvent } from '../../lib/audit-log.js';
 import { HttpError } from '../../lib/http-error.js';
 import { findCustomerById, updateCustomerOrganizationName } from '../site-auth/site-auth.repository.js';
-import {
-  getDefaultResearchSessionSettings,
-  getDefaultTestSessionSettings,
-  type AdministrationMode,
-  type AssessmentPurpose,
-  type InterpretationMode,
-} from '../test-sessions/session-settings.js';
+import type { AdministrationMode, AssessmentPurpose, InterpretationMode } from '../test-sessions/session-settings.js';
 import type { PublicTestTypeCode } from '../public-sessions/public-session.types.js';
+import { parseCustomerWorkspaceSettings, renderWorkspaceTemplate } from '../site-workspace/workspace-settings.js';
 import {
   activateCustomerAssessmentRecord,
   fetchCustomerAssessmentById,
@@ -74,30 +69,6 @@ function buildDescription(organizationName: string, purpose: AssessmentPurpose, 
   return `Draft ${testType.toUpperCase()} assessment for ${organizationName.trim()} (${purposeLabel}).`;
 }
 
-function buildConsentStatement(input: {
-  organizationName: string;
-  purpose: AssessmentPurpose;
-  testType: PublicTestTypeCode;
-}) {
-  if (input.purpose === 'research' || input.testType === 'custom') {
-    return `I agree to participate in this research assessment conducted by ${input.organizationName.trim()} and understand that my responses will be collected for structured analysis.`;
-  }
-
-  return `I agree to participate in this psychological assessment for ${input.organizationName.trim()} and understand that my responses will be used for the stated assessment purpose.`;
-}
-
-function buildPrivacyStatement(input: {
-  organizationName: string;
-  purpose: AssessmentPurpose;
-  testType: PublicTestTypeCode;
-}) {
-  if (input.purpose === 'research' || input.testType === 'custom') {
-    return `Your responses will be stored as confidential research data for ${input.organizationName.trim()} and accessed only by authorized academic or project reviewers.`;
-  }
-
-  return `Your personal information and responses will be treated as confidential assessment data for ${input.organizationName.trim()} and accessed only by authorized reviewers.`;
-}
-
 export async function listCustomerAssessmentItems(customerAccountId: number) {
   return fetchCustomerAssessments(customerAccountId);
 }
@@ -129,27 +100,33 @@ export async function createCustomerAssessment(input: {
     await updateCustomerOrganizationName(account.id, normalizedOrganizationName);
   }
 
+  const workspaceSettings = parseCustomerWorkspaceSettings(account.settings_json, {
+    organizationName: normalizedOrganizationName,
+    fullName: account.full_name,
+    email: account.email,
+    accountType: account.account_type,
+  });
+
   const interpretationMode: InterpretationMode = input.resultVisibility === 'review_required' ? 'professional_review' : 'self_assessment';
-  const defaults = input.purpose === 'research' || input.testType === 'custom'
-    ? getDefaultResearchSessionSettings()
-    : getDefaultTestSessionSettings();
 
   const settings = {
     assessmentPurpose: input.purpose,
     administrationMode: input.administrationMode,
     interpretationMode,
-    participantLimit: input.participantLimit,
-    consentStatement: buildConsentStatement({
+    participantLimit: input.participantLimit ?? workspaceSettings.defaultParticipantLimit,
+    consentStatement: renderWorkspaceTemplate(workspaceSettings.defaultConsentStatement, {
       organizationName: normalizedOrganizationName,
-      purpose: input.purpose,
-      testType: input.testType,
+      brandName: workspaceSettings.brandName,
+      contactPerson: workspaceSettings.contactPerson,
+      supportEmail: workspaceSettings.supportEmail,
     }),
-    privacyStatement: buildPrivacyStatement({
+    privacyStatement: renderWorkspaceTemplate(workspaceSettings.defaultPrivacyStatement, {
       organizationName: normalizedOrganizationName,
-      purpose: input.purpose,
-      testType: input.testType,
+      brandName: workspaceSettings.brandName,
+      contactPerson: workspaceSettings.contactPerson,
+      supportEmail: workspaceSettings.supportEmail,
     }),
-    contactPerson: account.full_name || defaults.contactPerson,
+    contactPerson: workspaceSettings.contactPerson,
   };
 
   const created = await insertCustomerAssessment({
@@ -159,7 +136,7 @@ export async function createCustomerAssessment(input: {
     title: input.title,
     description: buildDescription(normalizedOrganizationName, input.purpose, input.testType),
     instructions: getParticipantInstructions(input.testType, input.purpose),
-    timeLimitMinutes: input.timeLimitMinutes ?? getDefaultTimeLimit(input.testType),
+    timeLimitMinutes: input.timeLimitMinutes ?? workspaceSettings.defaultTimeLimitMinutes ?? getDefaultTimeLimit(input.testType),
     settings,
   });
 
@@ -175,7 +152,10 @@ export async function createCustomerAssessment(input: {
       purpose: input.purpose,
       administrationMode: input.administrationMode,
       resultVisibility: input.resultVisibility,
-      participantLimit: input.participantLimit,
+      participantLimit: input.participantLimit ?? workspaceSettings.defaultParticipantLimit,
+      timeLimitMinutes: input.timeLimitMinutes ?? workspaceSettings.defaultTimeLimitMinutes ?? getDefaultTimeLimit(input.testType),
+      supportEmail: workspaceSettings.supportEmail,
+      brandName: workspaceSettings.brandName,
     },
   });
 

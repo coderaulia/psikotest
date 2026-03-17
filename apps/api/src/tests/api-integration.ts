@@ -205,6 +205,46 @@ export async function runApiIntegrationTests() {
     const customerToken = String(signupPayload?.token ?? '');
     assert.ok(customerToken.length > 10);
 
+    const workspaceSettingsResponse = await fetch(`${baseUrl}/api/site-workspace/settings`, {
+      headers: {
+        Authorization: `Bearer ${customerToken}`,
+      },
+    });
+    assert.equal(workspaceSettingsResponse.status, 200);
+    const workspaceSettingsPayload = await readJson(workspaceSettingsResponse);
+    assert.equal(workspaceSettingsPayload?.account && typeof workspaceSettingsPayload.account === 'object' ? (workspaceSettingsPayload.account as Record<string, unknown>).organizationName : null, 'Psych Lab');
+    assert.equal(workspaceSettingsPayload?.settings && typeof workspaceSettingsPayload.settings === 'object' ? (workspaceSettingsPayload.settings as Record<string, unknown>).brandName : null, 'Psych Lab');
+    assert.equal(workspaceSettingsPayload?.settings && typeof workspaceSettingsPayload.settings === 'object' ? (workspaceSettingsPayload.settings as Record<string, unknown>).defaultAssessmentPurpose : null, 'research');
+    assert.equal(workspaceSettingsPayload?.settings && typeof workspaceSettingsPayload.settings === 'object' ? (workspaceSettingsPayload.settings as Record<string, unknown>).defaultParticipantLimit : null, 100);
+
+    const workspaceUpdateResponse = await fetch(`${baseUrl}/api/site-workspace/settings`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${customerToken}`,
+      },
+      body: JSON.stringify({
+        organizationName: 'Vanaila Research Lab',
+        brandName: 'Vanaila Research Lab',
+        brandTagline: 'Structured behavior science studies',
+        supportEmail: 'support@vanaila.test',
+        contactPerson: 'Research Desk',
+        defaultAssessmentPurpose: 'research',
+        defaultAdministrationMode: 'remote_unsupervised',
+        defaultResultVisibility: 'participant_summary',
+        defaultParticipantLimit: 48,
+        defaultTimeLimitMinutes: 22,
+        defaultConsentStatement: 'I agree to participate in studies managed by {{organizationName}}. Please contact {{supportEmail}} for support.',
+        defaultPrivacyStatement: 'Responses for {{organizationName}} are stored as confidential research data. Contact {{contactPerson}} if you need assistance.',
+      }),
+    });
+    assert.equal(workspaceUpdateResponse.status, 200);
+    const workspaceUpdatePayload = await readJson(workspaceUpdateResponse);
+    assert.equal(workspaceUpdatePayload?.account && typeof workspaceUpdatePayload.account === 'object' ? (workspaceUpdatePayload.account as Record<string, unknown>).organizationName : null, 'Vanaila Research Lab');
+    assert.equal(workspaceUpdatePayload?.settings && typeof workspaceUpdatePayload.settings === 'object' ? (workspaceUpdatePayload.settings as Record<string, unknown>).supportEmail : null, 'support@vanaila.test');
+    assert.equal(state.customerAccounts[0]?.organization_name, 'Vanaila Research Lab');
+    assert.equal(state.auditLogs.some((item) => item.action === 'customer_workspace.settings_updated'), true);
+
     const customerLoginResponse = await fetch(`${baseUrl}/api/site-auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -222,16 +262,19 @@ export async function runApiIntegrationTests() {
         testType: 'custom',
         title: 'Study Pilot A',
         purpose: 'research',
-        organizationName: 'Psych Lab',
+        organizationName: 'Vanaila Research Lab',
         administrationMode: 'remote_unsupervised',
-        timeLimitMinutes: 18,
-        participantLimit: 60,
+        timeLimitMinutes: null,
+        participantLimit: null,
         resultVisibility: 'participant_summary',
       }),
     });
     assert.equal(onboardingCreateResponse.status, 201);
     const onboardingCreatePayload = await readJson(onboardingCreateResponse);
     assert.equal(onboardingCreatePayload?.title, 'Study Pilot A');
+    assert.equal(onboardingCreatePayload?.organizationName, 'Vanaila Research Lab');
+    assert.equal(onboardingCreatePayload?.timeLimitMinutes, 22);
+    assert.equal(onboardingCreatePayload?.participantLimit, 48);
     assert.equal(onboardingCreatePayload?.sessionStatus, 'draft');
     assert.equal(typeof onboardingCreatePayload?.participantLink, 'string');
     assert.equal(state.customerAssessments.length, 1);
@@ -258,7 +301,12 @@ export async function runApiIntegrationTests() {
     });
     assert.equal(onboardingDetailResponse.status, 200);
     const onboardingDetailPayload = await readJson(onboardingDetailResponse);
-    assert.equal(onboardingDetailPayload?.description, 'Draft CUSTOM assessment for Psych Lab (research).');
+    assert.equal(onboardingDetailPayload?.description, 'Draft CUSTOM assessment for Vanaila Research Lab (research).');
+    assert.equal(onboardingDetailPayload?.contactPerson, 'Research Desk');
+    assert.equal(
+      onboardingDetailPayload?.consentStatement,
+      'I agree to participate in studies managed by Vanaila Research Lab. Please contact support@vanaila.test for support.',
+    );
     assert.equal(Array.isArray(onboardingDetailPayload?.instructions), true);
     assert.equal(onboardingDetailPayload?.canActivateSharing, true);
 
@@ -319,7 +367,7 @@ export async function runApiIntegrationTests() {
     assert.equal(typeof startPayload?.submissionAccessToken, 'string');
     assert.equal(state.participants.length, 2);
     assert.equal(state.submissions.length, 2);
-    assert.equal(state.auditLogs.length, 3);
+    assert.equal(state.auditLogs.length, 4);
     assert.equal(state.auditLogs.at(-1)?.action, 'submission.started');
 
     const answerResponse = await fetch(`${baseUrl}/api/public/submissions/500/answers`, {

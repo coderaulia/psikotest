@@ -9,6 +9,7 @@ export interface CustomerAccountRecord {
   password_hash: string;
   account_type: 'business' | 'researcher';
   organization_name: string;
+  settings_json: string | null;
   status: 'active' | 'inactive';
   last_login_at: string | null;
   session_version: number;
@@ -30,6 +31,7 @@ const baseSelect = `
     password_hash,
     account_type,
     organization_name,
+    settings_json,
     status,
     last_login_at,
     session_version,
@@ -94,11 +96,12 @@ export async function createCustomerAccount(input: {
         password_hash,
         account_type,
         organization_name,
+        settings_json,
         status,
         last_login_at,
         session_version
       )
-      VALUES (?, ?, ?, ?, ?, 'active', NOW(), 1)
+      VALUES (?, ?, ?, ?, ?, NULL, 'active', NOW(), 1)
     `,
     [
       input.fullName.trim(),

@@ -79,6 +79,10 @@ Customer assessment detail:
 
 - `src/pages/customer/customer-assessment-detail-page.tsx`
 
+Customer workspace settings:
+
+- `src/pages/customer/customer-workspace-settings-page.tsx`
+
 ## Participant pages
 
 Consent page:
@@ -172,3 +176,4 @@ Main sources:
 ## Future cleanup recommendation
 
 For long-term maintenance, move more page copy into shared translation modules instead of keeping text inline in many page files. The current guide is intended to make editing practical immediately, even before a full copy centralization pass is finished.
+

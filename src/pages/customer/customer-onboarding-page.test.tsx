@@ -83,3 +83,4 @@ describe('CustomerOnboardingPage', () => {
     expect(screen.getByText('https://app.example.com/t/custom-study-pilot')).toBeInTheDocument();
   });
 });
+

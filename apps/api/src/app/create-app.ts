@@ -18,6 +18,7 @@ import { resultRoutes } from '../modules/results/result.routes.js';
 import { settingsRoutes } from '../modules/settings/settings.routes.js';
 import { siteAuthRoutes } from '../modules/site-auth/site-auth.routes.js';
 import { siteOnboardingRoutes } from '../modules/site-onboarding/site-onboarding.routes.js';
+import { siteWorkspaceRoutes } from '../modules/site-workspace/site-workspace.routes.js';
 import { testSessionRoutes } from '../modules/test-sessions/test-session.routes.js';
 
 const allowedOrigins = env.APP_ORIGIN
@@ -72,6 +73,7 @@ export function createApp() {
   app.use('/api/auth', authRoutes);
   app.use('/api/site-auth', siteAuthRoutes);
   app.use('/api/site-onboarding', requireCustomerAuth, siteOnboardingRoutes);
+  app.use('/api/site-workspace', requireCustomerAuth, siteWorkspaceRoutes);
   app.use('/api/dashboard', requireAdminAuth, dashboardRoutes);
   app.use('/api/participants', requireAdminAuth, participantRoutes);
   app.use('/api/test-sessions', requireAdminAuth, testSessionRoutes);
@@ -86,4 +88,6 @@ export function createApp() {
 
   return app;
 }
+
+
 

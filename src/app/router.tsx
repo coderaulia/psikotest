@@ -95,6 +95,7 @@ const CustomerLoginPage = lazyNamed(() => import('@/pages/customer/customer-logi
 const CustomerWorkspacePage = lazyNamed(() => import('@/pages/customer/customer-workspace-page'), 'CustomerWorkspacePage');
 const CustomerOnboardingPage = lazyNamed(() => import('@/pages/customer/customer-onboarding-page'), 'CustomerOnboardingPage');
 const CustomerAssessmentDetailPage = lazyNamed(() => import('@/pages/customer/customer-assessment-detail-page'), 'CustomerAssessmentDetailPage');
+const CustomerWorkspaceSettingsPage = lazyNamed(() => import('@/pages/customer/customer-workspace-settings-page'), 'CustomerWorkspaceSettingsPage');
 const AdminLoginPage = lazyNamed(() => import('@/pages/admin/admin-login-page'), 'AdminLoginPage');
 const DashboardPage = lazyNamed(() => import('@/pages/admin/dashboard-page'), 'DashboardPage');
 const ParticipantsPage = lazyNamed(() => import('@/pages/admin/participants-page'), 'ParticipantsPage');
@@ -148,6 +149,7 @@ export const router = createBrowserRouter([
       { index: true, element: withSuspense(<CustomerWorkspacePage />), errorElement: routeErrorElement },
       { path: 'create', element: withSuspense(<CustomerOnboardingPage />), errorElement: routeErrorElement },
       { path: 'assessments/:assessmentId', element: withSuspense(<CustomerAssessmentDetailPage />), errorElement: routeErrorElement },
+      { path: 'settings', element: withSuspense(<CustomerWorkspaceSettingsPage />), errorElement: routeErrorElement },
     ],
   },
   {
