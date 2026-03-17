@@ -7,6 +7,7 @@ import type { ParticipantIdentityPayload } from '@/types/assessment';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 
 const initialForm = {
   fullName: '',
@@ -18,6 +19,17 @@ const initialForm = {
   age: '',
   educationLevel: '',
 };
+
+const educationLevelOptions = [
+  'Primary school',
+  'Junior high school',
+  'Senior high school',
+  'Diploma',
+  'Bachelor',
+  'Master',
+  'Doctorate',
+  'Other',
+];
 
 export function ParticipantIdentityPage() {
   const { token = 'assessment-token' } = useParams();
@@ -112,7 +124,14 @@ export function ParticipantIdentityPage() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-600">Education level</label>
-              <Input value={form.educationLevel} onChange={(event) => updateField('educationLevel', event.target.value)} placeholder="Last completed education" />
+              <Select value={form.educationLevel} onChange={(event) => updateField('educationLevel', event.target.value)}>
+                <option value="">Select education level</option>
+                {educationLevelOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Select>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-600">Department</label>
@@ -142,5 +161,3 @@ export function ParticipantIdentityPage() {
     </Card>
   );
 }
-
-

@@ -49,7 +49,7 @@ export function createApp() {
         return callback(new Error('Origin is not allowed by CORS'));
       },
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Authorization', 'Content-Type'],
+      allowedHeaders: ['Authorization', 'Content-Type', 'X-Submission-Token'],
       maxAge: 600,
     }),
   );
@@ -86,3 +86,4 @@ export function createApp() {
 
   return app;
 }
+
