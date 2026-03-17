@@ -4,6 +4,7 @@ import { RouterProvider } from 'react-router-dom';
 
 import { router } from './app/router';
 import { clearChunkRecoveryFlagSoon, tryRecoverFromChunkError } from './lib/chunk-load-recovery';
+import { LanguageProvider } from './lib/language';
 import './styles/index.css';
 
 if (typeof window !== 'undefined') {
@@ -17,6 +18,8 @@ if (typeof window !== 'undefined') {
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <RouterProvider router={router} />
+    <LanguageProvider>
+      <RouterProvider router={router} />
+    </LanguageProvider>
   </React.StrictMode>,
 );
