@@ -5,6 +5,7 @@ export type AdministrationMode = 'supervised' | 'remote_unsupervised';
 export type InterpretationMode = 'self_assessment' | 'professional_review';
 export type ParticipantResultMode = 'instant_summary' | 'review_required';
 export type ResultReviewStatus = 'scored_preliminary' | 'in_review' | 'reviewed' | 'released';
+export type ReviewerQueueScope = 'all' | 'mine' | 'unassigned';
 export type QuestionStatus = 'draft' | 'active' | 'archived';
 
 export interface TestSessionComplianceSettings {
@@ -392,6 +393,21 @@ export interface StoredResultDetailRecord extends StoredResultRecord {
     accessToken: string;
     testType: TestTypeCode;
   };
+}
+
+export interface ReviewerAdminOption {
+  id: number;
+  fullName: string;
+  email: string;
+  role: 'super_admin' | 'psychologist_reviewer';
+}
+
+export interface ReviewerQueueSummary {
+  pendingCount: number;
+  unassignedCount: number;
+  assignedToMeCount: number;
+  inReviewCount: number;
+  readyForReleaseCount: number;
 }
 
 export interface SubmitSubmissionResponse {

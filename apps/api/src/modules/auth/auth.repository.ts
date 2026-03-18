@@ -71,3 +71,18 @@ export async function revokeAdminSessions(adminId: number) {
     [adminId],
   );
 }
+
+export async function listReviewerAdmins() {
+  const pool = getDbPool();
+  const [rows] = await pool.query<AdminRow[]>(
+    `
+      SELECT id, full_name, email, password_hash, role, status, session_version
+      FROM admins
+      WHERE status = 'active'
+        AND role IN ('super_admin', 'psychologist_reviewer')
+      ORDER BY CASE WHEN role = 'super_admin' THEN 0 ELSE 1 END, full_name ASC, id ASC
+    `,
+  );
+
+  return rows;
+}

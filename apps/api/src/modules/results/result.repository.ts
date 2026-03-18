@@ -460,12 +460,17 @@ export async function saveResultReviewRecord(
     nextStatus = 'in_review';
   }
 
+  const nextReviewerAdminId = input.reviewerAdminId === undefined
+    ? currentState.reviewerAdminId
+    : input.reviewerAdminId;
+
   const nextPayload: Record<string, unknown> = {
     ...currentPayload,
     professionalSummary: applyReviewValue(currentPayload, 'professionalSummary', input.professionalSummary),
     recommendation: applyReviewValue(currentPayload, 'recommendation', input.recommendation),
     limitations: applyReviewValue(currentPayload, 'limitations', input.limitations),
     reviewerNotes: applyReviewValue(currentPayload, 'reviewerNotes', input.reviewerNotes),
+    reviewerAdminId: nextReviewerAdminId,
     reviewStatus: nextStatus,
   };
 
@@ -473,14 +478,14 @@ export async function saveResultReviewRecord(
     nextPayload.reviewStartedAt = null;
     nextPayload.reviewedAt = null;
     nextPayload.reviewedByAdminId = null;
-    nextPayload.reviewerAdminId = null;
+    nextPayload.reviewerAdminId = nextReviewerAdminId;
     nextPayload.releasedAt = null;
     nextPayload.releasedByAdminId = null;
   }
 
   if (nextStatus === 'in_review') {
     nextPayload.reviewStartedAt = currentState.reviewStartedAt ?? now;
-    nextPayload.reviewerAdminId = currentState.reviewerAdminId ?? adminId;
+    nextPayload.reviewerAdminId = nextReviewerAdminId ?? adminId;
     nextPayload.reviewedAt = null;
     nextPayload.reviewedByAdminId = null;
     nextPayload.releasedAt = null;
@@ -489,7 +494,7 @@ export async function saveResultReviewRecord(
 
   if (nextStatus === 'reviewed') {
     nextPayload.reviewStartedAt = currentState.reviewStartedAt ?? now;
-    nextPayload.reviewerAdminId = currentState.reviewerAdminId ?? adminId;
+    nextPayload.reviewerAdminId = nextReviewerAdminId ?? adminId;
     nextPayload.reviewedAt = now;
     nextPayload.reviewedByAdminId = adminId;
     nextPayload.releasedAt = null;
@@ -498,7 +503,7 @@ export async function saveResultReviewRecord(
 
   if (nextStatus === 'released') {
     nextPayload.reviewStartedAt = currentState.reviewStartedAt ?? now;
-    nextPayload.reviewerAdminId = currentState.reviewerAdminId ?? adminId;
+    nextPayload.reviewerAdminId = nextReviewerAdminId ?? adminId;
     nextPayload.reviewedAt = currentState.reviewedAt ?? now;
     nextPayload.reviewedByAdminId = currentState.reviewedByAdminId ?? adminId;
     nextPayload.releasedAt = now;

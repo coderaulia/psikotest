@@ -1,15 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
-import { StateCard } from '@/components/common/state-card';
 import { SectionHeading } from '@/components/common/section-heading';
+import { StateCard } from '@/components/common/state-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { loadAdminSession } from '@/lib/admin-session';
-import { fetchResultDetail, updateAdminResultReview } from '@/services/admin-data';
-import type { ResultReviewStatus, StoredResultDetailRecord } from '@/types/assessment';
+import {
+  assignAdminResultReviewer,
+  fetchResultDetail,
+  fetchReviewerOptions,
+  updateAdminResultReview,
+} from '@/services/admin-data';
+import type { ResultReviewStatus, ReviewerAdminOption, StoredResultDetailRecord } from '@/types/assessment';
 import {
   formatDateTime,
   formatResultHeadline,
@@ -38,8 +44,12 @@ export function ResultDetailPage() {
   const { id } = useParams();
   const resultId = Number(id);
   const adminSession = loadAdminSession();
-  const canReview = ['super_admin', 'psychologist_reviewer'].includes(adminSession?.admin.role ?? '');
+  const adminId = adminSession?.admin.id ?? null;
+  const adminRole = adminSession?.admin.role ?? null;
+  const canManageReviewer = ['super_admin', 'admin'].includes(adminRole ?? '');
   const [result, setResult] = useState<StoredResultDetailRecord | null>(null);
+  const [reviewers, setReviewers] = useState<ReviewerAdminOption[]>([]);
+  const [selectedReviewerId, setSelectedReviewerId] = useState('');
   const [form, setForm] = useState<ReviewFormState>({
     professionalSummary: '',
     recommendation: '',
@@ -48,16 +58,30 @@ export function ResultDetailPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const currentReviewerAdminId = result?.reviewerAdminId ?? null;
+  const isAssignedToAnotherReviewer = adminRole === 'psychologist_reviewer' && currentReviewerAdminId !== null && currentReviewerAdminId !== adminId;
+  const canReview = ['super_admin', 'psychologist_reviewer'].includes(adminRole ?? '') && !isAssignedToAnotherReviewer;
+  const assignedReviewer = useMemo(
+    () => reviewers.find((reviewer) => reviewer.id === result?.reviewerAdminId) ?? null,
+    [reviewers, result?.reviewerAdminId],
+  );
 
   async function loadResult() {
     setIsLoading(true);
     setError(null);
 
     try {
-      const record = await fetchResultDetail(resultId);
+      const [record, reviewerOptions] = await Promise.all([
+        fetchResultDetail(resultId),
+        canManageReviewer || adminRole === 'super_admin' ? fetchReviewerOptions() : Promise.resolve([]),
+      ]);
       setResult(record);
       setForm(createFormState(record));
+      setReviewers(reviewerOptions);
+      setSelectedReviewerId(record.reviewerAdminId ? String(record.reviewerAdminId) : '');
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to load result detail');
     } finally {
@@ -91,10 +115,31 @@ export function ResultDetailPage() {
       });
       setResult(updated);
       setForm(createFormState(updated));
+      setSelectedReviewerId(updated.reviewerAdminId ? String(updated.reviewerAdminId) : '');
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to save review changes');
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleAssignReviewer(reviewerAdminId: number | null) {
+    if (!result) {
+      return;
+    }
+
+    setIsAssigning(true);
+    setError(null);
+
+    try {
+      const updated = await assignAdminResultReviewer(result.id, reviewerAdminId);
+      setResult(updated);
+      setForm(createFormState(updated));
+      setSelectedReviewerId(updated.reviewerAdminId ? String(updated.reviewerAdminId) : '');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to update reviewer assignment');
+    } finally {
+      setIsAssigning(false);
     }
   }
 
@@ -121,10 +166,15 @@ export function ResultDetailPage() {
       <SectionHeading
         eyebrow="Result Detail"
         title={result.participant.fullName}
-        description={`${formatTestTypeLabel(result.testType)} assessment â€¢ ${formatDateTime(result.submittedAt)}`}
+        description={`${formatTestTypeLabel(result.testType)} assessment • ${formatDateTime(result.submittedAt)}`}
         actions={
           <div className="flex flex-wrap gap-3">
             <Button variant="outline" asChild><Link to={`/admin/test-sessions/${result.session.id}`}>Open session</Link></Button>
+            {adminRole === 'psychologist_reviewer' && result.reviewerAdminId === null ? (
+              <Button variant="outline" onClick={() => void handleAssignReviewer(adminId)} disabled={isAssigning || !adminId}>
+                {isAssigning ? 'Claiming...' : 'Claim review'}
+              </Button>
+            ) : null}
             {canReview ? (
               <>
                 <Button variant="outline" onClick={() => void saveReview('scored_preliminary')} disabled={isSaving}>
@@ -145,7 +195,11 @@ export function ResultDetailPage() {
         }
       />
 
-      {!canReview ? (
+      {isAssignedToAnotherReviewer ? (
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
+          This result is currently assigned to another reviewer. You can inspect the record but cannot edit reviewer content.
+        </div>
+      ) : !canReview ? (
         <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
           This result is read-only for your role. Reviewer actions are limited to psychologist reviewers and super admins.
         </div>
@@ -208,7 +262,10 @@ export function ResultDetailPage() {
             <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Employee Code</p><p className="mt-2 font-medium text-slate-950">{result.participant.employeeCode ?? '-'}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Department</p><p className="mt-2 font-medium text-slate-950">{result.participant.department ?? '-'}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Position</p><p className="mt-2 font-medium text-slate-950">{result.participant.positionTitle ?? '-'}</p></div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Reviewer Assigned</p><p className="mt-2 font-medium text-slate-950">{result.reviewerAdminId ?? '-'}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Reviewer Assigned</p>
+              <p className="mt-2 font-medium text-slate-950">{assignedReviewer ? `${assignedReviewer.fullName} (${assignedReviewer.role === 'super_admin' ? 'Super admin' : 'Psychologist reviewer'})` : result.reviewerAdminId ? `Reviewer #${result.reviewerAdminId}` : 'Unassigned'}</p>
+            </div>
           </CardContent>
         </Card>
 
@@ -230,6 +287,29 @@ export function ResultDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {canManageReviewer ? (
+        <Card className="bg-white/80">
+          <CardHeader>
+            <CardTitle>Reviewer assignment</CardTitle>
+            <CardDescription>Assign or reassign the professional reviewer before the report is released.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 md:flex-row md:items-end">
+            <div className="flex-1 space-y-2">
+              <label htmlFor="result-reviewer-assignment" className="text-sm font-medium text-slate-600">Assigned reviewer</label>
+              <Select id="result-reviewer-assignment" value={selectedReviewerId} onChange={(event) => setSelectedReviewerId(event.target.value)}>
+                <option value="">Unassigned</option>
+                {reviewers.map((reviewer) => (
+                  <option key={reviewer.id} value={String(reviewer.id)}>{reviewer.fullName} • {reviewer.email}</option>
+                ))}
+              </Select>
+            </div>
+            <Button onClick={() => void handleAssignReviewer(selectedReviewerId ? Number(selectedReviewerId) : null)} disabled={isAssigning}>
+              {isAssigning ? 'Updating...' : 'Save assignment'}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="bg-white/80">

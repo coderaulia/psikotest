@@ -83,6 +83,7 @@ Planned next roles:
   - `reviewed`
   - `released`
 - participant-facing release must not expose preliminary machine output as a final professional result
+- psychologist reviewers should only edit results assigned to them, or explicitly claim an unassigned result from the queue
 
 ## Security rules already in place
 - CORS allowlist by configured origin

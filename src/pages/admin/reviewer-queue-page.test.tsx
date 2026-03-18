@@ -6,14 +6,17 @@ import { renderWithRoute } from '@/test/render';
 import { ReviewerQueuePage } from './reviewer-queue-page';
 
 const fetchReviewerQueueMock = vi.fn();
+const fetchReviewerQueueSummaryMock = vi.fn();
 
 vi.mock('@/services/admin-data', () => ({
   fetchReviewerQueue: (...args: unknown[]) => fetchReviewerQueueMock(...args),
+  fetchReviewerQueueSummary: (...args: unknown[]) => fetchReviewerQueueSummaryMock(...args),
 }));
 
 describe('ReviewerQueuePage', () => {
   beforeEach(() => {
     fetchReviewerQueueMock.mockReset();
+    fetchReviewerQueueSummaryMock.mockReset();
     window.localStorage.clear();
     window.sessionStorage.clear();
   });
@@ -31,6 +34,14 @@ describe('ReviewerQueuePage', () => {
         },
       }),
     );
+
+    fetchReviewerQueueSummaryMock.mockResolvedValue({
+      pendingCount: 3,
+      unassignedCount: 1,
+      assignedToMeCount: 2,
+      inReviewCount: 1,
+      readyForReleaseCount: 1,
+    });
 
     fetchReviewerQueueMock.mockResolvedValue([
       {
@@ -75,6 +86,7 @@ describe('ReviewerQueuePage', () => {
 
     expect(await screen.findByText('Nadia Pratama')).toBeInTheDocument();
     expect(screen.getByText('DISC Hiring Session')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /open review/i })).toHaveAttribute('href', '/admin/results/7');
   });
 });

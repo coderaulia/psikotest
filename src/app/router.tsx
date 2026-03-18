@@ -104,6 +104,7 @@ const TestSessionDetailPage = lazyNamed(() => import('@/pages/admin/test-session
 const QuestionBankPage = lazyNamed(() => import('@/pages/admin/question-bank-page'), 'QuestionBankPage');
 const ResultsPage = lazyNamed(() => import('@/pages/admin/results-page'), 'ResultsPage');
 const ResultDetailPage = lazyNamed(() => import('@/pages/admin/result-detail-page'), 'ResultDetailPage');
+const ReviewerQueuePage = lazyNamed(() => import('@/pages/admin/reviewer-queue-page'), 'ReviewerQueuePage');
 const ReportsPage = lazyNamed(() => import('@/pages/admin/reports-page'), 'ReportsPage');
 const SettingsPage = lazyNamed(() => import('@/pages/admin/settings-page'), 'SettingsPage');
 const ParticipantConsentPage = lazyNamed(() => import('@/pages/participant/consent-page'), 'ParticipantConsentPage');
@@ -165,6 +166,7 @@ export const router = createBrowserRouter([
       { path: 'test-sessions/:id', element: withSuspense(<TestSessionDetailPage />), errorElement: routeErrorElement },
       { path: 'results', element: withSuspense(<ResultsPage />), errorElement: routeErrorElement },
       { path: 'results/:id', element: withSuspense(<ResultDetailPage />), errorElement: routeErrorElement },
+      { path: 'reviewer-queue', element: withSuspense(<ReviewerQueuePage />), errorElement: routeErrorElement },
       { path: 'reports', element: withSuspense(<ReportsPage />), errorElement: routeErrorElement },
       { path: 'settings', element: withSuspense(<SettingsPage />), errorElement: routeErrorElement },
     ],

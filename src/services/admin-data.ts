@@ -10,6 +10,9 @@ import type {
   QuestionBankQuestionPayload,
   ReportsSummaryResponse,
   ResultReviewStatus,
+  ReviewerAdminOption,
+  ReviewerQueueScope,
+  ReviewerQueueSummary,
   SettingsOverviewResponse,
   StoredResultDetailRecord,
   StoredResultRecord,
@@ -94,8 +97,18 @@ export async function fetchResults(filters: {
   return payload.items;
 }
 
-export async function fetchReviewerQueue() {
-  const payload = await adminFetchJson<{ items: StoredResultRecord[] }>('/results/reviewer-queue');
+export async function fetchReviewerQueue(scope: ReviewerQueueScope = 'all') {
+  const query = buildQuery({ scope });
+  const payload = await adminFetchJson<{ items: StoredResultRecord[] }>(`/results/reviewer-queue${query}`);
+  return payload.items;
+}
+
+export async function fetchReviewerQueueSummary() {
+  return adminFetchJson<ReviewerQueueSummary>('/results/reviewer-queue/summary');
+}
+
+export async function fetchReviewerOptions() {
+  const payload = await adminFetchJson<{ items: ReviewerAdminOption[] }>('/results/reviewers');
   return payload.items;
 }
 
@@ -120,6 +133,13 @@ export async function updateAdminResultReview(id: number, payload: {
   return adminFetchJson<StoredResultDetailRecord>(`/results/${id}/review`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
+  });
+}
+
+export async function assignAdminResultReviewer(id: number, reviewerAdminId: number | null) {
+  return adminFetchJson<StoredResultDetailRecord>(`/results/${id}/assign-reviewer`, {
+    method: 'PATCH',
+    body: JSON.stringify({ reviewerAdminId }),
   });
 }
 
