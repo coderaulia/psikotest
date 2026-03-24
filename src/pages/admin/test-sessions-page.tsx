@@ -49,6 +49,10 @@ export function TestSessionsPage() {
       'I agree to participate in this psychological assessment and understand that my responses will be used for the stated assessment purpose.',
     privacyStatement:
       'Your personal information and responses will be treated as confidential assessment data and accessed only by authorized reviewers.',
+    distributionPolicy: 'participant_summary',
+    protectedDeliveryMode: false,
+    participantResultAccess: 'summary',
+    hrResultAccess: 'full',
   });
 
   async function loadSessions() {
@@ -95,6 +99,10 @@ export function TestSessionsPage() {
           contactPerson: overview.sessionDefaults.settings.contactPerson,
           consentStatement: overview.sessionDefaults.settings.consentStatement,
           privacyStatement: overview.sessionDefaults.settings.privacyStatement,
+          distributionPolicy: overview.sessionDefaults.settings.distributionPolicy ?? 'participant_summary',
+          protectedDeliveryMode: overview.sessionDefaults.settings.protectedDeliveryMode ?? false,
+          participantResultAccess: overview.sessionDefaults.settings.participantResultAccess ?? 'summary',
+          hrResultAccess: overview.sessionDefaults.settings.hrResultAccess ?? 'full',
         }));
         setHasLoadedDefaults(true);
       })
@@ -128,6 +136,10 @@ export function TestSessionsPage() {
         contactPerson: form.contactPerson.trim(),
         consentStatement: form.consentStatement.trim(),
         privacyStatement: form.privacyStatement.trim(),
+        distributionPolicy: form.distributionPolicy as CreateTestSessionPayload['settings']['distributionPolicy'],
+        protectedDeliveryMode: form.protectedDeliveryMode,
+        participantResultAccess: form.participantResultAccess as CreateTestSessionPayload['settings']['participantResultAccess'],
+        hrResultAccess: form.hrResultAccess as CreateTestSessionPayload['settings']['hrResultAccess'],
       },
     };
 

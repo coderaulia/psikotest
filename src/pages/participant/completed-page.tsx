@@ -22,7 +22,12 @@ export function ParticipantCompletedPage() {
   const storedSession = loadParticipantSession(token);
   const result = storedSession?.result;
   const note = typeof result?.resultPayload.note === 'string' ? result.resultPayload.note : null;
+
+  const participantResultAccess = storedSession?.compliance?.participantResultAccess ?? 'summary';
   const isReviewRequired = storedSession?.participantResultMode === 'review_required' && result?.reviewStatus !== 'released';
+  const isNoAccess = participantResultAccess === 'none';
+  const isFullReleasedPending = participantResultAccess === 'full_released' && result?.reviewStatus !== 'released';
+  const shouldHideResult = isNoAccess || isReviewRequired || isFullReleasedPending;
 
   return (
     <Card className="mx-auto w-full max-w-3xl bg-white/82 text-center">
@@ -33,7 +38,13 @@ export function ParticipantCompletedPage() {
       <CardContent className="space-y-6">
         <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-6 text-left text-sm leading-7 text-slate-500">
           <p className="font-medium text-slate-950">{storedSession?.participant.fullName ?? 'Participant'}</p>
-          {isReviewRequired ? (
+
+          {isNoAccess ? (
+            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-emerald-500">Response recorded</p>
+              <p className="mt-2 text-sm text-slate-600">Your response has been recorded. Thank you for participating.</p>
+            </div>
+          ) : isReviewRequired || isFullReleasedPending ? (
             <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Review status</p>
               <p className="mt-2 text-base font-medium text-slate-950">Professional review required</p>
@@ -59,7 +70,7 @@ export function ParticipantCompletedPage() {
           )}
         </div>
 
-        {!isReviewRequired && result ? (
+        {!shouldHideResult && result ? (
           <>
             <div className="grid gap-3 text-left md:grid-cols-2">
               {result.summaries.map((summary) => (

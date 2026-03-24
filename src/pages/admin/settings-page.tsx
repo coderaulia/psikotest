@@ -40,6 +40,10 @@ export function SettingsPage() {
     contactPerson: '',
     consentStatement: '',
     privacyStatement: '',
+    distributionPolicy: 'participant_summary',
+    protectedDeliveryMode: false,
+    participantResultAccess: 'summary',
+    hrResultAccess: 'full',
   });
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingDefaults, setIsSavingDefaults] = useState(false);
@@ -66,6 +70,10 @@ export function SettingsPage() {
         contactPerson: overview.sessionDefaults.settings.contactPerson,
         consentStatement: overview.sessionDefaults.settings.consentStatement,
         privacyStatement: overview.sessionDefaults.settings.privacyStatement,
+        distributionPolicy: overview.sessionDefaults.settings.distributionPolicy ?? 'participant_summary',
+        protectedDeliveryMode: overview.sessionDefaults.settings.protectedDeliveryMode ?? false,
+        participantResultAccess: overview.sessionDefaults.settings.participantResultAccess ?? 'summary',
+        hrResultAccess: overview.sessionDefaults.settings.hrResultAccess ?? 'full',
       });
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to load settings');
@@ -120,6 +128,10 @@ export function SettingsPage() {
           contactPerson: defaultsForm.contactPerson,
           consentStatement: defaultsForm.consentStatement,
           privacyStatement: defaultsForm.privacyStatement,
+          distributionPolicy: defaultsForm.distributionPolicy as SettingsOverviewResponse['sessionDefaults']['settings']['distributionPolicy'],
+          protectedDeliveryMode: defaultsForm.protectedDeliveryMode,
+          participantResultAccess: defaultsForm.participantResultAccess as SettingsOverviewResponse['sessionDefaults']['settings']['participantResultAccess'],
+          hrResultAccess: defaultsForm.hrResultAccess as SettingsOverviewResponse['sessionDefaults']['settings']['hrResultAccess'],
         },
       });
 

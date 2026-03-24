@@ -1,6 +1,7 @@
 import type {
   ParticipantConsentState,
   ParticipantIdentityPayload,
+  ParticipantResultAccess,
   StartSubmissionResponse,
   StoredResultRecord,
   TestTypeCode,
@@ -15,6 +16,9 @@ export interface StoredParticipantSession {
   participantResultMode: 'instant_summary' | 'review_required';
   participant: ParticipantIdentityPayload;
   result: StoredResultRecord | null;
+  compliance?: {
+    participantResultAccess: ParticipantResultAccess;
+  };
 }
 
 function getStorageKey(token: string) {
@@ -38,6 +42,7 @@ export function saveParticipantSession(
   token: string,
   start: StartSubmissionResponse,
   participant: ParticipantIdentityPayload,
+  compliance?: { participantResultAccess: ParticipantResultAccess },
 ) {
   if (typeof window === 'undefined') {
     return;
@@ -52,6 +57,7 @@ export function saveParticipantSession(
     participantResultMode: start.participantResultMode,
     participant,
     result: null,
+    compliance,
   };
 
   window.sessionStorage.setItem(getStorageKey(token), JSON.stringify(payload));

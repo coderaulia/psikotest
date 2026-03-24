@@ -1,7 +1,10 @@
 import type {
   AdministrationMode,
   AssessmentPurpose,
+  DistributionPolicy,
+  HrResultAccess,
   InterpretationMode,
+  ParticipantResultAccess,
   ParticipantResultMode,
 } from '../test-sessions/session-settings.js';
 
@@ -36,6 +39,10 @@ export interface PublicSessionComplianceMeta {
   consentStatement: string;
   privacyStatement: string;
   contactPerson: string;
+  distributionPolicy: DistributionPolicy;
+  protectedDeliveryMode: boolean;
+  participantResultAccess: ParticipantResultAccess;
+  hrResultAccess: HrResultAccess;
 }
 
 export interface PublicSessionMeta {

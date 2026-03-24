@@ -2,7 +2,7 @@ import { type FormEvent, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 
 import { loadParticipantConsent, loadParticipantSession, saveParticipantSession } from '@/lib/participant-session';
-import { startPublicSubmission } from '@/services/public-sessions';
+import { startPublicSubmission, fetchPublicSession } from '@/services/public-sessions';
 import type { ParticipantIdentityPayload } from '@/types/assessment';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -86,7 +86,18 @@ export function ParticipantIdentityPage() {
       };
 
       const start = await startPublicSubmission(token, payload);
-      saveParticipantSession(token, start, payload);
+
+      let complianceData: { participantResultAccess: 'none' | 'summary' | 'full_released' } | undefined;
+      try {
+        const sessionDef = await fetchPublicSession(token);
+        complianceData = {
+          participantResultAccess: sessionDef.session.compliance.participantResultAccess ?? 'summary',
+        };
+      } catch {
+        // Best-effort; compliance defaults will be used on completed page
+      }
+
+      saveParticipantSession(token, start, payload, complianceData);
       navigate(`/t/${token}/instructions`);
     } catch (submissionError) {
       setError(submissionError instanceof Error ? submissionError.message : 'Unable to start the session');

@@ -58,9 +58,66 @@ function createReviewNote(reviewStatus: StoredResultDetailRecord['reviewStatus']
 function sanitizeParticipantResult(
   result: StoredResultDetailRecord,
   participantResultMode: 'instant_summary' | 'review_required',
+  participantResultAccess: 'none' | 'summary' | 'full_released' = 'summary',
 ) {
-  if (participantResultMode === 'instant_summary' || result.reviewStatus === 'released') {
+  if (participantResultAccess === 'none') {
+    return {
+      ...result,
+      scoreTotal: null,
+      scoreBand: null,
+      primaryType: null,
+      secondaryType: null,
+      profileCode: null,
+      interpretationKey: null,
+      professionalSummary: null,
+      recommendation: null,
+      limitations: null,
+      reviewerNotes: null,
+      summaries: [],
+      resultPayload: {
+        reviewStatus: result.reviewStatus,
+        note: 'Your response has been recorded. Thank you for participating.',
+      },
+    } satisfies StoredResultDetailRecord;
+  }
+
+  if (participantResultAccess === 'full_released' && result.reviewStatus === 'released') {
     return result;
+  }
+
+  if (participantResultAccess === 'full_released' && result.reviewStatus !== 'released') {
+    return {
+      ...result,
+      scoreTotal: null,
+      scoreBand: null,
+      primaryType: null,
+      secondaryType: null,
+      profileCode: null,
+      interpretationKey: null,
+      professionalSummary: null,
+      recommendation: null,
+      limitations: null,
+      reviewerNotes: null,
+      summaries: [],
+      resultPayload: {
+        reviewStatus: result.reviewStatus,
+        note: createReviewNote(result.reviewStatus),
+      },
+    } satisfies StoredResultDetailRecord;
+  }
+
+  // participantResultAccess === 'summary'
+  if (participantResultMode === 'instant_summary' || result.reviewStatus === 'released') {
+    return {
+      ...result,
+      professionalSummary: result.reviewStatus === 'released' ? result.professionalSummary : null,
+      recommendation: result.reviewStatus === 'released' ? result.recommendation : null,
+      limitations: null,
+      reviewerNotes: null,
+      resultPayload: {
+        reviewStatus: result.reviewStatus,
+      },
+    } satisfies StoredResultDetailRecord;
   }
 
   return {
@@ -156,6 +213,7 @@ export async function submitPublicSubmission(
       result: sanitizeParticipantResult(
         context.existingResult,
         context.definition.session.compliance.participantResultMode,
+        context.definition.session.compliance.participantResultAccess,
       ),
     };
   }
@@ -216,6 +274,7 @@ export async function submitPublicSubmission(
     result: sanitizeParticipantResult(
       storedResult,
       context.definition.session.compliance.participantResultMode,
+      context.definition.session.compliance.participantResultAccess,
     ),
   };
 }

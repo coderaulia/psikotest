@@ -7,6 +7,9 @@ export type ParticipantResultMode = 'instant_summary' | 'review_required';
 export type ResultReviewStatus = 'scored_preliminary' | 'in_review' | 'reviewed' | 'released';
 export type ReviewerQueueScope = 'all' | 'mine' | 'unassigned';
 export type QuestionStatus = 'draft' | 'active' | 'archived';
+export type DistributionPolicy = 'hr_only' | 'participant_summary' | 'full_report_with_consent';
+export type ParticipantResultAccess = 'none' | 'summary' | 'full_released';
+export type HrResultAccess = 'none' | 'summary' | 'full';
 
 export interface TestSessionComplianceSettings {
   assessmentPurpose: AssessmentPurpose;
@@ -17,6 +20,10 @@ export interface TestSessionComplianceSettings {
   consentStatement: string;
   privacyStatement: string;
   contactPerson: string;
+  distributionPolicy: DistributionPolicy;
+  protectedDeliveryMode: boolean;
+  participantResultAccess: ParticipantResultAccess;
+  hrResultAccess: HrResultAccess;
 }
 
 export interface SessionSettingsPayload {
@@ -27,6 +34,10 @@ export interface SessionSettingsPayload {
   consentStatement: string;
   privacyStatement: string;
   contactPerson: string;
+  distributionPolicy: DistributionPolicy;
+  protectedDeliveryMode: boolean;
+  participantResultAccess: ParticipantResultAccess;
+  hrResultAccess: HrResultAccess;
 }
 
 export interface AssessmentOption {

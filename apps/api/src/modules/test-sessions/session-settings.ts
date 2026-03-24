@@ -8,6 +8,9 @@ export type AssessmentPurpose =
 export type AdministrationMode = 'supervised' | 'remote_unsupervised';
 export type InterpretationMode = 'self_assessment' | 'professional_review';
 export type ParticipantResultMode = 'instant_summary' | 'review_required';
+export type DistributionPolicy = 'hr_only' | 'participant_summary' | 'full_report_with_consent';
+export type ParticipantResultAccess = 'none' | 'summary' | 'full_released';
+export type HrResultAccess = 'none' | 'summary' | 'full';
 
 export interface TestSessionSettings {
   assessmentPurpose: AssessmentPurpose;
@@ -17,6 +20,10 @@ export interface TestSessionSettings {
   consentStatement: string;
   privacyStatement: string;
   contactPerson: string;
+  distributionPolicy: DistributionPolicy;
+  protectedDeliveryMode: boolean;
+  participantResultAccess: ParticipantResultAccess;
+  hrResultAccess: HrResultAccess;
 }
 
 const defaultConsentStatement =
@@ -39,6 +46,10 @@ export function getDefaultTestSessionSettings(overrides: Partial<TestSessionSett
     consentStatement: defaultConsentStatement,
     privacyStatement: defaultPrivacyStatement,
     contactPerson: defaultContactPerson,
+    distributionPolicy: 'participant_summary',
+    protectedDeliveryMode: false,
+    participantResultAccess: 'summary',
+    hrResultAccess: 'full',
   };
 
   return {
@@ -55,6 +66,10 @@ export function getDefaultResearchSessionSettings(): TestSessionSettings {
     consentStatement: defaultResearchConsentStatement,
     privacyStatement: defaultResearchPrivacyStatement,
     contactPerson: defaultResearchContactPerson,
+    distributionPolicy: 'participant_summary',
+    protectedDeliveryMode: false,
+    participantResultAccess: 'none',
+    hrResultAccess: 'full',
   });
 }
 
@@ -76,6 +91,10 @@ export function parseTestSessionSettings(
     typeof parsed.participantLimit === 'number' && Number.isFinite(parsed.participantLimit)
       ? Math.max(1, Math.round(parsed.participantLimit))
       : null;
+
+  const validDistributionPolicies = ['hr_only', 'participant_summary', 'full_report_with_consent'];
+  const validParticipantAccess = ['none', 'summary', 'full_released'];
+  const validHrAccess = ['none', 'summary', 'full'];
 
   return {
     assessmentPurpose:
@@ -103,6 +122,22 @@ export function parseTestSessionSettings(
       typeof parsed.contactPerson === 'string' && parsed.contactPerson.trim().length > 0
         ? parsed.contactPerson.trim()
         : defaults.contactPerson,
+    distributionPolicy:
+      typeof parsed.distributionPolicy === 'string' && validDistributionPolicies.includes(parsed.distributionPolicy)
+        ? (parsed.distributionPolicy as DistributionPolicy)
+        : defaults.distributionPolicy,
+    protectedDeliveryMode:
+      typeof parsed.protectedDeliveryMode === 'boolean'
+        ? parsed.protectedDeliveryMode
+        : defaults.protectedDeliveryMode,
+    participantResultAccess:
+      typeof parsed.participantResultAccess === 'string' && validParticipantAccess.includes(parsed.participantResultAccess)
+        ? (parsed.participantResultAccess as ParticipantResultAccess)
+        : defaults.participantResultAccess,
+    hrResultAccess:
+      typeof parsed.hrResultAccess === 'string' && validHrAccess.includes(parsed.hrResultAccess)
+        ? (parsed.hrResultAccess as HrResultAccess)
+        : defaults.hrResultAccess,
   };
 }
 

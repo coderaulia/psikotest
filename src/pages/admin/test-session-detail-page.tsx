@@ -53,6 +53,10 @@ export function TestSessionDetailPage() {
     contactPerson: '',
     consentStatement: '',
     privacyStatement: '',
+    distributionPolicy: 'participant_summary',
+    protectedDeliveryMode: false,
+    participantResultAccess: 'summary',
+    hrResultAccess: 'full',
   });
 
   async function loadSession() {
@@ -77,6 +81,10 @@ export function TestSessionDetailPage() {
         contactPerson: detail.settings.contactPerson,
         consentStatement: detail.settings.consentStatement,
         privacyStatement: detail.settings.privacyStatement,
+        distributionPolicy: detail.settings.distributionPolicy ?? 'participant_summary',
+        protectedDeliveryMode: detail.settings.protectedDeliveryMode ?? false,
+        participantResultAccess: detail.settings.participantResultAccess ?? 'summary',
+        hrResultAccess: detail.settings.hrResultAccess ?? 'full',
       });
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to load session detail');
@@ -123,6 +131,10 @@ export function TestSessionDetailPage() {
           contactPerson: form.contactPerson.trim(),
           consentStatement: form.consentStatement.trim(),
           privacyStatement: form.privacyStatement.trim(),
+          distributionPolicy: form.distributionPolicy as UpdateTestSessionPayload['settings']['distributionPolicy'],
+          protectedDeliveryMode: form.protectedDeliveryMode,
+          participantResultAccess: form.participantResultAccess as UpdateTestSessionPayload['settings']['participantResultAccess'],
+          hrResultAccess: form.hrResultAccess as UpdateTestSessionPayload['settings']['hrResultAccess'],
         },
       };
 
@@ -256,6 +268,40 @@ export function TestSessionDetailPage() {
                 </div>
               </div>
 
+              <div className="mt-2 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4">
+                <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-500">Distribution &amp; Security</h4>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-600">Distribution policy</label>
+                    <Select value={form.distributionPolicy} onChange={(event) => setForm((current) => ({ ...current, distributionPolicy: event.target.value }))}>
+                      <option value="participant_summary">Participant summary</option>
+                      <option value="hr_only">HR only</option>
+                      <option value="full_report_with_consent">Full report with consent</option>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-600">Participant result access</label>
+                    <Select value={form.participantResultAccess} onChange={(event) => setForm((current) => ({ ...current, participantResultAccess: event.target.value }))}>
+                      <option value="none">No access</option>
+                      <option value="summary">Summary only</option>
+                      <option value="full_released">Full (after release)</option>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-600">HR result access</label>
+                    <Select value={form.hrResultAccess} onChange={(event) => setForm((current) => ({ ...current, hrResultAccess: event.target.value }))}>
+                      <option value="none">No access</option>
+                      <option value="summary">Summary only</option>
+                      <option value="full">Full access</option>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-3 self-end rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                    <input type="checkbox" id="protectedDelivery" checked={form.protectedDeliveryMode} onChange={(event) => setForm((current) => ({ ...current, protectedDeliveryMode: event.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-indigo-600" />
+                    <label htmlFor="protectedDelivery" className="text-sm text-slate-600">Protected delivery mode</label>
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-600">Description</label>
                 <textarea className={textAreaClassName} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} />
@@ -296,6 +342,10 @@ export function TestSessionDetailPage() {
               <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Access Token</p><p className="mt-2 font-medium text-slate-950">{session.accessToken}</p></div>
               <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Start Time</p><p className="mt-2 font-medium text-slate-950">{formatDateTime(session.startsAt)}</p></div>
               <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Time Limit</p><p className="mt-2 font-medium text-slate-950">{session.timeLimitMinutes ? `${session.timeLimitMinutes} minutes` : 'Not set'}</p></div>
+              <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4"><p className="text-xs uppercase tracking-[0.18em] text-indigo-500">Distribution Policy</p><p className="mt-2 font-medium text-slate-950">{formatTokenLabel(session.settings.distributionPolicy ?? 'participant_summary')}</p></div>
+              <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4"><p className="text-xs uppercase tracking-[0.18em] text-indigo-500">Participant Access</p><p className="mt-2 font-medium text-slate-950">{formatTokenLabel(session.settings.participantResultAccess ?? 'summary')}</p></div>
+              <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4"><p className="text-xs uppercase tracking-[0.18em] text-indigo-500">HR Access</p><p className="mt-2 font-medium text-slate-950">{formatTokenLabel(session.settings.hrResultAccess ?? 'full')}</p></div>
+              <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4"><p className="text-xs uppercase tracking-[0.18em] text-indigo-500">Protected Delivery</p><p className="mt-2 font-medium text-slate-950">{session.settings.protectedDeliveryMode ? 'Enabled' : 'Disabled'}</p></div>
             </div>
           </CardContent>
         </Card>

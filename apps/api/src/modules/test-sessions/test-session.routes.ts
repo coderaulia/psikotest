@@ -29,6 +29,10 @@ const settingsSchema = z.object({
   consentStatement: z.string().min(20).max(2000),
   privacyStatement: z.string().min(20).max(2000),
   contactPerson: z.string().min(3).max(255),
+  distributionPolicy: z.enum(['hr_only', 'participant_summary', 'full_report_with_consent']).optional().default('participant_summary'),
+  protectedDeliveryMode: z.boolean().optional().default(false),
+  participantResultAccess: z.enum(['none', 'summary', 'full_released']).optional().default('summary'),
+  hrResultAccess: z.enum(['none', 'summary', 'full']).optional().default('full'),
 });
 
 const createSessionSchema = z.object({
