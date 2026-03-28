@@ -10,6 +10,7 @@ interface FakeAdmin {
   role: 'super_admin' | 'admin' | 'psychologist_reviewer';
   status: 'active' | 'inactive';
   last_login_at: string | null;
+  session_version: number;
 }
 
 interface FakeCustomerAccount {
@@ -63,8 +64,11 @@ interface FakeQuestion {
   question_code: string;
   instruction_text: string | null;
   prompt: string | null;
+  question_group_key: string | null;
   dimension_key: string | null;
   question_type: 'single_choice' | 'forced_choice' | 'likert';
+  question_order: number;
+  status: 'active' | 'draft' | 'archived';
 }
 
 interface FakeOption {
@@ -75,6 +79,7 @@ interface FakeOption {
   dimension_key: string | null;
   value_number: number | null;
   is_correct: number;
+  option_order: number;
 }
 
 interface FakeParticipant {
@@ -93,9 +98,49 @@ interface FakeSubmission {
   participant_id: number;
   attempt_no: number;
   status: 'in_progress' | 'submitted' | 'scored';
+  started_at: string | null;
+  submitted_at: string | null;
   consent_given_at: string | null;
   consent_payload_json: string | null;
   identity_snapshot_json: string | null;
+  answer_sequence: number;
+  raw_score: number | null;
+}
+
+interface FakeAnswer {
+  id: number;
+  submission_id: number;
+  question_id: number;
+  answer_role: 'single' | 'most' | 'least' | 'scale';
+  selected_option_id: number | null;
+  value_number: number | null;
+  answer_payload_json: string | null;
+}
+
+interface FakeResult {
+  id: number;
+  submission_id: number;
+  test_type_id: number;
+  score_total: number | null;
+  score_band: string | null;
+  primary_type: string | null;
+  secondary_type: string | null;
+  profile_code: string | null;
+  interpretation_key: string | null;
+  result_payload_json: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface FakeResultSummary {
+  id: number;
+  result_id: number;
+  metric_key: string;
+  metric_label: string;
+  metric_type: string;
+  score: number;
+  band: string | null;
+  sort_order: number;
 }
 
 interface FakeAuditLog {
@@ -118,6 +163,9 @@ export interface FakeDbState {
   options: FakeOption[];
   participants: FakeParticipant[];
   submissions: FakeSubmission[];
+  answers: FakeAnswer[];
+  results: FakeResult[];
+  resultSummaries: FakeResultSummary[];
   auditLogs: FakeAuditLog[];
 }
 
@@ -144,6 +192,9 @@ export class FakeDbPool implements DbPoolLike {
   private nextCustomerAssessmentId = 40;
   private nextParticipantId = 100;
   private nextSubmissionId = 500;
+  private nextAnswerId = 800;
+  private nextResultId = 900;
+  private nextResultSummaryId = 950;
   private nextAuditId = 1000;
 
   constructor(public readonly state: FakeDbState) {
@@ -165,6 +216,18 @@ export class FakeDbPool implements DbPoolLike {
 
     if (state.submissions.length > 0) {
       this.nextSubmissionId = Math.max(...state.submissions.map((item) => item.id)) + 1;
+    }
+
+    if (state.answers.length > 0) {
+      this.nextAnswerId = Math.max(...state.answers.map((item) => item.id)) + 1;
+    }
+
+    if (state.results.length > 0) {
+      this.nextResultId = Math.max(...state.results.map((item) => item.id)) + 1;
+    }
+
+    if (state.resultSummaries.length > 0) {
+      this.nextResultSummaryId = Math.max(...state.resultSummaries.map((item) => item.id)) + 1;
     }
 
     if (state.auditLogs.length > 0) {
@@ -427,17 +490,20 @@ export class FakeDbPool implements DbPoolLike {
       }], []] as unknown as [any, any];
     }
 
-    if (normalized.includes('from questions q where q.test_type_id = ?') && normalized.includes('order by q.question_order asc')) {
+    if (normalized.includes('from questions q where q.test_type_id = ?') && normalized.includes("q.status = 'active'") && normalized.includes('order by q.question_order asc')) {
       const testTypeId = Number(params[0]);
       const rows = this.state.questions
-        .filter((item) => item.test_type_id === testTypeId)
+        .filter((item) => item.test_type_id === testTypeId && item.status === 'active')
+        .sort((left, right) => left.question_order - right.question_order)
         .map((item) => ({
           id: item.id,
           question_code: item.question_code,
           instruction_text: item.instruction_text,
           prompt: item.prompt,
+          question_group_key: item.question_group_key,
           dimension_key: item.dimension_key,
           question_type: item.question_type,
+          question_order: item.question_order,
         }));
       return [rows, []] as unknown as [any, any];
     }
@@ -446,6 +512,7 @@ export class FakeDbPool implements DbPoolLike {
       const questionIds = params.map((item) => Number(item));
       const rows = this.state.options
         .filter((item) => questionIds.includes(item.question_id))
+        .sort((left, right) => left.question_id - right.question_id || left.option_order - right.option_order)
         .map((item) => ({
           id: item.id,
           question_id: item.question_id,
@@ -518,12 +585,315 @@ export class FakeDbPool implements DbPoolLike {
         participant_id: Number(params[1]),
         attempt_no: Number(params[2]),
         status: 'in_progress',
+        started_at: new Date().toISOString(),
+        submitted_at: null,
         consent_given_at: params[3] instanceof Date ? params[3].toISOString() : String(params[3] ?? ''),
         consent_payload_json: (params[4] as string | null) ?? null,
         identity_snapshot_json: (params[5] as string | null) ?? null,
+        answer_sequence: 0,
+        raw_score: null,
       };
       this.state.submissions.push(submission);
       return [{ insertId: submission.id }, []] as unknown as [any, any];
+    }
+
+    if (normalized.includes('from test_sessions ts inner join test_types tt on tt.id = ts.test_type_id where ts.id = ? limit 1')) {
+      const sessionId = Number(params[0]);
+      const session = this.state.sessions.find((item) => item.id === sessionId);
+      if (!session) {
+        return [[], []] as unknown as [any, any];
+      }
+
+      const testType = this.state.testTypes.find((item) => item.id === session.test_type_id)!;
+      return [[{
+        session_id: session.id,
+        test_type_id: session.test_type_id,
+        title: session.title,
+        access_token: session.access_token,
+        instructions: session.instructions,
+        time_limit_minutes: session.time_limit_minutes,
+        settings_json: session.settings_json,
+        status: session.status,
+        test_type_code: testType.code,
+      }], []] as unknown as [any, any];
+    }
+
+    if (normalized.includes('from submissions s inner join participants p on p.id = s.participant_id inner join test_sessions ts on ts.id = s.test_session_id inner join test_types tt on tt.id = ts.test_type_id where s.id = ? limit 1')) {
+      const submissionId = Number(params[0]);
+      const submission = this.state.submissions.find((item) => item.id === submissionId);
+      if (!submission) {
+        return [[], []] as unknown as [any, any];
+      }
+
+      const participant = this.state.participants.find((item) => item.id === submission.participant_id)!;
+      const session = this.state.sessions.find((item) => item.id === submission.test_session_id)!;
+      const testType = this.state.testTypes.find((item) => item.id === session.test_type_id)!;
+      return [[{
+        submission_id: submission.id,
+        participant_id: participant.id,
+        participant_name: participant.full_name,
+        session_id: session.id,
+        access_token: session.access_token,
+        test_type_code: testType.code,
+        submission_status: submission.status,
+        answer_sequence: submission.answer_sequence,
+      }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('select s.id, s.status, ts.test_type_id, s.answer_sequence from submissions s inner join test_sessions ts on ts.id = s.test_session_id where s.id = ? limit 1')) {
+      const submissionId = Number(params[0]);
+      const submission = this.state.submissions.find((item) => item.id === submissionId);
+      if (!submission) {
+        return [[], []] as unknown as [any, any];
+      }
+
+      const session = this.state.sessions.find((item) => item.id === submission.test_session_id)!;
+      return [[{ id: submission.id, status: submission.status, test_type_id: session.test_type_id, answer_sequence: submission.answer_sequence }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('select question_id, answer_role, selected_option_id, value_number from answers where submission_id = ?')) {
+      const submissionId = Number(params[0]);
+      const rows = this.state.answers
+        .filter((item) => item.submission_id === submissionId)
+        .sort((left, right) => left.question_id - right.question_id || left.id - right.id)
+        .map((item) => ({
+          question_id: item.question_id,
+          answer_role: item.answer_role,
+          selected_option_id: item.selected_option_id,
+          value_number: item.value_number,
+        }));
+      return [rows, []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('delete from answers where submission_id = ? and question_id in')) {
+      const submissionId = Number(params[0]);
+      const questionIds = params.slice(1).map((item) => Number(item));
+      this.state.answers = this.state.answers.filter((item) => !(item.submission_id === submissionId && questionIds.includes(item.question_id)));
+      return [[{ affectedRows: 1 }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('insert into answers')) {
+      let answer: FakeAnswer;
+
+      if (normalized.includes("values (?, ?, 'most'")) {
+        answer = {
+          id: this.nextAnswerId++,
+          submission_id: Number(params[0]),
+          question_id: Number(params[1]),
+          answer_role: 'most',
+          selected_option_id: Number(params[2]),
+          value_number: null,
+          answer_payload_json: (params[3] as string | null) ?? null,
+        };
+      } else if (normalized.includes("values (?, ?, 'least'")) {
+        answer = {
+          id: this.nextAnswerId++,
+          submission_id: Number(params[0]),
+          question_id: Number(params[1]),
+          answer_role: 'least',
+          selected_option_id: Number(params[2]),
+          value_number: null,
+          answer_payload_json: (params[3] as string | null) ?? null,
+        };
+      } else {
+        answer = {
+          id: this.nextAnswerId++,
+          submission_id: Number(params[0]),
+          question_id: Number(params[1]),
+          answer_role: params[2] as FakeAnswer['answer_role'],
+          selected_option_id: params[3] === null || params[3] === undefined ? null : Number(params[3]),
+          value_number: (params[4] as number | null) ?? null,
+          answer_payload_json: (params[5] as string | null) ?? null,
+        };
+      }
+
+      this.state.answers.push(answer);
+      return [{ insertId: answer.id }, []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('update submissions set answer_sequence = ?, updated_at = current_timestamp where id = ?')) {
+      const answerSequence = Number(params[0]);
+      const submissionId = Number(params[1]);
+      const submission = this.state.submissions.find((item) => item.id === submissionId);
+      if (submission) {
+        submission.answer_sequence = answerSequence;
+      }
+      return [[{ affectedRows: submission ? 1 : 0 }], []] as unknown as [any, any];
+    }
+
+    if (normalized.includes('select count(distinct question_id) as answered_question_count from answers where submission_id = ?')) {
+      const submissionId = Number(params[0]);
+      const count = new Set(this.state.answers.filter((item) => item.submission_id === submissionId).map((item) => item.question_id)).size;
+      return [[{ answered_question_count: count }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('select id, result_payload_json from results where submission_id = ? limit 1')) {
+      const submissionId = Number(params[0]);
+      const result = this.state.results.find((item) => item.submission_id === submissionId);
+      return [[result ? { id: result.id, result_payload_json: result.result_payload_json } : undefined].filter(Boolean), []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('insert into results')) {
+      const submissionId = Number(params[0]);
+      const existing = this.state.results.find((item) => item.submission_id === submissionId);
+      const now = new Date().toISOString();
+
+      if (existing) {
+        existing.test_type_id = Number(params[1]);
+        existing.score_total = (params[2] as number | null) ?? null;
+        existing.score_band = (params[3] as string | null) ?? null;
+        existing.primary_type = (params[4] as string | null) ?? null;
+        existing.secondary_type = (params[5] as string | null) ?? null;
+        existing.profile_code = (params[6] as string | null) ?? null;
+        existing.interpretation_key = (params[7] as string | null) ?? null;
+        existing.result_payload_json = String(params[8] ?? '{}');
+        existing.updated_at = now;
+        return [{ insertId: existing.id }, []] as unknown as [any, any];
+      }
+
+      const result: FakeResult = {
+        id: this.nextResultId++,
+        submission_id: submissionId,
+        test_type_id: Number(params[1]),
+        score_total: (params[2] as number | null) ?? null,
+        score_band: (params[3] as string | null) ?? null,
+        primary_type: (params[4] as string | null) ?? null,
+        secondary_type: (params[5] as string | null) ?? null,
+        profile_code: (params[6] as string | null) ?? null,
+        interpretation_key: (params[7] as string | null) ?? null,
+        result_payload_json: String(params[8] ?? '{}'),
+        created_at: now,
+        updated_at: now,
+      };
+      this.state.results.push(result);
+      return [{ insertId: result.id }, []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('select id from results where submission_id = ? limit 1')) {
+      const submissionId = Number(params[0]);
+      const result = this.state.results.find((item) => item.submission_id === submissionId);
+      return [[result ? { id: result.id } : undefined].filter(Boolean), []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('delete from result_summaries where result_id = ?')) {
+      const resultId = Number(params[0]);
+      this.state.resultSummaries = this.state.resultSummaries.filter((item) => item.result_id !== resultId);
+      return [[{ affectedRows: 1 }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('insert into result_summaries')) {
+      const summary: FakeResultSummary = {
+        id: this.nextResultSummaryId++,
+        result_id: Number(params[0]),
+        metric_key: String(params[1] ?? ''),
+        metric_label: String(params[2] ?? ''),
+        metric_type: String(params[3] ?? ''),
+        score: Number(params[4] ?? 0),
+        band: (params[5] as string | null) ?? null,
+        sort_order: Number(params[6] ?? 0),
+      };
+      this.state.resultSummaries.push(summary);
+      return [{ insertId: summary.id }, []] as unknown as [any, any];
+    }
+
+    if (normalized.includes('from results r inner join submissions s on s.id = r.submission_id inner join participants p on p.id = s.participant_id inner join test_sessions ts on ts.id = s.test_session_id inner join test_types tt on tt.id = r.test_type_id where r.submission_id = ? limit 1')) {
+      const submissionId = Number(params[0]);
+      const result = this.state.results.find((item) => item.submission_id === submissionId);
+      if (!result) {
+        return [[], []] as unknown as [any, any];
+      }
+
+      const submission = this.state.submissions.find((item) => item.id === result.submission_id)!;
+      const participant = this.state.participants.find((item) => item.id === submission.participant_id)!;
+      const session = this.state.sessions.find((item) => item.id === submission.test_session_id)!;
+      const testType = this.state.testTypes.find((item) => item.id === session.test_type_id)!;
+      return [[{
+        id: result.id,
+        submission_id: submission.id,
+        participant_id: participant.id,
+        participant_name: participant.full_name,
+        participant_email: participant.email,
+        employee_code: participant.employee_code,
+        department: participant.department,
+        position_title: participant.position_title,
+        session_id: session.id,
+        session_title: session.title,
+        access_token: session.access_token,
+        test_type: testType.code,
+        submitted_at: submission.submitted_at ?? result.created_at,
+        score_total: result.score_total,
+        score_band: result.score_band,
+        primary_type: result.primary_type,
+        secondary_type: result.secondary_type,
+        profile_code: result.profile_code,
+        interpretation_key: result.interpretation_key,
+        result_payload_json: result.result_payload_json,
+        settings_json: session.settings_json,
+      }], []] as unknown as [any, any];
+    }
+
+    if (normalized.includes('from results r inner join submissions s on s.id = r.submission_id inner join participants p on p.id = s.participant_id inner join test_sessions ts on ts.id = s.test_session_id inner join test_types tt on tt.id = r.test_type_id where r.id = ? limit 1')) {
+      const resultId = Number(params[0]);
+      const result = this.state.results.find((item) => item.id === resultId);
+      if (!result) {
+        return [[], []] as unknown as [any, any];
+      }
+
+      const submission = this.state.submissions.find((item) => item.id === result.submission_id)!;
+      const participant = this.state.participants.find((item) => item.id === submission.participant_id)!;
+      const session = this.state.sessions.find((item) => item.id === submission.test_session_id)!;
+      const testType = this.state.testTypes.find((item) => item.id === session.test_type_id)!;
+      return [[{
+        id: result.id,
+        submission_id: submission.id,
+        participant_id: participant.id,
+        participant_name: participant.full_name,
+        participant_email: participant.email,
+        employee_code: participant.employee_code,
+        department: participant.department,
+        position_title: participant.position_title,
+        session_id: session.id,
+        session_title: session.title,
+        access_token: session.access_token,
+        test_type: testType.code,
+        submitted_at: submission.submitted_at ?? result.created_at,
+        score_total: result.score_total,
+        score_band: result.score_band,
+        primary_type: result.primary_type,
+        secondary_type: result.secondary_type,
+        profile_code: result.profile_code,
+        interpretation_key: result.interpretation_key,
+        result_payload_json: result.result_payload_json,
+        settings_json: session.settings_json,
+      }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('select result_id, metric_key, metric_label, score, band from result_summaries where result_id in')) {
+      const resultIds = params.map((item) => Number(item));
+      const rows = this.state.resultSummaries
+        .filter((item) => resultIds.includes(item.result_id))
+        .sort((left, right) => left.sort_order - right.sort_order || left.id - right.id)
+        .map((item) => ({
+          result_id: item.result_id,
+          metric_key: item.metric_key,
+          metric_label: item.metric_label,
+          score: item.score,
+          band: item.band,
+        }));
+      return [rows, []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith("update submissions set status = 'scored', submitted_at = ?, raw_score = ? where id = ?")) {
+      const submittedAt = String(params[0] ?? new Date().toISOString());
+      const rawScore = Number(params[1] ?? 0);
+      const submissionId = Number(params[2]);
+      const submission = this.state.submissions.find((item) => item.id === submissionId);
+      if (submission) {
+        submission.status = 'scored';
+        submission.submitted_at = submittedAt;
+        submission.raw_score = rawScore;
+      }
+      return [[{ affectedRows: submission ? 1 : 0 }], []] as unknown as [any, any];
     }
 
     if (normalized.startsWith('insert into audit_logs')) {
@@ -543,6 +913,7 @@ export class FakeDbPool implements DbPoolLike {
     throw new Error(`Unsupported fake DB query: ${sql}`);
   }
 }
+
 
 
 

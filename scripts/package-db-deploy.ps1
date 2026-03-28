@@ -91,7 +91,8 @@ Run the files in this order:
 
 Notes:
 
-- `01_schema_current.sql` already includes the current schema, including consent fields, audit tables, customer account tables, and reviewer role support.
+- `01_schema_current.sql` already includes the current schema, including workspace settings, reviewer workflow support, report access logging, and answer sequence tracking for protected sessions.
+- Distribution policy and protected delivery are stored in both session settings JSON and the current schema for easier legacy compatibility.
 - `04_seed_demo_sessions.sql` is optional. Skip it in production if you do not want demo sessions and tokens.
 "@
 Set-Content (Join-Path $installDir 'README.md') $installReadme
@@ -102,7 +103,9 @@ $upgradeFiles = @(
   '004_customer_accounts_and_assessments.sql',
   '005_result_review_workflow.sql',
   '006_session_security.sql',
-  '007_customer_workspace_settings.sql'
+  '007_customer_workspace_settings.sql',
+  '008_distribution_and_security.sql',
+  '009_submission_progressive_security.sql'
 ) | ForEach-Object { Join-Path $migrationsDir $_ }
 
 $upgradeBundle = @()
@@ -126,9 +129,10 @@ This bundled upgrade adds:
 
 - submission consent and identity snapshot fields
 - app settings and audit log tables
-- customer account and customer assessment tables for old installs
+- customer account, customer workspace settings, and customer assessment tables for old installs
 - reviewer role support on the `admins` table
-- customer workspace settings storage on `customer_accounts`
+- distribution policy and protected delivery compatibility fields
+- submission answer sequence tracking for replay protection in protected sessions
 "@
 Set-Content (Join-Path $upgradeDir 'README.md') $upgradeReadme
 
@@ -143,4 +147,3 @@ $zipPaths = @(
 Compress-Archive -Path $zipPaths -DestinationPath $zipPath -Force
 
 Write-Host "Generated $zipPath"
-

@@ -12,6 +12,10 @@ import { fetchResults } from '@/services/admin-data';
 import type { ResultReviewStatus, StoredResultRecord, TestTypeCode } from '@/types/assessment';
 import { formatDate, formatResultHeadline, formatResultSummary, formatTestTypeLabel, formatTokenLabel } from '@/lib/formatters';
 
+function renderAudienceSummary(result: StoredResultRecord) {
+  return `Participant: ${formatTokenLabel(result.participantResultAccess)} · HR: ${formatTokenLabel(result.hrResultAccess)}`;
+}
+
 export function ResultsPage() {
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
@@ -53,7 +57,7 @@ export function ResultsPage() {
       <SectionHeading
         eyebrow="Results"
         title="Assessment results"
-        description="Search by participant, filter by test type or review state, and open result details for reviewer-led release workflow."
+        description="Search by participant, filter by test type or review state, and inspect release visibility before any report leaves the platform."
       />
       <Card className="bg-white/80">
         <CardContent className="space-y-5 p-5">
@@ -90,7 +94,7 @@ export function ResultsPage() {
           <div className="overflow-hidden rounded-2xl border border-slate-200">
             {isLoading ? (
               <div className="p-6">
-                <StateCard title="Loading results" description="Pulling scored assessments and review workflow states from MySQL." />
+                <StateCard title="Loading results" description="Pulling scored assessments and visibility policies from MySQL." />
               </div>
             ) : error ? (
               <div className="p-6">
@@ -107,12 +111,12 @@ export function ResultsPage() {
                     <th className="px-4 py-3 font-medium">Participant</th>
                     <th className="px-4 py-3 font-medium">Test</th>
                     <th className="px-4 py-3 font-medium">Review</th>
+                    <th className="px-4 py-3 font-medium">Visibility</th>
                     <th className="px-4 py-3 font-medium">Summary</th>
-                    <th className="px-4 py-3 font-medium">Score</th>
                     <th className="px-4 py-3 font-medium">Date</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
+                <tbody className="divide-y divide-slate-100 bg-white align-top">
                   {results.map((result) => (
                     <tr key={result.id}>
                       <td className="px-4 py-4 font-medium text-slate-950">
@@ -124,22 +128,27 @@ export function ResultsPage() {
                       <td className="px-4 py-4"><Badge>{formatTestTypeLabel(result.testType)}</Badge></td>
                       <td className="px-4 py-4"><Badge>{formatTokenLabel(result.reviewStatus)}</Badge></td>
                       <td className="px-4 py-4 text-slate-500">
-                        {formatResultSummary({
+                        <div className="flex flex-wrap gap-2">
+                          <Badge>{formatTokenLabel(result.distributionPolicy)}</Badge>
+                          {result.protectedDeliveryMode ? <Badge>Protected delivery</Badge> : null}
+                        </div>
+                        <p className="mt-2 text-xs leading-5 text-slate-500">{renderAudienceSummary(result)}</p>
+                      </td>
+                      <td className="px-4 py-4 text-slate-500">
+                        <p>{formatResultSummary({
                           testType: result.testType,
                           primaryType: result.primaryType,
                           secondaryType: result.secondaryType,
                           scoreBand: result.scoreBand,
-                        })}
-                      </td>
-                      <td className="px-4 py-4 text-slate-950">
-                        {formatResultHeadline({
+                        })}</p>
+                        <p className="mt-2 text-sm font-medium text-slate-950">{formatResultHeadline({
                           testType: result.testType,
                           primaryType: result.primaryType,
                           secondaryType: result.secondaryType,
                           profileCode: result.profileCode,
                           scoreBand: result.scoreBand,
                           scoreTotal: result.scoreTotal,
-                        })}
+                        })}</p>
                       </td>
                       <td className="px-4 py-4 text-slate-500">{formatDate(result.submittedAt)}</td>
                     </tr>

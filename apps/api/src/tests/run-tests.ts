@@ -10,6 +10,7 @@ import {
   verifySubmissionAccessToken,
 } from '../lib/signed-token.js';
 import { scoreAssessment } from '../modules/scoring/score-assessment.js';
+import { getParticipantResultMode, parseTestSessionSettings } from '../modules/test-sessions/session-settings.js';
 import type { ScoreAssessmentContext } from '../modules/scoring/scoring.types.js';
 import { runApiIntegrationTests } from './api-integration.js';
 
@@ -23,6 +24,10 @@ function createBaseCompliance() {
     consentStatement: 'Consent statement for testing purposes.',
     privacyStatement: 'Privacy statement for testing purposes.',
     contactPerson: 'Testing Admin',
+    distributionPolicy: 'participant_summary' as const,
+    protectedDeliveryMode: false,
+    participantResultAccess: 'summary' as const,
+    hrResultAccess: 'full' as const,
   };
 }
 
@@ -37,6 +42,7 @@ function testIqScoring() {
         instructions: [],
         estimatedMinutes: 15,
         status: 'active',
+        delivery: { mode: 'full', totalQuestions: 1, totalGroups: 1 },
         compliance: createBaseCompliance(),
       },
       questions: [
@@ -74,6 +80,7 @@ function testDiscScoring() {
         instructions: [],
         estimatedMinutes: 15,
         status: 'active',
+        delivery: { mode: 'full', totalQuestions: 1, totalGroups: 1 },
         compliance: createBaseCompliance(),
       },
       questions: [
@@ -108,6 +115,7 @@ function testWorkloadScoring() {
         instructions: [],
         estimatedMinutes: 10,
         status: 'active',
+        delivery: { mode: 'full', totalQuestions: 1, totalGroups: 1 },
         compliance: createBaseCompliance(),
       },
       questions: [
@@ -141,6 +149,7 @@ function testCustomResearchScoring() {
         instructions: [],
         estimatedMinutes: 12,
         status: 'active',
+        delivery: { mode: 'full', totalQuestions: 1, totalGroups: 1 },
         compliance: {
           ...createBaseCompliance(),
           assessmentPurpose: 'research',
@@ -168,6 +177,30 @@ function testCustomResearchScoring() {
   assert.equal(result.interpretationKey, 'custom_high_response');
   assert.equal(result.summaries.find((item) => item.metricKey === 'self_regulation')?.score, 9);
   assert.equal(result.summaries.at(-1)?.metricKey, 'overall_average');
+}
+
+function testPolicyValidation() {
+  const parsed = parseTestSessionSettings({
+    assessmentPurpose: 'research',
+    administrationMode: 'remote_unsupervised',
+    interpretationMode: 'professional_review',
+    participantLimit: -5,
+    consentStatement: 'Research consent.',
+    privacyStatement: 'Research privacy.',
+    contactPerson: 'Research desk',
+    distributionPolicy: 'invalid_policy',
+    protectedDeliveryMode: true,
+    participantResultAccess: 'invalid_access',
+    hrResultAccess: 'summary',
+  });
+
+  assert.equal(parsed.assessmentPurpose, 'research');
+  assert.equal(parsed.participantLimit, 1);
+  assert.equal(parsed.distributionPolicy, 'participant_summary');
+  assert.equal(parsed.protectedDeliveryMode, true);
+  assert.equal(parsed.participantResultAccess, 'summary');
+  assert.equal(parsed.hrResultAccess, 'summary');
+  assert.equal(getParticipantResultMode(parsed), 'review_required');
 }
 
 async function testSecurityUtilities() {
@@ -204,7 +237,8 @@ async function testSecurityUtilities() {
     submissionId: 55,
     participantId: 77,
   });
-  const submissionClaims = verifySubmissionAccessToken(submissionToken);
+  const submissionClaims = verifySubmissionAccessToken(submissionToken.token);
+  assert.match(submissionToken.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.ok(submissionClaims);
   assert.equal(submissionClaims?.submissionId, 55);
   assert.equal(submissionClaims?.participantId, 77);
@@ -215,6 +249,7 @@ async function main() {
   testDiscScoring();
   testWorkloadScoring();
   testCustomResearchScoring();
+  testPolicyValidation();
   await testSecurityUtilities();
   await runApiIntegrationTests();
   console.log('API tests passed');
@@ -224,6 +259,11 @@ main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
+
+
+
+
+
 
 
 

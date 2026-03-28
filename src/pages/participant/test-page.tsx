@@ -1,15 +1,20 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import { loadParticipantSession, saveParticipantResult } from '@/lib/participant-session';
+import {
+  loadParticipantSession,
+  saveParticipantResult,
+  updateParticipantSession,
+} from '@/lib/participant-session';
 import {
   fetchPublicSession,
-  savePublicAnswers,
+  fetchSubmissionQuestionWindow,
   submitPublicSubmission,
 } from '@/services/public-sessions';
 import type {
   AssessmentOption,
   AssessmentQuestion,
+  ProgressiveQuestionWindow,
   PublicSessionResponse,
   SubmissionAnswerInput,
 } from '@/types/assessment';
@@ -42,11 +47,14 @@ export function ParticipantTestPage() {
   const { token = 'assessment-token' } = useParams();
   const navigate = useNavigate();
   const [session, setSession] = useState<PublicSessionResponse | null>(null);
+  const [questionWindow, setQuestionWindow] = useState<ProgressiveQuestionWindow | null>(null);
   const [answers, setAnswers] = useState<Record<number, SubmissionAnswerInput>>({});
   const [submissionId, setSubmissionId] = useState<number | null>(null);
   const [submissionAccessToken, setSubmissionAccessToken] = useState<string | null>(null);
+  const [answerSequence, setAnswerSequence] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingWindow, setIsLoadingWindow] = useState(false);
 
   useEffect(() => {
     const storedSession = loadParticipantSession(token);
@@ -58,13 +66,48 @@ export function ParticipantTestPage() {
 
     setSubmissionId(storedSession.submissionId);
     setSubmissionAccessToken(storedSession.submissionAccessToken);
+    setAnswerSequence(storedSession.answerSequence);
 
     let isMounted = true;
 
     void fetchPublicSession(token)
-      .then((payload) => {
-        if (isMounted) {
-          setSession(payload);
+      .then(async (payload) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setSession(payload);
+
+        if (payload.session.delivery.mode === 'progressive') {
+          setIsLoadingWindow(true);
+          try {
+            const initialWindow = await fetchSubmissionQuestionWindow(
+              storedSession.submissionId,
+              storedSession.submissionAccessToken,
+              0,
+            );
+            if (!isMounted) {
+              return;
+            }
+            setQuestionWindow(initialWindow);
+            setAnswerSequence(initialWindow.answerSequence);
+            updateParticipantSession(token, { answerSequence: initialWindow.answerSequence });
+            setAnswers((current) => {
+              const next = { ...current };
+              for (const answer of initialWindow.savedAnswers) {
+                next[answer.questionId] = answer;
+              }
+              return next;
+            });
+          } catch (requestError) {
+            if (isMounted) {
+              setError(requestError instanceof Error ? requestError.message : 'Unable to load protected assessment questions');
+            }
+          } finally {
+            if (isMounted) {
+              setIsLoadingWindow(false);
+            }
+          }
         }
       })
       .catch((requestError) => {
@@ -77,6 +120,9 @@ export function ParticipantTestPage() {
       isMounted = false;
     };
   }, [navigate, token]);
+
+  const isProtectedMode = session?.session.delivery.mode === 'progressive';
+  const activeQuestions = isProtectedMode ? (questionWindow?.questions ?? []) : (session?.questions ?? []);
 
   function upsertAnswer(questionId: number, next: Partial<SubmissionAnswerInput>) {
     setAnswers((current) => ({
@@ -133,6 +179,67 @@ export function ParticipantTestPage() {
     });
   }
 
+  async function loadGroup(groupIndex: number) {
+    if (!submissionId || !submissionAccessToken) {
+      return;
+    }
+
+    setIsLoadingWindow(true);
+    try {
+      const nextWindow = await fetchSubmissionQuestionWindow(submissionId, submissionAccessToken, groupIndex);
+      setQuestionWindow(nextWindow);
+      setAnswerSequence(nextWindow.answerSequence);
+      updateParticipantSession(token, { answerSequence: nextWindow.answerSequence });
+      setAnswers((current) => {
+        const next = { ...current };
+        for (const answer of nextWindow.savedAnswers) {
+          next[answer.questionId] = answer;
+        }
+        return next;
+      });
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to load the next question group');
+    } finally {
+      setIsLoadingWindow(false);
+    }
+  }
+
+  async function saveCurrentGroupAndMove(targetGroupIndex: number) {
+    if (!questionWindow || !submissionId || !submissionAccessToken) {
+      return;
+    }
+
+    const groupAnswers = questionWindow.questions
+      .map((question) => answers[question.id])
+      .filter((answer): answer is SubmissionAnswerInput => Boolean(answer));
+
+    const movingForward = targetGroupIndex > questionWindow.groupIndex;
+    const allGroupAnswered = questionWindow.questions.every((question) => isQuestionAnswered(question, answers[question.id]));
+
+    if (movingForward && !allGroupAnswered) {
+      setError('Please answer all questions in this section before continuing.');
+      return;
+    }
+
+    setIsLoadingWindow(true);
+    setError(null);
+
+    try {
+      if (groupAnswers.length > 0) {
+        const nextSequence = answerSequence + 1;
+        const saveResponse = await import('@/services/public-sessions').then(({ savePublicAnswers }) =>
+          savePublicAnswers(submissionId, submissionAccessToken, nextSequence, groupAnswers),
+        );
+        setAnswerSequence(saveResponse.answerSequence);
+        updateParticipantSession(token, { answerSequence: saveResponse.answerSequence });
+      }
+
+      await loadGroup(targetGroupIndex);
+    } finally {
+      setIsLoadingWindow(false);
+    }
+  }
+
   async function handleSubmit() {
     if (!session || !submissionId || !submissionAccessToken) {
       return;
@@ -141,13 +248,49 @@ export function ParticipantTestPage() {
     setIsSubmitting(true);
     setError(null);
 
-    const orderedAnswers = session.questions
-      .map((question) => answers[question.id])
-      .filter((answer): answer is SubmissionAnswerInput => Boolean(answer));
-
     try {
-      await savePublicAnswers(submissionId, submissionAccessToken, orderedAnswers);
-      const response = await submitPublicSubmission(submissionId, submissionAccessToken, orderedAnswers);
+      if (isProtectedMode) {
+        if (!questionWindow) {
+          throw new Error('Protected question window is unavailable');
+        }
+
+        const groupAnswers = questionWindow.questions
+          .map((question) => answers[question.id])
+          .filter((answer): answer is SubmissionAnswerInput => Boolean(answer));
+
+        const allGroupAnswered = questionWindow.questions.every((question) => isQuestionAnswered(question, answers[question.id]));
+        if (!allGroupAnswered) {
+          throw new Error('Please answer all questions in this section before submitting.');
+        }
+
+        const response = await submitPublicSubmission(
+          submissionId,
+          submissionAccessToken,
+          answerSequence + 1,
+          groupAnswers,
+        );
+        updateParticipantSession(token, { answerSequence: answerSequence + 1 });
+        saveParticipantResult(token, response.result);
+        navigate(`/t/${token}/completed`);
+        return;
+      }
+
+      const orderedAnswers = session.questions
+        .map((question) => answers[question.id])
+        .filter((answer): answer is SubmissionAnswerInput => Boolean(answer));
+
+      const allAnswered = session.questions.every((question) => isQuestionAnswered(question, answers[question.id]));
+      if (!allAnswered) {
+        throw new Error('Please answer all questions before submitting.');
+      }
+
+      const response = await submitPublicSubmission(
+        submissionId,
+        submissionAccessToken,
+        answerSequence + 1,
+        orderedAnswers,
+      );
+      updateParticipantSession(token, { answerSequence: answerSequence + 1 });
       saveParticipantResult(token, response.result);
       navigate(`/t/${token}/completed`);
     } catch (submissionError) {
@@ -165,7 +308,7 @@ export function ParticipantTestPage() {
     );
   }
 
-  if (!session) {
+  if (!session || (isProtectedMode && !questionWindow && isLoadingWindow)) {
     return (
       <Card className="bg-white/82">
         <CardContent className="p-8 text-sm text-slate-500">Loading assessment...</CardContent>
@@ -173,9 +316,19 @@ export function ParticipantTestPage() {
     );
   }
 
-  const answeredCount = session.questions.filter((question) => isQuestionAnswered(question, answers[question.id])).length;
-  const progressValue = session.questions.length === 0 ? 0 : (answeredCount / session.questions.length) * 100;
-  const allAnswered = answeredCount === session.questions.length;
+  const answeredCount = isProtectedMode && questionWindow
+    ? (() => {
+        const savedInCurrentGroup = questionWindow.savedAnswers.filter((answer) => {
+          const question = questionWindow.questions.find((item) => item.id === answer.questionId);
+          return question ? isQuestionAnswered(question, answer) : false;
+        }).length;
+        const localInCurrentGroup = questionWindow.questions.filter((question) => isQuestionAnswered(question, answers[question.id])).length;
+        return questionWindow.answeredQuestionCount - savedInCurrentGroup + localInCurrentGroup;
+      })()
+    : session.questions.filter((question) => isQuestionAnswered(question, answers[question.id])).length;
+  const totalQuestions = session.session.delivery.totalQuestions || session.questions.length;
+  const progressValue = totalQuestions === 0 ? 0 : (answeredCount / totalQuestions) * 100;
+  const allVisibleAnswered = activeQuestions.every((question) => isQuestionAnswered(question, answers[question.id]));
 
   return (
     <div className="space-y-6">
@@ -183,25 +336,33 @@ export function ParticipantTestPage() {
         <CardHeader>
           <CardTitle>{session.session.title}</CardTitle>
           <CardDescription>
-            {formatTestTypeLabel(session.session.testType)} assessment • {answeredCount} of {session.questions.length} questions answered
+            {formatTestTypeLabel(session.session.testType)} assessment • {answeredCount} of {totalQuestions} questions answered
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <Progress value={progressValue} />
-          <div className="flex items-center justify-between text-sm text-slate-500">
+          <div className="flex flex-col gap-2 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
             <span>{Math.round(progressValue)}% complete</span>
             <span>Estimated {session.session.estimatedMinutes} minutes</span>
           </div>
+          {isProtectedMode && questionWindow ? (
+            <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
+              Protected delivery is enabled. You are completing group {questionWindow.groupIndex + 1} of {questionWindow.totalGroups}.
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
-      {session.questions.map((question, index) => {
+      {activeQuestions.map((question, index) => {
         const answer = answers[question.id];
+        const displayIndex = isProtectedMode && questionWindow
+          ? questionWindow.groupIndex + index + 1
+          : index + 1;
 
         return (
           <Card key={question.id} className="bg-white/82">
             <CardHeader>
-              <CardTitle>Question {index + 1}</CardTitle>
+              <CardTitle>Question {displayIndex}</CardTitle>
               <CardDescription>{question.prompt ?? question.instructionText}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -285,11 +446,23 @@ export function ParticipantTestPage() {
         </div>
       ) : null}
 
-      <div className="sticky bottom-4 flex justify-end">
-        <Button size="lg" className="shadow-panel" disabled={!allAnswered || isSubmitting} onClick={handleSubmit}>
-          {isSubmitting ? 'Submitting...' : 'Submit responses'}
-        </Button>
+      <div className="sticky bottom-4 flex flex-wrap justify-end gap-3">
+        {isProtectedMode && questionWindow && questionWindow.groupIndex > 0 ? (
+          <Button variant="outline" size="lg" disabled={isLoadingWindow || isSubmitting} onClick={() => void saveCurrentGroupAndMove(questionWindow.groupIndex - 1)}>
+            Previous section
+          </Button>
+        ) : null}
+        {isProtectedMode && questionWindow && questionWindow.groupIndex < questionWindow.totalGroups - 1 ? (
+          <Button size="lg" className="shadow-panel" disabled={isLoadingWindow || isSubmitting || !allVisibleAnswered} onClick={() => void saveCurrentGroupAndMove(questionWindow.groupIndex + 1)}>
+            {isLoadingWindow ? 'Saving...' : 'Save and continue'}
+          </Button>
+        ) : (
+          <Button size="lg" className="shadow-panel" disabled={isSubmitting || !allVisibleAnswered} onClick={handleSubmit}>
+            {isSubmitting ? 'Submitting...' : 'Submit responses'}
+          </Button>
+        )}
       </div>
     </div>
   );
 }
+

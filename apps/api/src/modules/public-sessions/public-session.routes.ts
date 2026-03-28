@@ -6,6 +6,7 @@ import { asyncHandler } from '../../lib/async-handler.js';
 import { createRateLimit } from '../../middleware/rate-limit.js';
 import {
   getPublicSession,
+  getSubmissionQuestionWindow,
   saveSubmissionAnswers,
   startPublicSubmission,
   submitPublicSubmission,
@@ -32,12 +33,18 @@ const startSchema = z.object({
   consentAcceptedAt: z.string().datetime(),
 });
 
+const questionWindowQuerySchema = z.object({
+  groupIndex: z.coerce.number().int().min(0).optional(),
+});
+
 const answersSchema = z.object({
-  answers: z.array(answerItemSchema).max(500),
+  answerSequence: z.number().int().positive(),
+  answers: z.array(answerItemSchema).min(1).max(500),
 });
 
 const submitSchema = z.object({
-  answers: z.array(answerItemSchema).max(500).optional(),
+  answerSequence: z.number().int().positive().optional(),
+  answers: z.array(answerItemSchema).min(1).max(500).optional(),
 });
 
 const sessionLookupRateLimit = createRateLimit({
@@ -101,6 +108,21 @@ publicSessionRoutes.post(
   }),
 );
 
+publicSessionRoutes.get(
+  '/submissions/:submissionId/questions',
+  submissionWriteRateLimit,
+  asyncHandler(async (request, response) => {
+    const query = questionWindowQuerySchema.parse(request.query);
+    const submissionId = Number(request.params.submissionId);
+    const submissionAccessToken = readSubmissionAccessToken(
+      request.header('Authorization') ?? undefined,
+      request.header('X-Submission-Token') ?? undefined,
+    );
+
+    response.json(await getSubmissionQuestionWindow(submissionId, submissionAccessToken, query.groupIndex ?? 0));
+  }),
+);
+
 publicSessionRoutes.post(
   '/submissions/:submissionId/answers',
   submissionWriteRateLimit,
@@ -112,7 +134,7 @@ publicSessionRoutes.post(
       request.header('X-Submission-Token') ?? undefined,
     );
 
-    response.json(await saveSubmissionAnswers(submissionId, submissionAccessToken, payload.answers));
+    response.json(await saveSubmissionAnswers(submissionId, submissionAccessToken, payload.answerSequence, payload.answers));
   }),
 );
 
@@ -127,6 +149,6 @@ publicSessionRoutes.post(
       request.header('X-Submission-Token') ?? undefined,
     );
 
-    response.json(await submitPublicSubmission(submissionId, submissionAccessToken, payload.answers));
+    response.json(await submitPublicSubmission(submissionId, submissionAccessToken, payload.answerSequence, payload.answers));
   }),
 );

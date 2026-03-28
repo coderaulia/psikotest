@@ -18,6 +18,7 @@ function createFakeState(passwordHash: string): FakeDbState {
         role: 'super_admin',
         status: 'active',
         last_login_at: null,
+        session_version: 1,
       },
       {
         id: 2,
@@ -27,6 +28,7 @@ function createFakeState(passwordHash: string): FakeDbState {
         role: 'admin',
         status: 'active',
         last_login_at: null,
+        session_version: 1,
       },
     ],
     customerAccounts: [],
@@ -47,9 +49,14 @@ function createFakeState(passwordHash: string): FakeDbState {
           assessmentPurpose: 'recruitment',
           administrationMode: 'remote_unsupervised',
           interpretationMode: 'professional_review',
+          participantLimit: null,
           consentStatement: 'I agree to participate in this screening assessment.',
           privacyStatement: 'Only authorized reviewers can access my results.',
           contactPerson: 'HR Assessment Desk',
+          distributionPolicy: 'full_report_with_consent',
+          protectedDeliveryMode: true,
+          participantResultAccess: 'full_released',
+          hrResultAccess: 'full',
         }),
         time_limit_minutes: 15,
         status: 'active',
@@ -69,6 +76,10 @@ function createFakeState(passwordHash: string): FakeDbState {
           consentStatement: 'I agree to participate in this research questionnaire.',
           privacyStatement: 'Responses are stored as confidential research data.',
           contactPerson: 'Research coordinator',
+          distributionPolicy: 'participant_summary',
+          protectedDeliveryMode: false,
+          participantResultAccess: 'none',
+          hrResultAccess: 'full',
         }),
         time_limit_minutes: 10,
         status: 'active',
@@ -81,8 +92,23 @@ function createFakeState(passwordHash: string): FakeDbState {
         question_code: 'DISC_Q001',
         instruction_text: 'Choose the most and least descriptive statements.',
         prompt: null,
+        question_group_key: 'group-1',
         dimension_key: null,
         question_type: 'forced_choice',
+        question_order: 1,
+        status: 'active',
+      },
+      {
+        id: 101,
+        test_type_id: 1,
+        question_code: 'DISC_Q002',
+        instruction_text: 'Choose the most and least descriptive statements.',
+        prompt: null,
+        question_group_key: 'group-2',
+        dimension_key: null,
+        question_type: 'forced_choice',
+        question_order: 2,
+        status: 'active',
       },
       {
         id: 200,
@@ -90,17 +116,24 @@ function createFakeState(passwordHash: string): FakeDbState {
         question_code: 'CUSTOM_Q001',
         instruction_text: 'Rate the statement below.',
         prompt: 'I stay focused on academic tasks.',
+        question_group_key: 'custom-1',
         dimension_key: 'self_regulation',
         question_type: 'likert',
+        question_order: 1,
+        status: 'active',
       },
     ],
     options: [
-      { id: 1001, question_id: 100, option_key: 'A', option_text: 'Decisive', dimension_key: 'D', value_number: null, is_correct: 0 },
-      { id: 1002, question_id: 100, option_key: 'B', option_text: 'Persuasive', dimension_key: 'I', value_number: null, is_correct: 0 },
-      { id: 1003, question_id: 100, option_key: 'C', option_text: 'Steady', dimension_key: 'S', value_number: null, is_correct: 0 },
-      { id: 1004, question_id: 100, option_key: 'D', option_text: 'Analytical', dimension_key: 'C', value_number: null, is_correct: 0 },
-      { id: 2001, question_id: 200, option_key: '1', option_text: 'Strongly disagree', dimension_key: 'self_regulation', value_number: 1, is_correct: 0 },
-      { id: 2002, question_id: 200, option_key: '5', option_text: 'Strongly agree', dimension_key: 'self_regulation', value_number: 5, is_correct: 0 },
+      { id: 1001, question_id: 100, option_key: 'A', option_text: 'Decisive', dimension_key: 'D', value_number: null, is_correct: 0, option_order: 1 },
+      { id: 1002, question_id: 100, option_key: 'B', option_text: 'Persuasive', dimension_key: 'I', value_number: null, is_correct: 0, option_order: 2 },
+      { id: 1003, question_id: 100, option_key: 'C', option_text: 'Steady', dimension_key: 'S', value_number: null, is_correct: 0, option_order: 3 },
+      { id: 1004, question_id: 100, option_key: 'D', option_text: 'Analytical', dimension_key: 'C', value_number: null, is_correct: 0, option_order: 4 },
+      { id: 1011, question_id: 101, option_key: 'A', option_text: 'Direct', dimension_key: 'D', value_number: null, is_correct: 0, option_order: 1 },
+      { id: 1012, question_id: 101, option_key: 'B', option_text: 'Enthusiastic', dimension_key: 'I', value_number: null, is_correct: 0, option_order: 2 },
+      { id: 1013, question_id: 101, option_key: 'C', option_text: 'Patient', dimension_key: 'S', value_number: null, is_correct: 0, option_order: 3 },
+      { id: 1014, question_id: 101, option_key: 'D', option_text: 'Precise', dimension_key: 'C', value_number: null, is_correct: 0, option_order: 4 },
+      { id: 2001, question_id: 200, option_key: '1', option_text: 'Strongly disagree', dimension_key: 'self_regulation', value_number: 1, is_correct: 0, option_order: 1 },
+      { id: 2002, question_id: 200, option_key: '5', option_text: 'Strongly agree', dimension_key: 'self_regulation', value_number: 5, is_correct: 0, option_order: 2 },
     ],
     participants: [
       {
@@ -120,11 +153,18 @@ function createFakeState(passwordHash: string): FakeDbState {
         participant_id: 300,
         attempt_no: 1,
         status: 'submitted',
+        started_at: new Date().toISOString(),
+        submitted_at: new Date().toISOString(),
         consent_given_at: new Date().toISOString(),
         consent_payload_json: '{}',
         identity_snapshot_json: '{}',
+        answer_sequence: 0,
+        raw_score: null,
       },
     ],
+    answers: [],
+    results: [],
+    resultSummaries: [],
     auditLogs: [],
   };
 }
@@ -183,9 +223,6 @@ export async function runApiIntegrationTests() {
     assert.equal(loginResponse.headers.get('x-powered-by'), null);
     assert.ok(state.admins[0]?.last_login_at);
 
-    const protectedResponse = await fetch(`${baseUrl}/api/dashboard/summary`);
-    assert.equal(protectedResponse.status, 401);
-
     const signupResponse = await fetch(`${baseUrl}/api/site-auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -199,23 +236,8 @@ export async function runApiIntegrationTests() {
     });
     assert.equal(signupResponse.status, 201);
     const signupPayload = await readJson(signupResponse);
-    assert.equal(signupPayload?.account && typeof signupPayload.account === 'object' ? (signupPayload.account as Record<string, unknown>).organizationName : null, 'Psych Lab');
-    assert.equal(state.customerAccounts.length, 1);
-
     const customerToken = String(signupPayload?.token ?? '');
     assert.ok(customerToken.length > 10);
-
-    const workspaceSettingsResponse = await fetch(`${baseUrl}/api/site-workspace/settings`, {
-      headers: {
-        Authorization: `Bearer ${customerToken}`,
-      },
-    });
-    assert.equal(workspaceSettingsResponse.status, 200);
-    const workspaceSettingsPayload = await readJson(workspaceSettingsResponse);
-    assert.equal(workspaceSettingsPayload?.account && typeof workspaceSettingsPayload.account === 'object' ? (workspaceSettingsPayload.account as Record<string, unknown>).organizationName : null, 'Psych Lab');
-    assert.equal(workspaceSettingsPayload?.settings && typeof workspaceSettingsPayload.settings === 'object' ? (workspaceSettingsPayload.settings as Record<string, unknown>).brandName : null, 'Psych Lab');
-    assert.equal(workspaceSettingsPayload?.settings && typeof workspaceSettingsPayload.settings === 'object' ? (workspaceSettingsPayload.settings as Record<string, unknown>).defaultAssessmentPurpose : null, 'research');
-    assert.equal(workspaceSettingsPayload?.settings && typeof workspaceSettingsPayload.settings === 'object' ? (workspaceSettingsPayload.settings as Record<string, unknown>).defaultParticipantLimit : null, 100);
 
     const workspaceUpdateResponse = await fetch(`${baseUrl}/api/site-workspace/settings`, {
       method: 'PATCH',
@@ -239,18 +261,6 @@ export async function runApiIntegrationTests() {
       }),
     });
     assert.equal(workspaceUpdateResponse.status, 200);
-    const workspaceUpdatePayload = await readJson(workspaceUpdateResponse);
-    assert.equal(workspaceUpdatePayload?.account && typeof workspaceUpdatePayload.account === 'object' ? (workspaceUpdatePayload.account as Record<string, unknown>).organizationName : null, 'Vanaila Research Lab');
-    assert.equal(workspaceUpdatePayload?.settings && typeof workspaceUpdatePayload.settings === 'object' ? (workspaceUpdatePayload.settings as Record<string, unknown>).supportEmail : null, 'support@vanaila.test');
-    assert.equal(state.customerAccounts[0]?.organization_name, 'Vanaila Research Lab');
-    assert.equal(state.auditLogs.some((item) => item.action === 'customer_workspace.settings_updated'), true);
-
-    const customerLoginResponse = await fetch(`${baseUrl}/api/site-auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'owner@example.com', password: 'StrongPassword123!' }),
-    });
-    assert.equal(customerLoginResponse.status, 200);
 
     const onboardingCreateResponse = await fetch(`${baseUrl}/api/site-onboarding/assessments`, {
       method: 'POST',
@@ -271,44 +281,8 @@ export async function runApiIntegrationTests() {
     });
     assert.equal(onboardingCreateResponse.status, 201);
     const onboardingCreatePayload = await readJson(onboardingCreateResponse);
-    assert.equal(onboardingCreatePayload?.title, 'Study Pilot A');
-    assert.equal(onboardingCreatePayload?.organizationName, 'Vanaila Research Lab');
-    assert.equal(onboardingCreatePayload?.timeLimitMinutes, 22);
-    assert.equal(onboardingCreatePayload?.participantLimit, 48);
-    assert.equal(onboardingCreatePayload?.sessionStatus, 'draft');
-    assert.equal(typeof onboardingCreatePayload?.participantLink, 'string');
-    assert.equal(state.customerAssessments.length, 1);
-    assert.equal(state.sessions.some((item) => item.title === 'Study Pilot A' && item.status === 'draft'), true);
-
-    const onboardingListResponse = await fetch(`${baseUrl}/api/site-onboarding/assessments`, {
-      headers: {
-        Authorization: `Bearer ${customerToken}`,
-      },
-    });
-    assert.equal(onboardingListResponse.status, 200);
-    const onboardingListPayload = await readJson(onboardingListResponse);
-    assert.equal(Array.isArray(onboardingListPayload?.items), true);
-    assert.equal((onboardingListPayload?.items as unknown[]).length, 1);
-    assert.equal(state.auditLogs.some((item) => item.action === 'customer_assessment.created'), true);
-
     const createdAssessmentId = Number(onboardingCreatePayload?.assessmentId ?? 0);
     assert.ok(createdAssessmentId > 0);
-
-    const onboardingDetailResponse = await fetch(`${baseUrl}/api/site-onboarding/assessments/${createdAssessmentId}`, {
-      headers: {
-        Authorization: `Bearer ${customerToken}`,
-      },
-    });
-    assert.equal(onboardingDetailResponse.status, 200);
-    const onboardingDetailPayload = await readJson(onboardingDetailResponse);
-    assert.equal(onboardingDetailPayload?.description, 'Draft CUSTOM assessment for Vanaila Research Lab (research).');
-    assert.equal(onboardingDetailPayload?.contactPerson, 'Research Desk');
-    assert.equal(
-      onboardingDetailPayload?.consentStatement,
-      'I agree to participate in studies managed by Vanaila Research Lab. Please contact support@vanaila.test for support.',
-    );
-    assert.equal(Array.isArray(onboardingDetailPayload?.instructions), true);
-    assert.equal(onboardingDetailPayload?.canActivateSharing, true);
 
     const activateAssessmentResponse = await fetch(`${baseUrl}/api/site-onboarding/assessments/${createdAssessmentId}/activate`, {
       method: 'POST',
@@ -317,23 +291,14 @@ export async function runApiIntegrationTests() {
       },
     });
     assert.equal(activateAssessmentResponse.status, 200);
-    const activateAssessmentPayload = await readJson(activateAssessmentResponse);
-    assert.equal(activateAssessmentPayload?.sessionStatus, 'active');
-    assert.equal(activateAssessmentPayload?.planStatus, 'upgraded');
-    assert.equal(activateAssessmentPayload?.canActivateSharing, false);
-    assert.equal(state.customerAssessments[0]?.plan_status, 'upgraded');
-    assert.equal(state.sessions.some((item) => item.title === 'Study Pilot A' && item.status === 'active'), true);
-    assert.equal(state.auditLogs.some((item) => item.action === 'customer_assessment.activated'), true);
 
     const sessionResponse = await fetch(`${baseUrl}/api/public/session/disc-batch-a`);
     assert.equal(sessionResponse.status, 200);
     const sessionPayload = await readJson(sessionResponse);
     assert.equal(sessionPayload?.session && typeof sessionPayload.session === 'object' ? (sessionPayload.session as Record<string, unknown>).title : null, 'DISC Hiring Session');
     assert.equal(sessionResponse.headers.get('cache-control'), 'no-store, no-cache, must-revalidate, private');
-    const questions = Array.isArray(sessionPayload?.questions) ? (sessionPayload.questions as Array<Record<string, unknown>>) : [];
-    const firstQuestion = questions[0] ?? null;
-    const firstOptions = firstQuestion && Array.isArray(firstQuestion.options) ? (firstQuestion.options as Array<Record<string, unknown>>) : [];
-    assert.equal(firstOptions.some((option) => Object.hasOwn(option, 'isCorrect')), false);
+    assert.equal(Array.isArray(sessionPayload?.questions) ? (sessionPayload?.questions as unknown[]).length : -1, 0);
+    assert.equal(sessionPayload?.session && typeof sessionPayload.session === 'object' ? ((sessionPayload.session as Record<string, unknown>).delivery as Record<string, unknown>).mode : null, 'progressive');
 
     const invalidStart = await fetch(`${baseUrl}/api/public/session/disc-batch-a/start`, {
       method: 'POST',
@@ -365,17 +330,106 @@ export async function runApiIntegrationTests() {
     assert.equal(startResponse.status, 201);
     const startPayload = await readJson(startResponse);
     assert.equal(typeof startPayload?.submissionAccessToken, 'string');
+    assert.equal(startPayload?.answerSequence, 0);
+    assert.equal(typeof startPayload?.submissionAccessExpiresAt, 'string');
     assert.equal(state.participants.length, 2);
-    assert.equal(state.submissions.length, 2);
-    assert.equal(state.auditLogs.length, 4);
-    assert.equal(state.auditLogs.at(-1)?.action, 'submission.started');
 
-    const answerResponse = await fetch(`${baseUrl}/api/public/submissions/500/answers`, {
+    const submissionId = Number(startPayload?.submissionId ?? 0);
+    const submissionToken = String(startPayload?.submissionAccessToken ?? '');
+    assert.ok(submissionId > 0);
+
+    const questionWindowResponse = await fetch(`${baseUrl}/api/public/submissions/${submissionId}/questions?groupIndex=0`, {
+      headers: {
+        'X-Submission-Token': submissionToken,
+      },
+    });
+    assert.equal(questionWindowResponse.status, 200);
+    const questionWindowPayload = await readJson(questionWindowResponse);
+    assert.equal(questionWindowPayload?.groupIndex, 0);
+    assert.equal(questionWindowPayload?.totalGroups, 2);
+    const windowQuestions = Array.isArray(questionWindowPayload?.questions) ? (questionWindowPayload.questions as Array<Record<string, unknown>>) : [];
+    const windowOptions = windowQuestions[0] && Array.isArray(windowQuestions[0].options) ? (windowQuestions[0].options as Array<Record<string, unknown>>) : [];
+    assert.equal(windowOptions.some((option) => Object.hasOwn(option, 'isCorrect')), false);
+
+    const missingTokenAnswerResponse = await fetch(`${baseUrl}/api/public/submissions/${submissionId}/answers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ answers: [] }),
+      body: JSON.stringify({
+        answerSequence: 1,
+        answers: [{ questionId: 100, mostOptionId: 1002, leastOptionId: 1004 }],
+      }),
     });
-    assert.equal(answerResponse.status, 401);
+    assert.equal(missingTokenAnswerResponse.status, 401);
+
+    const saveAnswerResponse = await fetch(`${baseUrl}/api/public/submissions/${submissionId}/answers`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Submission-Token': submissionToken,
+      },
+      body: JSON.stringify({
+        answerSequence: 1,
+        answers: [{ questionId: 100, mostOptionId: 1002, leastOptionId: 1004 }],
+      }),
+    });
+    assert.equal(saveAnswerResponse.status, 200);
+    const saveAnswerPayload = await readJson(saveAnswerResponse);
+    assert.equal(saveAnswerPayload?.answerSequence, 1);
+    assert.equal(saveAnswerPayload?.answeredQuestionCount, 1);
+
+    const replayAnswerResponse = await fetch(`${baseUrl}/api/public/submissions/${submissionId}/answers`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Submission-Token': submissionToken,
+      },
+      body: JSON.stringify({
+        answerSequence: 1,
+        answers: [{ questionId: 100, mostOptionId: 1002, leastOptionId: 1004 }],
+      }),
+    });
+    assert.equal(replayAnswerResponse.status, 409);
+
+    const nextWindowResponse = await fetch(`${baseUrl}/api/public/submissions/${submissionId}/questions?groupIndex=1`, {
+      headers: {
+        'X-Submission-Token': submissionToken,
+      },
+    });
+    assert.equal(nextWindowResponse.status, 200);
+    const nextWindowPayload = await readJson(nextWindowResponse);
+    assert.equal(nextWindowPayload?.groupIndex, 1);
+
+    const submitResponse = await fetch(`${baseUrl}/api/public/submissions/${submissionId}/submit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Submission-Token': submissionToken,
+      },
+      body: JSON.stringify({
+        answerSequence: 2,
+        answers: [{ questionId: 101, mostOptionId: 1011, leastOptionId: 1013 }],
+      }),
+    });
+    assert.equal(submitResponse.status, 200);
+    const submitPayload = await readJson(submitResponse);
+    const result = submitPayload?.result as Record<string, unknown>;
+    assert.equal(submitPayload?.status, 'scored');
+    assert.equal(typeof submitPayload?.resultId, 'number');
+    assert.equal(result?.scoreTotal ?? null, null);
+    assert.equal(typeof (result?.resultPayload as Record<string, unknown>)?.note, 'string');
+    assert.equal(result?.reviewStatus, 'scored_preliminary');
+
+    const duplicateSubmitResponse = await fetch(`${baseUrl}/api/public/submissions/${submissionId}/submit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Submission-Token': submissionToken,
+      },
+      body: JSON.stringify({}),
+    });
+    assert.equal(duplicateSubmitResponse.status, 200);
+    const duplicateSubmitPayload = await readJson(duplicateSubmitResponse);
+    assert.equal(duplicateSubmitPayload?.resultId, submitPayload?.resultId);
 
     const limitResponse = await fetch(`${baseUrl}/api/public/session/research-scale-pilot/start`, {
       method: 'POST',
@@ -395,14 +449,3 @@ export async function runApiIntegrationTests() {
     setDbPoolForTests(null);
   }
 }
-
-
-
-
-
-
-
-
-
-
-

@@ -1,7 +1,7 @@
 import { createAuditEvent } from '../../lib/audit-log.js';
 import { HttpError } from '../../lib/http-error.js';
 import { findCustomerById, updateCustomerOrganizationName } from '../site-auth/site-auth.repository.js';
-import type { AdministrationMode, AssessmentPurpose, InterpretationMode } from '../test-sessions/session-settings.js';
+import type { AdministrationMode, AssessmentPurpose, InterpretationMode, TestSessionSettings } from '../test-sessions/session-settings.js';
 import type { PublicTestTypeCode } from '../public-sessions/public-session.types.js';
 import { parseCustomerWorkspaceSettings, renderWorkspaceTemplate } from '../site-workspace/workspace-settings.js';
 import {
@@ -109,7 +109,7 @@ export async function createCustomerAssessment(input: {
 
   const interpretationMode: InterpretationMode = input.resultVisibility === 'review_required' ? 'professional_review' : 'self_assessment';
 
-  const settings = {
+  const settings: TestSessionSettings = {
     assessmentPurpose: input.purpose,
     administrationMode: input.administrationMode,
     interpretationMode,
@@ -127,6 +127,10 @@ export async function createCustomerAssessment(input: {
       supportEmail: workspaceSettings.supportEmail,
     }),
     contactPerson: workspaceSettings.contactPerson,
+    distributionPolicy: input.resultVisibility === 'review_required' ? 'full_report_with_consent' : 'participant_summary',
+    protectedDeliveryMode: false,
+    participantResultAccess: input.resultVisibility === 'review_required' ? 'full_released' : 'summary',
+    hrResultAccess: 'full',
   };
 
   const created = await insertCustomerAssessment({
@@ -196,3 +200,5 @@ export async function activateCustomerAssessment(customerAccountId: number, asse
 
   return assessment;
 }
+
+

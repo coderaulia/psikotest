@@ -40,6 +40,26 @@ function createFormState(result: StoredResultDetailRecord): ReviewFormState {
   };
 }
 
+function getVisibilityGuidance(result: StoredResultDetailRecord) {
+  if (result.distributionPolicy === 'hr_only') {
+    return 'This result is restricted to internal HR and reviewer delivery. Participant-facing release remains disabled.';
+  }
+
+  if (result.participantResultAccess === 'none') {
+    return 'Participants do not receive a result view for this assessment. Only approved internal audiences can access the report.';
+  }
+
+  if (result.participantResultAccess === 'full_released' && result.reviewStatus !== 'released') {
+    return 'Participants cannot access the full report until the reviewer releases the final version.';
+  }
+
+  if (result.participantResultAccess === 'summary') {
+    return 'Participants can only receive the configured summary view. Internal reviewer notes and draft interpretations remain hidden.';
+  }
+
+  return 'Visibility is governed by the session policy and the current review state.';
+}
+
 export function ResultDetailPage() {
   const { id } = useParams();
   const resultId = Number(id);
@@ -161,12 +181,35 @@ export function ResultDetailPage() {
 
   const note = typeof result.resultPayload.note === 'string' ? result.resultPayload.note : null;
 
+  const visibilityCards = [
+    {
+      label: 'Distribution policy',
+      value: formatTokenLabel(result.distributionPolicy),
+      helper: 'Defines which audience can receive the result package.',
+    },
+    {
+      label: 'Participant access',
+      value: formatTokenLabel(result.participantResultAccess),
+      helper: 'Controls what the participant can see after scoring and release.',
+    },
+    {
+      label: 'HR access',
+      value: formatTokenLabel(result.hrResultAccess),
+      helper: 'Controls the customer or HR-facing report scope.',
+    },
+    {
+      label: 'Delivery mode',
+      value: result.protectedDeliveryMode ? 'Protected progressive' : 'Full session delivery',
+      helper: 'Protected mode delivers the test group by group instead of sending the full item bank at once.',
+    },
+  ];
+
   return (
     <div className="space-y-8">
       <SectionHeading
         eyebrow="Result Detail"
         title={result.participant.fullName}
-        description={`${formatTestTypeLabel(result.testType)} assessment • ${formatDateTime(result.submittedAt)}`}
+        description={`${formatTestTypeLabel(result.testType)} assessment - ${formatDateTime(result.submittedAt)}`}
         actions={
           <div className="flex flex-wrap gap-3">
             <Button variant="outline" asChild><Link to={`/admin/test-sessions/${result.session.id}`}>Open session</Link></Button>
@@ -251,6 +294,27 @@ export function ResultDetailPage() {
         </Card>
       </div>
 
+      <Card className="bg-white/80">
+        <CardHeader>
+          <CardTitle>Audience visibility and delivery controls</CardTitle>
+          <CardDescription>Result release is driven by policy, review state, and protected delivery settings.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {visibilityCards.map((card) => (
+              <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">{card.label}</p>
+                <p className="mt-2 font-medium text-slate-950">{card.value}</p>
+                <p className="mt-2 leading-6">{card.helper}</p>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-700">
+            {getVisibilityGuidance(result)}
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
         <Card className="bg-white/80">
           <CardHeader>
@@ -263,7 +327,7 @@ export function ResultDetailPage() {
             <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Department</p><p className="mt-2 font-medium text-slate-950">{result.participant.department ?? '-'}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Position</p><p className="mt-2 font-medium text-slate-950">{result.participant.positionTitle ?? '-'}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Reviewer Assigned</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Reviewer assigned</p>
               <p className="mt-2 font-medium text-slate-950">{assignedReviewer ? `${assignedReviewer.fullName} (${assignedReviewer.role === 'super_admin' ? 'Super admin' : 'Psychologist reviewer'})` : result.reviewerAdminId ? `Reviewer #${result.reviewerAdminId}` : 'Unassigned'}</p>
             </div>
           </CardContent>
@@ -300,7 +364,7 @@ export function ResultDetailPage() {
               <Select id="result-reviewer-assignment" value={selectedReviewerId} onChange={(event) => setSelectedReviewerId(event.target.value)}>
                 <option value="">Unassigned</option>
                 {reviewers.map((reviewer) => (
-                  <option key={reviewer.id} value={String(reviewer.id)}>{reviewer.fullName} • {reviewer.email}</option>
+                  <option key={reviewer.id} value={String(reviewer.id)}>{reviewer.fullName} - {reviewer.email}</option>
                 ))}
               </Select>
             </div>

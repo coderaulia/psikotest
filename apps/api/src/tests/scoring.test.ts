@@ -14,6 +14,10 @@ function createBaseCompliance() {
     consentStatement: 'Consent statement for testing purposes.',
     privacyStatement: 'Privacy statement for testing purposes.',
     contactPerson: 'Testing Admin',
+    distributionPolicy: 'participant_summary' as const,
+    protectedDeliveryMode: false,
+    participantResultAccess: 'summary' as const,
+    hrResultAccess: 'full' as const,
   };
 }
 
@@ -28,6 +32,7 @@ test('IQ scoring calculates total, band, and summaries', () => {
         instructions: [],
         estimatedMinutes: 15,
         status: 'active',
+        delivery: { mode: 'full', totalQuestions: 1, totalGroups: 1 },
         compliance: createBaseCompliance(),
       },
       questions: [
@@ -66,6 +71,7 @@ test('DISC scoring returns primary and secondary profile from forced-choice answ
         instructions: [],
         estimatedMinutes: 15,
         status: 'active',
+        delivery: { mode: 'full', totalQuestions: 1, totalGroups: 1 },
         compliance: createBaseCompliance(),
       },
       questions: [
@@ -101,6 +107,7 @@ test('Workload scoring aggregates category totals and workload band', () => {
         instructions: [],
         estimatedMinutes: 10,
         status: 'active',
+        delivery: { mode: 'full', totalQuestions: 1, totalGroups: 1 },
         compliance: createBaseCompliance(),
       },
       questions: [
@@ -135,6 +142,7 @@ test('Custom research scoring aggregates questionnaire totals', () => {
         instructions: [],
         estimatedMinutes: 12,
         status: 'active',
+        delivery: { mode: 'full', totalQuestions: 1, totalGroups: 1 },
         compliance: {
           ...createBaseCompliance(),
           assessmentPurpose: 'research',
@@ -163,3 +171,6 @@ test('Custom research scoring aggregates questionnaire totals', () => {
   assert.equal(result.interpretationKey, 'custom_high_response');
   assert.equal(result.summaries.find((item) => item.metricKey === 'self_regulation')?.score, 9);
 });
+
+
+

@@ -2,6 +2,7 @@ import type { RowDataPacket } from 'mysql2/promise';
 
 import { getDbPool } from '../../database/mysql.js';
 import type { PublicTestTypeCode } from '../public-sessions/public-session.types.js';
+import { parseTestSessionSettings } from '../test-sessions/session-settings.js';
 import type { ResultSummaryItem, ScoredAssessmentResult } from '../scoring/scoring.types.js';
 import type {
   ResultListFilters,
@@ -32,6 +33,7 @@ interface ResultListRow extends RowDataPacket {
   profile_code: string | null;
   interpretation_key: string | null;
   result_payload_json: string | Record<string, unknown> | null;
+  settings_json: string | Record<string, unknown> | null;
 }
 
 interface ResultSummaryRow extends RowDataPacket {
@@ -158,6 +160,7 @@ function attachSummaries(rows: ResultListRow[], summaryRows: ResultSummaryRow[])
   return rows.map((row) => {
     const resultPayload = normalizePayload(row.result_payload_json);
     const reviewState = readReviewState(resultPayload);
+    const sessionSettings = parseTestSessionSettings(row.settings_json);
 
     return {
       id: row.id,
@@ -189,6 +192,10 @@ function attachSummaries(rows: ResultListRow[], summaryRows: ResultSummaryRow[])
       recommendation: reviewState.recommendation,
       limitations: reviewState.limitations,
       reviewerNotes: reviewState.reviewerNotes,
+      distributionPolicy: sessionSettings.distributionPolicy,
+      participantResultAccess: sessionSettings.participantResultAccess,
+      hrResultAccess: sessionSettings.hrResultAccess,
+      protectedDeliveryMode: sessionSettings.protectedDeliveryMode,
       resultPayload,
       summaries: summaryRows
         .filter((summary) => summary.result_id === row.id)
@@ -282,7 +289,8 @@ function buildResultQuery(filters: ResultListFilters = {}) {
         r.secondary_type,
         r.profile_code,
         r.interpretation_key,
-        r.result_payload_json
+        r.result_payload_json,
+        ts.settings_json
       FROM results r
       INNER JOIN submissions s ON s.id = r.submission_id
       INNER JOIN participants p ON p.id = s.participant_id
@@ -356,7 +364,8 @@ export async function fetchResultById(id: number) {
         r.secondary_type,
         r.profile_code,
         r.interpretation_key,
-        r.result_payload_json
+        r.result_payload_json,
+        ts.settings_json
       FROM results r
       INNER JOIN submissions s ON s.id = r.submission_id
       INNER JOIN participants p ON p.id = s.participant_id
@@ -400,7 +409,8 @@ export async function fetchResultBySubmissionId(submissionId: number) {
         r.secondary_type,
         r.profile_code,
         r.interpretation_key,
-        r.result_payload_json
+        r.result_payload_json,
+        ts.settings_json
       FROM results r
       INNER JOIN submissions s ON s.id = r.submission_id
       INNER JOIN participants p ON p.id = s.participant_id
@@ -661,4 +671,5 @@ export async function upsertResultRecord(input: {
     connection.release();
   }
 }
+
 

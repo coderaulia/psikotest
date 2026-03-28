@@ -12,6 +12,8 @@ export interface StoredParticipantSession {
   participantId: number;
   token: string;
   submissionAccessToken: string;
+  submissionAccessExpiresAt: string;
+  answerSequence: number;
   testType: TestTypeCode;
   participantResultMode: 'instant_summary' | 'review_required';
   participant: ParticipantIdentityPayload;
@@ -53,6 +55,8 @@ export function saveParticipantSession(
     participantId: start.participantId,
     token: start.token,
     submissionAccessToken: start.submissionAccessToken,
+    submissionAccessExpiresAt: start.submissionAccessExpiresAt,
+    answerSequence: start.answerSequence,
     testType: start.testType,
     participantResultMode: start.participantResultMode,
     participant,
@@ -63,7 +67,7 @@ export function saveParticipantSession(
   window.sessionStorage.setItem(getStorageKey(token), JSON.stringify(payload));
 }
 
-export function saveParticipantResult(token: string, result: StoredResultRecord) {
+export function updateParticipantSession(token: string, updates: Partial<StoredParticipantSession>) {
   if (typeof window === 'undefined') {
     return;
   }
@@ -73,8 +77,16 @@ export function saveParticipantResult(token: string, result: StoredResultRecord)
     return;
   }
 
-  existing.result = result;
-  window.sessionStorage.setItem(getStorageKey(token), JSON.stringify(existing));
+  const next = {
+    ...existing,
+    ...updates,
+  } satisfies StoredParticipantSession;
+
+  window.sessionStorage.setItem(getStorageKey(token), JSON.stringify(next));
+}
+
+export function saveParticipantResult(token: string, result: StoredResultRecord) {
+  updateParticipantSession(token, { result });
 }
 
 export function saveParticipantConsent(token: string, consent: ParticipantConsentState) {

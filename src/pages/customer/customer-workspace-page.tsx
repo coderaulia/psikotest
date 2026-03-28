@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Copy, ExternalLink, FlaskConical, Link as LinkIcon, Users } from 'lucide-react';
+import { Copy, ExternalLink, FlaskConical, Link as LinkIcon, ShieldCheck, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { formatDateTime, formatTokenLabel } from '@/lib/formatters';
@@ -8,6 +8,10 @@ import type { CustomerAssessmentItem } from '@/types/assessment';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+function renderAudienceSummary(item: CustomerAssessmentItem) {
+  return `Participant: ${formatTokenLabel(item.participantResultAccess)} | HR: ${formatTokenLabel(item.hrResultAccess)}`;
+}
 
 export function CustomerWorkspacePage() {
   const [items, setItems] = useState<CustomerAssessmentItem[]>([]);
@@ -125,7 +129,7 @@ export function CustomerWorkspacePage() {
                     </Badge>
                   </div>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-4">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-500">
                     <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Purpose</p>
                     <p className="mt-2 font-medium text-slate-950">{formatTokenLabel(item.assessmentPurpose)}</p>
@@ -135,6 +139,10 @@ export function CustomerWorkspacePage() {
                     <p className="mt-2 font-medium text-slate-950">{item.participantLimit ?? 'Flexible'}</p>
                   </div>
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-500">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Distribution</p>
+                    <p className="mt-2 font-medium text-slate-950">{formatTokenLabel(item.distributionPolicy)}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-500">
                     <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Created</p>
                     <p className="mt-2 font-medium text-slate-950">{formatDateTime(item.createdAt)}</p>
                   </div>
@@ -142,7 +150,11 @@ export function CustomerWorkspacePage() {
               </CardHeader>
               <CardContent className="space-y-4 text-sm text-slate-500">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="font-medium text-slate-950">Participant link</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge className="border-slate-200 bg-slate-100 text-slate-700">{formatTokenLabel(item.distributionPolicy)}</Badge>
+                    {item.protectedDeliveryMode ? <Badge className="border-sky-200 bg-sky-50 text-sky-700">Protected delivery</Badge> : null}
+                  </div>
+                  <p className="mt-4 font-medium text-slate-950">Participant link</p>
                   <p className="mt-2 break-all text-slate-500">{item.participantLink}</p>
                   <p className="mt-2 text-xs text-slate-400">
                     {isActive
@@ -165,19 +177,26 @@ export function CustomerWorkspacePage() {
                     </Button>
                   ) : null}
                 </div>
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-4">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                     <p className="inline-flex items-center gap-2 font-medium text-slate-950"><Users className="h-4 w-4" /> Participant access</p>
-                    <p className="mt-2 text-xs leading-6 text-slate-500">{isActive ? 'Sharing is active for this assessment.' : 'Participant access is still held in draft mode.'}</p>
+                    <p className="mt-2 text-xs leading-6 text-slate-500">{formatTokenLabel(item.participantResultAccess)}</p>
                   </div>
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                    <p className="inline-flex items-center gap-2 font-medium text-slate-950"><FlaskConical className="h-4 w-4" /> Preview route</p>
-                    <p className="mt-2 text-xs leading-6 text-slate-500">Use the demo flow to inspect the participant experience without exposing draft content.</p>
+                    <p className="inline-flex items-center gap-2 font-medium text-slate-950"><ShieldCheck className="h-4 w-4" /> HR access</p>
+                    <p className="mt-2 text-xs leading-6 text-slate-500">{formatTokenLabel(item.hrResultAccess)}</p>
                   </div>
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                    <p className="inline-flex items-center gap-2 font-medium text-slate-950"><LinkIcon className="h-4 w-4" /> Visibility</p>
-                    <p className="mt-2 text-xs leading-6 text-slate-500">{formatTokenLabel(item.resultVisibility)}</p>
+                    <p className="inline-flex items-center gap-2 font-medium text-slate-950"><FlaskConical className="h-4 w-4" /> Delivery mode</p>
+                    <p className="mt-2 text-xs leading-6 text-slate-500">{item.protectedDeliveryMode ? 'Progressive protected delivery' : 'Full session delivery'}</p>
                   </div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                    <p className="inline-flex items-center gap-2 font-medium text-slate-950"><LinkIcon className="h-4 w-4" /> Visibility note</p>
+                    <p className="mt-2 text-xs leading-6 text-slate-500">{renderAudienceSummary(item)}</p>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs leading-6 text-sky-700">
+                  Customer workspace views only show audience-facing policy information. Reviewer notes and internal draft interpretations remain hidden until formally released.
                 </div>
               </CardContent>
             </Card>

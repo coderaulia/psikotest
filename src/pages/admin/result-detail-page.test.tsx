@@ -49,6 +49,10 @@ function buildResult(overrides: Record<string, unknown> = {}) {
     recommendation: null,
     limitations: null,
     reviewerNotes: null,
+    distributionPolicy: 'full_report_with_consent',
+    participantResultAccess: 'full_released',
+    hrResultAccess: 'full',
+    protectedDeliveryMode: true,
     resultPayload: {},
     summaries: [],
     participant: {
@@ -79,7 +83,7 @@ describe('ResultDetailPage', () => {
     window.sessionStorage.clear();
   });
 
-  it('lets super admins assign a reviewer from the result detail view', async () => {
+  it('lets super admins assign a reviewer and shows the visibility controls', async () => {
     window.sessionStorage.setItem(
       'psikotest:admin-session',
       JSON.stringify({
@@ -106,6 +110,9 @@ describe('ResultDetailPage', () => {
     });
 
     expect(await screen.findByText('Nadia Pratama')).toBeInTheDocument();
+    expect(screen.getByText(/full report with consent/i)).toBeInTheDocument();
+    expect(screen.getByText(/protected progressive/i)).toBeInTheDocument();
+    expect(screen.getByText(/participants cannot access the full report until the reviewer releases the final version/i)).toBeInTheDocument();
 
     const user = userEvent.setup();
     await user.selectOptions(screen.getByLabelText(/assigned reviewer/i), '9');

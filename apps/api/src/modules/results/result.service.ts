@@ -73,6 +73,10 @@ export interface StoredResultRecord {
   recommendation: string | null;
   limitations: string | null;
   reviewerNotes: string | null;
+  distributionPolicy: 'hr_only' | 'participant_summary' | 'full_report_with_consent';
+  participantResultAccess: 'none' | 'summary' | 'full_released';
+  hrResultAccess: 'none' | 'summary' | 'full';
+  protectedDeliveryMode: boolean;
   resultPayload: Record<string, unknown>;
   summaries: ResultSummaryItem[];
 }
@@ -261,3 +265,4 @@ export async function storeResult(input: {
 
   return result;
 }
+

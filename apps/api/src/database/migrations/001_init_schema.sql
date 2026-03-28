@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS customer_accounts (
   password_hash VARCHAR(255) NOT NULL,
   account_type ENUM('business', 'researcher') NOT NULL DEFAULT 'business',
   organization_name VARCHAR(190) NOT NULL,
+  settings_json JSON NULL,
   status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
   last_login_at DATETIME NULL,
   session_version INT UNSIGNED NOT NULL DEFAULT 1,
@@ -72,6 +73,10 @@ CREATE TABLE IF NOT EXISTS test_sessions (
   access_token VARCHAR(80) NOT NULL,
   instructions TEXT NULL,
   settings_json JSON NULL,
+  distribution_policy ENUM('hr_only', 'participant_summary', 'full_report_with_consent') NOT NULL DEFAULT 'participant_summary',
+  protected_delivery_mode TINYINT(1) NOT NULL DEFAULT 0,
+  participant_result_access ENUM('none', 'summary', 'full_released') NOT NULL DEFAULT 'summary',
+  hr_result_access ENUM('none', 'summary', 'full') NOT NULL DEFAULT 'full',
   time_limit_minutes INT UNSIGNED NULL,
   status ENUM('draft', 'active', 'completed', 'archived') NOT NULL DEFAULT 'draft',
   starts_at DATETIME NULL,
@@ -163,6 +168,7 @@ CREATE TABLE IF NOT EXISTS submissions (
   consent_given_at DATETIME NULL,
   consent_payload_json JSON NULL,
   identity_snapshot_json JSON NULL,
+  answer_sequence INT UNSIGNED NOT NULL DEFAULT 0,
   submitted_at DATETIME NULL,
   time_spent_seconds INT UNSIGNED NULL,
   raw_score DECIMAL(10,2) NULL,
@@ -243,6 +249,21 @@ CREATE TABLE IF NOT EXISTS result_summaries (
   UNIQUE KEY uq_result_summaries_metric (result_id, metric_key),
   KEY idx_result_summaries_metric_type (metric_type),
   CONSTRAINT fk_result_summaries_result
+    FOREIGN KEY (result_id) REFERENCES results (id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS report_access_logs (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  result_id BIGINT UNSIGNED NOT NULL,
+  accessor_type ENUM('admin', 'customer', 'participant', 'hr_user') NOT NULL,
+  accessor_id BIGINT UNSIGNED NULL,
+  access_action ENUM('view', 'download', 'export') NOT NULL DEFAULT 'view',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_report_access_result (result_id),
+  KEY idx_report_access_created (created_at),
+  CONSTRAINT fk_report_access_result
     FOREIGN KEY (result_id) REFERENCES results (id)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

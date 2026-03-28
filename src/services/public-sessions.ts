@@ -1,7 +1,9 @@
 import { apiBaseUrl } from './api-client';
 import type {
   ParticipantIdentityPayload,
+  ProgressiveQuestionWindow,
   PublicSessionResponse,
+  SaveSubmissionAnswersResponse,
   StartSubmissionResponse,
   SubmissionAnswerInput,
   SubmitSubmissionResponse,
@@ -40,29 +42,43 @@ export async function startPublicSubmission(token: string, payload: ParticipantI
   return readJson<StartSubmissionResponse>(response);
 }
 
+export async function fetchSubmissionQuestionWindow(
+  submissionId: number,
+  submissionAccessToken: string,
+  groupIndex: number,
+) {
+  const response = await fetch(`${apiBaseUrl}/public/submissions/${submissionId}/questions?groupIndex=${groupIndex}`, {
+    headers: createSubmissionHeaders(submissionAccessToken),
+  });
+
+  return readJson<ProgressiveQuestionWindow>(response);
+}
+
 export async function savePublicAnswers(
   submissionId: number,
   submissionAccessToken: string,
+  answerSequence: number,
   answers: SubmissionAnswerInput[],
 ) {
   const response = await fetch(`${apiBaseUrl}/public/submissions/${submissionId}/answers`, {
     method: 'POST',
     headers: createSubmissionHeaders(submissionAccessToken),
-    body: JSON.stringify({ answers }),
+    body: JSON.stringify({ answerSequence, answers }),
   });
 
-  return readJson<{ saved: boolean }>(response);
+  return readJson<SaveSubmissionAnswersResponse>(response);
 }
 
 export async function submitPublicSubmission(
   submissionId: number,
   submissionAccessToken: string,
-  answers: SubmissionAnswerInput[],
+  answerSequence?: number,
+  answers?: SubmissionAnswerInput[],
 ) {
   const response = await fetch(`${apiBaseUrl}/public/submissions/${submissionId}/submit`, {
     method: 'POST',
     headers: createSubmissionHeaders(submissionAccessToken),
-    body: JSON.stringify({ answers }),
+    body: JSON.stringify({ answerSequence, answers }),
   });
 
   return readJson<SubmitSubmissionResponse>(response);

@@ -25,6 +25,10 @@ export interface CustomerAssessmentListItem {
   assessmentPurpose: AssessmentPurpose;
   administrationMode: AdministrationMode;
   resultVisibility: CustomerAssessmentResultVisibility;
+  distributionPolicy: 'hr_only' | 'participant_summary' | 'full_report_with_consent';
+  protectedDeliveryMode: boolean;
+  participantResultAccess: 'none' | 'summary' | 'full_released';
+  hrResultAccess: 'none' | 'summary' | 'full';
   timeLimitMinutes: number | null;
   participantLimit: number | null;
   sessionStatus: 'draft' | 'active' | 'completed' | 'archived';
@@ -130,6 +134,10 @@ function mapAssessmentRow(row: CustomerAssessmentRow): CustomerAssessmentListIte
     assessmentPurpose: settings.assessmentPurpose,
     administrationMode: settings.administrationMode,
     resultVisibility: mapResultVisibility(settings),
+    distributionPolicy: settings.distributionPolicy,
+    protectedDeliveryMode: settings.protectedDeliveryMode,
+    participantResultAccess: settings.participantResultAccess,
+    hrResultAccess: settings.hrResultAccess,
     timeLimitMinutes: row.time_limit_minutes,
     participantLimit: settings.participantLimit,
     sessionStatus: row.session_status,
@@ -377,3 +385,5 @@ export async function activateCustomerAssessmentRecord(customerAccountId: number
     connection.release();
   }
 }
+
+

@@ -1,26 +1,25 @@
 # Target Product Flow
 
-This document defines the intended end-to-end workflow for Vanaila Psikotest after the MVP.
+This document defines the intended end-to-end workflow for Vanaila Psikotest beyond the MVP.
 
-It should be read together with:
+Read this together with:
 
 - `docs/compliance.md`
 - `docs/development-phases.md`
+- `docs/assessment-engine.md`
 
 ## Product Direction
 
-The platform has two major operating modes:
+The platform operates across two main delivery contexts:
 
 - business and HR assessments
 - academic or psychological research assessments
 
-Both modes share the same core assessment pipeline, but professional interpretation, result visibility, and release rules can differ.
+Both modes share the same assessment engine, but they differ in review rules, audience visibility, and release behavior.
 
 ## Core Assessment Workflow
 
-The product should model psychological assessment as a process, not only as a scoring engine.
-
-### Target flow
+The product models psychological assessment as a controlled service workflow, not only as a scoring engine.
 
 Purpose clarification
 ↓
@@ -30,19 +29,19 @@ Consent and privacy disclosure
 ↓
 Participant validation
 ↓
-Test administration
+Protected or standard test delivery
 ↓
 Automated scoring
 ↓
 Professional review when required
 ↓
-Released report or summary
+Released report or approved summary
 ↓
-Feedback and recommendation
+Feedback, handoff, or export
 
 ## Customer and Researcher Onboarding Flow
 
-The public business flow stays:
+The public commercial flow remains:
 
 Landing Page
 ↓
@@ -80,6 +79,7 @@ Configure Settings
 - Time limit
 - Number of participants
 - Result visibility
+- Protected delivery mode when needed
 
 #### Step 4
 
@@ -103,10 +103,36 @@ Submit
 ↓
 Completion state
 
-### Required future behavior
+### Protected delivery flow
+
+Protected sessions do not expose the full question set at once.
+
+Public link
+↓
+Consent page
+↓
+Identity page
+↓
+Signed submission token issued
+↓
+Question window 1 loaded
+↓
+Answers saved with `answerSequence`
+↓
+Question window 2 loaded
+↓
+Repeat until final group
+↓
+Submit and score
+
+### Required behavior
 
 - consent is always shown before test start
 - identity fields reflect assessment purpose and context
+- submission tokens expire after 4 hours by default
+- protected sessions load questions group by group
+- answer saves must advance the monotonic `answerSequence`
+- duplicate submit must be idempotent and return the existing scored result
 - participants should not automatically receive final professional interpretation
 - result visibility depends on session policy and review status
 
@@ -136,12 +162,12 @@ Report is released to allowed audiences
 ### Visibility principle
 
 - preliminary score is operational data, not the final report
-- reviewed output is professional interpretation
+- reviewed output is professional interpretation still restricted to internal roles
 - released output is the only version that should be treated as deliverable
 
 ## Result Distribution Flow
 
-The platform should support these result policies:
+The platform supports these result policies:
 
 - HR only
 - participant summary
@@ -150,13 +176,14 @@ The platform should support these result policies:
 ### Rules
 
 - do not release full psychological interpretation automatically
-- participant visibility must follow consent and session policy
-- research studies may choose to suppress participant-facing results entirely
+- participant visibility must follow consent, policy, and review status
+- research studies may suppress participant-facing results entirely
 - HR should not see draft reviewer notes before release
+- customer workspace pages may show audience policy, but not internal reviewer draft content
 
 ## Research Flow
 
-Custom research assessments should remain structured and compliance-aware.
+Custom research assessments remain structured and compliance-aware.
 
 Researcher signs up
 ↓
@@ -174,7 +201,8 @@ Exports structured dataset
 
 - custom assessments may not need participant result delivery
 - export structure should be suitable for statistical analysis
-- privacy wording and contact person details must remain visible in consent flow
+- privacy wording and contact person details must remain visible in the consent flow
+- protected delivery can still be enabled for sensitive research instruments
 
 ## Reporting Flow
 
@@ -202,6 +230,7 @@ Whenever the implementation changes any of the following, this document should b
 
 - onboarding steps
 - participant flow
+- protected delivery behavior
 - reviewer flow
 - result release flow
 - research export flow

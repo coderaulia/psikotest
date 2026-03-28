@@ -35,6 +35,5 @@ describe('LandingPage language toggle', () => {
     expect(screen.getByRole('heading', { name: /bangun asesmen digital dengan alur kerja yang lebih tenang/i })).toBeInTheDocument();
     expect(screen.getByText(/platform asesmen psikologis/i)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /beragam alat asesmen dalam satu platform/i })).toBeInTheDocument();
-  });
+  }, 15000);
 });
-

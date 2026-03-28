@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Copy, ExternalLink, Link as LinkIcon, LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react';
+import { CheckCircle2, Copy, ExternalLink, Link as LinkIcon, LockKeyhole, ShieldCheck, Sparkles, Users } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 
 import { formatDateTime, formatTokenLabel } from '@/lib/formatters';
@@ -8,6 +8,22 @@ import type { CustomerAssessmentDetail } from '@/types/assessment';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+function getCustomerVisibilityNote(detail: CustomerAssessmentDetail) {
+  if (detail.distributionPolicy === 'hr_only') {
+    return 'This configuration keeps the report restricted to internal HR or authorized reviewers only.';
+  }
+
+  if (detail.participantResultAccess === 'none') {
+    return 'Participants will complete the assessment, but they will not receive a result view from this workspace.';
+  }
+
+  if (detail.participantResultAccess === 'full_released') {
+    return 'Participants only receive the full report after professional review and release.';
+  }
+
+  return 'Participants receive only the approved summary view. Reviewer drafts and internal notes remain hidden from this workspace.';
+}
 
 export function CustomerAssessmentDetailPage() {
   const { assessmentId = '' } = useParams();
@@ -107,6 +123,29 @@ export function CustomerAssessmentDetailPage() {
     );
   }
 
+  const visibilityCards = [
+    {
+      label: 'Distribution policy',
+      value: formatTokenLabel(detail.distributionPolicy),
+      icon: ShieldCheck,
+    },
+    {
+      label: 'Participant access',
+      value: formatTokenLabel(detail.participantResultAccess),
+      icon: Users,
+    },
+    {
+      label: 'HR access',
+      value: formatTokenLabel(detail.hrResultAccess),
+      icon: LinkIcon,
+    },
+    {
+      label: 'Delivery mode',
+      value: detail.protectedDeliveryMode ? 'Protected progressive' : 'Full session delivery',
+      icon: Sparkles,
+    },
+  ];
+
   return (
     <div className="grid gap-6 xl:grid-cols-[1.04fr_0.96fr]">
       <div className="space-y-6">
@@ -125,7 +164,7 @@ export function CustomerAssessmentDetailPage() {
                 </Badge>
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-4">
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-500">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Purpose</p>
                 <p className="mt-2 font-medium text-slate-950">{formatTokenLabel(detail.assessmentPurpose)}</p>
@@ -135,8 +174,12 @@ export function CustomerAssessmentDetailPage() {
                 <p className="mt-2 font-medium text-slate-950">{formatTokenLabel(detail.administrationMode)}</p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-500">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Visibility</p>
-                <p className="mt-2 font-medium text-slate-950">{formatTokenLabel(detail.resultVisibility)}</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Distribution</p>
+                <p className="mt-2 font-medium text-slate-950">{formatTokenLabel(detail.distributionPolicy)}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-500">
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Created</p>
+                <p className="mt-2 font-medium text-slate-950">{formatDateTime(detail.createdAt)}</p>
               </div>
             </div>
           </CardHeader>
@@ -154,8 +197,8 @@ export function CustomerAssessmentDetailPage() {
                   <p className="mt-2 font-medium text-slate-950">{detail.participantLimit ?? 'Flexible'}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Created</p>
-                  <p className="mt-2 font-medium text-slate-950">{formatDateTime(detail.createdAt)}</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Interpretation mode</p>
+                  <p className="mt-2 font-medium text-slate-950">{formatTokenLabel(detail.interpretationMode)}</p>
                 </div>
               </div>
             </div>
@@ -195,7 +238,11 @@ export function CustomerAssessmentDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-slate-500">
             <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-              <p className="font-medium text-slate-950">Participant link</p>
+              <div className="flex flex-wrap gap-2">
+                <Badge className="border-slate-200 bg-slate-100 text-slate-700">{formatTokenLabel(detail.distributionPolicy)}</Badge>
+                {detail.protectedDeliveryMode ? <Badge className="border-sky-200 bg-sky-50 text-sky-700">Protected delivery</Badge> : null}
+              </div>
+              <p className="mt-4 font-medium text-slate-950">Participant link</p>
               <p className="mt-2 break-all">{detail.participantLink}</p>
               <p className="mt-2 text-xs text-slate-400">
                 {detail.sessionStatus === 'active'
@@ -227,6 +274,29 @@ export function CustomerAssessmentDetailPage() {
                   </a>
                 </Button>
               ) : null}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white/84">
+          <CardHeader>
+            <CardTitle>Audience visibility</CardTitle>
+            <CardDescription>Workspace owners see policy state, not internal reviewer draft content.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm text-slate-500">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {visibilityCards.map((card) => {
+                const Icon = card.icon;
+                return (
+                  <div key={card.label} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                    <p className="inline-flex items-center gap-2 font-medium text-slate-950"><Icon className="h-4 w-4" /> {card.label}</p>
+                    <p className="mt-2 text-xs leading-6 text-slate-500">{card.value}</p>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs leading-6 text-sky-700">
+              {getCustomerVisibilityNote(detail)} Reviewer notes and draft interpretations remain internal and are never exposed in the customer workspace view.
             </div>
           </CardContent>
         </Card>

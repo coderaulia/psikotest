@@ -2,10 +2,11 @@
 
 This document maps ethical and compliance expectations into product and engineering requirements for Vanaila Psikotest.
 
-It should be read together with:
+Read this together with:
 
 - `docs/new-flow.md`
 - `docs/development-phases.md`
+- `docs/auth-and-access.md`
 
 ## Compliance Basis
 
@@ -47,7 +48,7 @@ Implications for the product:
 
 - access to participant data and results must be role-controlled
 - result visibility must be policy-driven
-- audit logging should record review and release actions
+- audit logging should record review, release, and report access actions
 - data retention and export actions should be trackable
 
 ### 4. Protection of test materials
@@ -59,6 +60,7 @@ Implications for the product:
 - question banks must remain admin-only
 - participant delivery should minimize full item exposure
 - protected sessions should support progressive item delivery
+- stale or replayed answer payloads must be rejected
 - anti-copy posture should be considered for professional tests
 
 ### 5. Interpretation responsibility
@@ -70,6 +72,7 @@ Implications for the product:
 - automated interpretation must be labeled as indicative or preliminary
 - professional interpretation requires reviewer validation
 - released reports should clearly identify whether they are summary-only or professionally reviewed
+- customer-facing views must never expose internal reviewer draft notes
 
 ## Product Requirements Derived from Compliance
 
@@ -140,6 +143,7 @@ Implements:
 
 - stronger question security
 - progressive delivery for protected tests
+- replay and duplicate-submit protection
 - result distribution enforcement
 
 ### Phase 3
@@ -150,13 +154,23 @@ Implements:
 - delivery logging
 - final report operationalization
 
-## Current Gaps To Close
+## Current Implementation Notes
 
-- reviewer-specific permissions are not yet fully modeled
-- full result distribution policy enforcement is not yet complete
-- question exposure is still broader than ideal for protected tests
+The current codebase now supports:
+
+- signed participant submission tokens with a 4-hour default expiry
+- protected sessions that deliver question groups progressively
+- monotonically increasing `answerSequence` checks for protected saves
+- idempotent duplicate submit behavior for already scored submissions
+- visibility-aware admin and customer result surfaces
+
+## Remaining Gaps To Close
+
+- reviewer-specific permissions can still be deepened for future role expansion
+- anti-copy posture is still UX-level, not enterprise-grade browser control
 - final report export and delivery workflows are still deferred
+- external edge protection is still needed for high-scale abuse and DDoS resilience
 
 ## Documentation Rule
 
-Any change to consent handling, reviewer flow, result visibility, or export policy should update this document before release.
+Any change to consent handling, protected delivery, reviewer flow, result visibility, or export policy should update this document before release.

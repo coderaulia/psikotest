@@ -20,7 +20,7 @@ describe('CustomerAssessmentDetailPage', () => {
     activateCustomerAssessmentMock.mockReset();
   });
 
-  it('loads a draft assessment and activates sharing', async () => {
+  it('loads a draft assessment, shows audience policy, and activates sharing', async () => {
     getCustomerAssessmentMock.mockResolvedValue({
       assessmentId: 51,
       sessionId: 81,
@@ -30,6 +30,10 @@ describe('CustomerAssessmentDetailPage', () => {
       assessmentPurpose: 'research',
       administrationMode: 'remote_unsupervised',
       resultVisibility: 'participant_summary',
+      distributionPolicy: 'full_report_with_consent',
+      protectedDeliveryMode: true,
+      participantResultAccess: 'full_released',
+      hrResultAccess: 'full',
       timeLimitMinutes: 18,
       participantLimit: 60,
       sessionStatus: 'draft',
@@ -42,7 +46,7 @@ describe('CustomerAssessmentDetailPage', () => {
       consentStatement: 'I agree to participate in this research assessment.',
       privacyStatement: 'Responses are stored as confidential research data.',
       contactPerson: 'Research coordinator',
-      interpretationMode: 'self_assessment',
+      interpretationMode: 'professional_review',
       canActivateSharing: true,
     });
     activateCustomerAssessmentMock.mockResolvedValue({
@@ -54,6 +58,10 @@ describe('CustomerAssessmentDetailPage', () => {
       assessmentPurpose: 'research',
       administrationMode: 'remote_unsupervised',
       resultVisibility: 'participant_summary',
+      distributionPolicy: 'full_report_with_consent',
+      protectedDeliveryMode: true,
+      participantResultAccess: 'full_released',
+      hrResultAccess: 'full',
       timeLimitMinutes: 18,
       participantLimit: 60,
       sessionStatus: 'active',
@@ -66,7 +74,7 @@ describe('CustomerAssessmentDetailPage', () => {
       consentStatement: 'I agree to participate in this research assessment.',
       privacyStatement: 'Responses are stored as confidential research data.',
       contactPerson: 'Research coordinator',
-      interpretationMode: 'self_assessment',
+      interpretationMode: 'professional_review',
       canActivateSharing: false,
     });
 
@@ -76,7 +84,9 @@ describe('CustomerAssessmentDetailPage', () => {
     });
 
     await screen.findByText('Study Pilot A');
-    expect(screen.getByText('Draft CUSTOM assessment for Psych Lab (research).')).toBeInTheDocument();
+    expect(screen.getAllByText(/full report with consent/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/protected delivery/i)).toBeInTheDocument();
+    expect(screen.getByText(/reviewer notes and draft interpretations remain internal/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /upgrade to share/i })).toBeInTheDocument();
 
     const user = userEvent.setup();
@@ -88,3 +98,4 @@ describe('CustomerAssessmentDetailPage', () => {
     expect(screen.getByRole('button', { name: /copy live participant link/i })).toBeInTheDocument();
   });
 });
+

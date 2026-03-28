@@ -10,6 +10,7 @@ export type QuestionStatus = 'draft' | 'active' | 'archived';
 export type DistributionPolicy = 'hr_only' | 'participant_summary' | 'full_report_with_consent';
 export type ParticipantResultAccess = 'none' | 'summary' | 'full_released';
 export type HrResultAccess = 'none' | 'summary' | 'full';
+export type PublicDeliveryMode = 'full' | 'progressive';
 
 export interface CustomerListItem {
   id: number;
@@ -67,6 +68,8 @@ export interface AssessmentQuestion {
   instructionText?: string;
   prompt?: string;
   dimensionKey?: string;
+  questionGroupKey?: string;
+  orderIndex?: number;
   options: AssessmentOption[];
 }
 
@@ -79,6 +82,11 @@ export interface PublicSessionResponse {
     estimatedMinutes: number;
     status: 'active';
     compliance: TestSessionComplianceSettings;
+    delivery: {
+      mode: PublicDeliveryMode;
+      totalQuestions: number;
+      totalGroups: number;
+    };
   };
   questions: AssessmentQuestion[];
 }
@@ -108,14 +116,37 @@ export interface SubmissionAnswerInput {
   value?: number;
 }
 
+export interface ProgressiveQuestionWindow {
+  submissionId: number;
+  status: 'in_progress';
+  answerSequence: number;
+  groupIndex: number;
+  totalGroups: number;
+  totalQuestions: number;
+  answeredQuestionCount: number;
+  groupKey: string;
+  questions: AssessmentQuestion[];
+  savedAnswers: SubmissionAnswerInput[];
+}
+
 export interface StartSubmissionResponse {
   submissionId: number;
   participantId: number;
   token: string;
   submissionAccessToken: string;
+  submissionAccessExpiresAt: string;
+  answerSequence: number;
   status: 'in_progress';
   testType: TestTypeCode;
   participantResultMode: ParticipantResultMode;
+}
+
+export interface SaveSubmissionAnswersResponse {
+  submissionId: number;
+  saved: boolean;
+  answerSequence: number;
+  answeredQuestionCount: number;
+  status: 'in_progress';
 }
 
 export interface AdminUser {
@@ -190,6 +221,10 @@ export interface CustomerAssessmentItem {
   assessmentPurpose: AssessmentPurpose;
   administrationMode: AdministrationMode;
   resultVisibility: CustomerAssessmentResultVisibility;
+  distributionPolicy: DistributionPolicy;
+  protectedDeliveryMode: boolean;
+  participantResultAccess: ParticipantResultAccess;
+  hrResultAccess: HrResultAccess;
   timeLimitMinutes: number | null;
   participantLimit: number | null;
   sessionStatus: 'draft' | 'active' | 'completed' | 'archived';
@@ -398,6 +433,10 @@ export interface StoredResultRecord {
   recommendation: string | null;
   limitations: string | null;
   reviewerNotes: string | null;
+  distributionPolicy: DistributionPolicy;
+  participantResultAccess: ParticipantResultAccess;
+  hrResultAccess: HrResultAccess;
+  protectedDeliveryMode: boolean;
   resultPayload: Record<string, unknown>;
   summaries: StoredResultSummary[];
 }
@@ -522,6 +561,8 @@ export interface SettingsOverviewResponse {
   sessionDefaults: SessionDefaultsSettings;
   auditFeed: AuditFeedItem[];
 }
+
+
 
 
 

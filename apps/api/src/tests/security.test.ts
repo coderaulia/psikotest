@@ -39,11 +39,14 @@ test('submission access token preserves participant and submission ids', () => {
     participantId: 77,
   });
 
-  const claims = verifySubmissionAccessToken(token);
+  assert.match(token.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
+  const claims = verifySubmissionAccessToken(token.token);
   assert.ok(claims);
   assert.equal(claims?.submissionId, 55);
   assert.equal(claims?.participantId, 77);
 });
+
+
 
 
 
