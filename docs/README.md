@@ -11,6 +11,8 @@ This folder holds the product, engineering, deployment, and maintenance referenc
   Compliance and ethical requirements mapped to product and engineering rules.
 - [development-phases.md](./development-phases.md)
   Multi-phase roadmap for SaaS, white-label, and enterprise-grade platform evolution.
+- [saas-completion-plan.md](./saas-completion-plan.md)
+  SaaS-first delivery plan for completing self-serve workspace, billing, delivery, and reporting flows.
 
 ### Content and Maintenance
 - [content-editing-guide.md](./content-editing-guide.md)
@@ -21,6 +23,8 @@ This folder holds the product, engineering, deployment, and maintenance referenc
 ### Architecture and Deployment
 - [architecture-overview.md](./architecture-overview.md)
   High-level system and hosting architecture.
+- [white-label-architecture.md](./white-label-architecture.md)
+  Shared-core white-label model, tenant routing, and long-term schema direction.
 - [auth-and-access.md](./auth-and-access.md)
   Roles, auth boundaries, and session model.
 - [assessment-engine.md](./assessment-engine.md)
@@ -40,11 +44,13 @@ This folder holds the product, engineering, deployment, and maintenance referenc
 1. `new-flow.md`
 2. `compliance.md`
 3. `development-phases.md`
-4. `architecture-overview.md`
-5. `auth-and-access.md`
-6. `assessment-engine.md`
-7. `documentation-roadmap.md`
-8. deployment and maintenance guides as needed
+4. `saas-completion-plan.md`
+5. `architecture-overview.md`
+6. `white-label-architecture.md`
+7. `auth-and-access.md`
+8. `assessment-engine.md`
+9. `documentation-roadmap.md`
+10. deployment and maintenance guides as needed
 
 ## Update Rules
 - Update `new-flow.md` when workflow or page flow changes.

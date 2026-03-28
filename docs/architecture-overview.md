@@ -3,7 +3,7 @@
 This project is a multi-surface psychological assessment platform with two operational modes:
 
 - SaaS workspace for companies and researchers
-- future white-label adaptation on top of the same operational core
+- future white-label adaptation on top of the same operational core and API
 
 ## Current deployment shape
 
@@ -118,6 +118,7 @@ The next tenant evolution should formalize:
 - team members and invites
 - branding and white-label boundaries
 - plan and usage enforcement
+- domain-based tenant resolution for shared white-label delivery
 
 ## Hosting topology
 
@@ -140,3 +141,8 @@ Use together with:
 - `docs/development-phases.md`
 - `docs/auth-and-access.md`
 - `docs/assessment-engine.md`
+
+
+## White-label principle
+
+White-label should run on the same API and assessment engine as the SaaS product. The recommended default is a shared multi-tenant platform with host-based workspace resolution, not a forked application.
