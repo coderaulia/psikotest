@@ -28,6 +28,24 @@ class MemoryStorage implements Storage {
   }
 }
 
+class MockIntersectionObserver implements IntersectionObserver {
+  readonly root = null;
+  readonly rootMargin = '0px';
+  readonly thresholds = [0];
+
+  constructor(_: IntersectionObserverCallback, __?: IntersectionObserverInit) {}
+
+  disconnect() {}
+
+  observe() {}
+
+  takeRecords(): IntersectionObserverEntry[] {
+    return [];
+  }
+
+  unobserve() {}
+}
+
 const localStorageMock = new MemoryStorage();
 const sessionStorageMock = new MemoryStorage();
 
@@ -38,5 +56,15 @@ Object.defineProperty(window, 'localStorage', {
 
 Object.defineProperty(window, 'sessionStorage', {
   value: sessionStorageMock,
+  configurable: true,
+});
+
+Object.defineProperty(window, 'IntersectionObserver', {
+  value: MockIntersectionObserver,
+  configurable: true,
+});
+
+Object.defineProperty(globalThis, 'IntersectionObserver', {
+  value: MockIntersectionObserver,
   configurable: true,
 });
