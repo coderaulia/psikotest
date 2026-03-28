@@ -168,6 +168,8 @@ export type CustomerAssessmentParticipantStatus = 'draft' | 'invited' | 'in_prog
 export type CustomerAssessmentInviteChannel = 'email' | 'link';
 export type DummyCheckoutPlan = 'starter' | 'growth' | 'research';
 export type DummyCheckoutBillingCycle = 'monthly' | 'annual';
+export type CustomerWorkspaceMemberRole = 'owner' | 'admin' | 'operator' | 'reviewer';
+export type CustomerWorkspaceMemberStatus = 'active' | 'invited';
 
 export interface CustomerUser {
   id: number;
@@ -201,6 +203,27 @@ export interface CustomerWorkspaceSettingsResponse {
   settings: CustomerWorkspaceSettings;
 }
 
+export interface CustomerWorkspaceMemberItem {
+  id: number;
+  fullName: string;
+  email: string;
+  role: CustomerWorkspaceMemberRole;
+  status: CustomerWorkspaceMemberStatus;
+  source: 'owner' | 'workspace_member';
+  invitedAt: string | null;
+  lastNotifiedAt: string | null;
+}
+
+export interface CustomerWorkspaceTeamResponse {
+  workspace: {
+    organizationName: string;
+    ownerName: string;
+    ownerEmail: string;
+    accountType: CustomerAccountType;
+  };
+  items: CustomerWorkspaceMemberItem[];
+}
+
 export interface UpdateCustomerWorkspaceSettingsPayload {
   organizationName: string;
   brandName: string;
@@ -214,6 +237,17 @@ export interface UpdateCustomerWorkspaceSettingsPayload {
   defaultTimeLimitMinutes: number | null;
   defaultConsentStatement: string;
   defaultPrivacyStatement: string;
+}
+
+export interface CreateCustomerWorkspaceMemberPayload {
+  fullName: string;
+  email: string;
+  role: Exclude<CustomerWorkspaceMemberRole, 'owner'>;
+}
+
+export interface SendCustomerWorkspaceMemberInviteResponse {
+  member: CustomerWorkspaceMemberItem;
+  deliveryPreview: string;
 }
 
 export interface CustomerAssessmentItem {

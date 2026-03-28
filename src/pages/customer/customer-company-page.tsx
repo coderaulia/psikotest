@@ -153,6 +153,11 @@ export function CustomerCompanyPage() {
                 <p className="inline-flex items-center gap-2 font-medium text-white"><Users className="h-4 w-4" /> Invite participants</p>
                 <p className="mt-2">Prepare invite lists and share the live participant link when the assessment is active.</p>
               </div>
+              <div className="pt-2">
+                <Button variant="secondary" className="w-full justify-between" asChild>
+                  <Link to="/workspace/team">Open workspace team</Link>
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

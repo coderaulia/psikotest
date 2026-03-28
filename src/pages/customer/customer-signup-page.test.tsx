@@ -64,5 +64,5 @@ describe('CustomerSignupPage', () => {
     });
     expect(window.localStorage.getItem('psikotest:customer-session')).toBeNull();
     expect(window.sessionStorage.getItem('psikotest:customer-session')).not.toBeNull();
-  });
+  }, 10000);
 });

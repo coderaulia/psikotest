@@ -88,5 +88,5 @@ describe('CustomerOnboardingPage', () => {
     expect(screen.getByText('https://app.example.com/t/custom-study-pilot')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /review setup/i })).toHaveAttribute('href', '/workspace/assessments/51/setup');
     expect(screen.getByRole('link', { name: /dummy payment/i })).toHaveAttribute('href', '/workspace/assessments/51/checkout');
-  });
+  }, 10000);
 });

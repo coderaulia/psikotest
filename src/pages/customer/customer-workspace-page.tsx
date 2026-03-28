@@ -97,6 +97,9 @@ export function CustomerWorkspacePage() {
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
           <Button variant="secondary" asChild>
+            <Link to="/workspace/team">Workspace team</Link>
+          </Button>
+          <Button variant="secondary" asChild>
             <Link to="/workspace/settings">Workspace settings</Link>
           </Button>
           <Button asChild>

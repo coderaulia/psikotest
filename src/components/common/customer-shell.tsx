@@ -16,6 +16,7 @@ const copy = {
     nav: {
       workspace: 'Assessments',
       company: 'Company',
+      team: 'Team',
       createAssessment: 'Create Assessment',
       settings: 'Settings',
       signOut: 'Sign out',
@@ -38,6 +39,7 @@ const copy = {
     nav: {
       workspace: 'Asesmen',
       company: 'Perusahaan',
+      team: 'Tim',
       createAssessment: 'Buat Asesmen',
       settings: 'Pengaturan',
       signOut: 'Keluar',
@@ -65,6 +67,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
   const navItems = [
     { to: '/workspace', label: t.nav.workspace },
     { to: '/workspace/company', label: t.nav.company },
+    { to: '/workspace/team', label: t.nav.team },
     { to: '/workspace/create', label: t.nav.createAssessment },
     { to: '/workspace/settings', label: t.nav.settings },
   ];
