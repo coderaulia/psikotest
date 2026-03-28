@@ -33,6 +33,9 @@ function createFakeState(passwordHash: string): FakeDbState {
     ],
     customerAccounts: [],
     customerAssessments: [],
+    workspaceSubscriptions: [],
+    customerAssessmentParticipants: [],
+    workspaceMembers: [],
     testTypes: [
       { id: 1, code: 'disc' },
       { id: 2, code: 'custom' },
@@ -239,6 +242,31 @@ export async function runApiIntegrationTests() {
     const customerToken = String(signupPayload?.token ?? '');
     assert.ok(customerToken.length > 10);
 
+    const billingOverviewResponse = await fetch(`${baseUrl}/api/site-billing/overview`, {
+      headers: {
+        Authorization: `Bearer ${customerToken}`,
+      },
+    });
+    assert.equal(billingOverviewResponse.status, 200);
+    const billingOverviewPayload = await readJson(billingOverviewResponse);
+    assert.equal(billingOverviewPayload?.subscription && typeof billingOverviewPayload.subscription === 'object' ? (billingOverviewPayload.subscription as Record<string, unknown>).planCode : null, 'research');
+    assert.equal(billingOverviewPayload?.usage && typeof billingOverviewPayload.usage === 'object' ? (billingOverviewPayload.usage as Record<string, unknown>).teamSeatCount : null, 1);
+
+    const billingUpdateResponse = await fetch(`${baseUrl}/api/site-billing/subscription`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${customerToken}`,
+      },
+      body: JSON.stringify({
+        selectedPlan: 'starter',
+        billingCycle: 'monthly',
+      }),
+    });
+    assert.equal(billingUpdateResponse.status, 200);
+    const billingUpdatePayload = await readJson(billingUpdateResponse);
+    assert.equal(billingUpdatePayload?.subscription && typeof billingUpdatePayload.subscription === 'object' ? (billingUpdatePayload.subscription as Record<string, unknown>).planCode : null, 'starter');
+
     const workspaceUpdateResponse = await fetch(`${baseUrl}/api/site-workspace/settings`, {
       method: 'PATCH',
       headers: {
@@ -291,6 +319,109 @@ export async function runApiIntegrationTests() {
       },
     });
     assert.equal(activateAssessmentResponse.status, 200);
+
+    const secondAssessmentResponse = await fetch(`${baseUrl}/api/site-onboarding/assessments`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${customerToken}`,
+      },
+      body: JSON.stringify({
+        testType: 'custom',
+        title: 'Study Pilot B',
+        purpose: 'research',
+        organizationName: 'Vanaila Research Lab',
+        administrationMode: 'remote_unsupervised',
+        timeLimitMinutes: null,
+        participantLimit: null,
+        resultVisibility: 'participant_summary',
+      }),
+    });
+    assert.equal(secondAssessmentResponse.status, 201);
+
+    const thirdAssessmentResponse = await fetch(`${baseUrl}/api/site-onboarding/assessments`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${customerToken}`,
+      },
+      body: JSON.stringify({
+        testType: 'custom',
+        title: 'Study Pilot C',
+        purpose: 'research',
+        organizationName: 'Vanaila Research Lab',
+        administrationMode: 'remote_unsupervised',
+        timeLimitMinutes: null,
+        participantLimit: null,
+        resultVisibility: 'participant_summary',
+      }),
+    });
+    assert.equal(thirdAssessmentResponse.status, 201);
+
+    const overLimitAssessmentResponse = await fetch(`${baseUrl}/api/site-onboarding/assessments`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${customerToken}`,
+      },
+      body: JSON.stringify({
+        testType: 'custom',
+        title: 'Study Pilot D',
+        purpose: 'research',
+        organizationName: 'Vanaila Research Lab',
+        administrationMode: 'remote_unsupervised',
+        timeLimitMinutes: null,
+        participantLimit: null,
+        resultVisibility: 'participant_summary',
+      }),
+    });
+    assert.equal(overLimitAssessmentResponse.status, 409);
+    const overLimitAssessmentPayload = await readJson(overLimitAssessmentResponse);
+    assert.equal(overLimitAssessmentPayload?.error, 'Assessment limit reached for this workspace plan');
+
+    const firstMemberResponse = await fetch(`${baseUrl}/api/site-workspace/team`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${customerToken}`,
+      },
+      body: JSON.stringify({
+        fullName: 'Workspace Admin',
+        email: 'member.one@example.com',
+        role: 'admin',
+      }),
+    });
+    assert.equal(firstMemberResponse.status, 201);
+
+    const secondMemberResponse = await fetch(`${baseUrl}/api/site-workspace/team`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${customerToken}`,
+      },
+      body: JSON.stringify({
+        fullName: 'Workspace Reviewer',
+        email: 'member.two@example.com',
+        role: 'reviewer',
+      }),
+    });
+    assert.equal(secondMemberResponse.status, 201);
+
+    const overSeatResponse = await fetch(`${baseUrl}/api/site-workspace/team`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${customerToken}`,
+      },
+      body: JSON.stringify({
+        fullName: 'Workspace Operator',
+        email: 'member.three@example.com',
+        role: 'operator',
+      }),
+    });
+    assert.equal(overSeatResponse.status, 409);
+    const overSeatPayload = await readJson(overSeatResponse);
+    assert.equal(overSeatPayload?.error, 'Team member limit reached for this workspace plan');
 
     const sessionResponse = await fetch(`${baseUrl}/api/public/session/disc-batch-a`);
     assert.equal(sessionResponse.status, 200);

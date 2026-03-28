@@ -5,6 +5,13 @@ import type { AdministrationMode, AssessmentPurpose, InterpretationMode, TestSes
 import type { PublicTestTypeCode } from '../public-sessions/public-session.types.js';
 import { parseCustomerWorkspaceSettings, renderWorkspaceTemplate } from '../site-workspace/workspace-settings.js';
 import {
+  assertAssessmentCreationCapacity,
+  assertParticipantCapacity,
+  updateWorkspaceSubscriptionSelection,
+  type DummyCheckoutBillingCycle,
+  type DummyCheckoutPlan,
+} from '../site-billing/site-billing.service.js';
+import {
   activateCustomerAssessmentRecord,
   fetchCustomerAssessmentById,
   fetchCustomerAssessmentBySessionId,
@@ -19,8 +26,6 @@ import {
 } from './site-onboarding.repository.js';
 
 export type CustomerAssessmentResultVisibility = 'participant_summary' | 'review_required';
-export type DummyCheckoutPlan = 'starter' | 'growth' | 'research';
-export type DummyCheckoutBillingCycle = 'monthly' | 'annual';
 
 function getDefaultTimeLimit(testType: PublicTestTypeCode) {
   if (testType === 'iq') {
@@ -152,6 +157,7 @@ export async function createCustomerAssessment(input: {
   protectedDeliveryMode: boolean;
 }) {
   const account = await requireActiveCustomer(input.customerAccountId);
+  await assertAssessmentCreationCapacity(input.customerAccountId);
   const normalizedOrganizationName = input.organizationName.trim();
 
   await normalizeOrganization(account.id, account.organization_name, normalizedOrganizationName);
@@ -299,7 +305,11 @@ export async function completeCustomerAssessmentCheckout(input: {
   plan: DummyCheckoutPlan;
   billingCycle: DummyCheckoutBillingCycle;
 }) {
-  const account = await requireActiveCustomer(input.customerAccountId);
+  await updateWorkspaceSubscriptionSelection({
+    customerAccountId: input.customerAccountId,
+    planCode: input.plan,
+    billingCycle: input.billingCycle,
+  });
   const assessment = await activateCustomerAssessmentRecord(input.customerAccountId, input.assessmentId);
 
   if (!assessment) {
@@ -312,7 +322,7 @@ export async function completeCustomerAssessmentCheckout(input: {
     entityId: input.assessmentId,
     action: 'customer_assessment.checkout_completed',
     metadata: {
-      customerAccountId: account.id,
+      customerAccountId: input.customerAccountId,
       sessionId: assessment.sessionId,
       plan: input.plan,
       billingCycle: input.billingCycle,
@@ -355,6 +365,19 @@ export async function addCustomerAssessmentParticipant(input: {
   note: string | null;
 }) {
   await requireActiveCustomer(input.customerAccountId);
+  const existingList = await fetchCustomerAssessmentParticipants(input.customerAccountId, input.assessmentId);
+
+  if (!existingList) {
+    throw new HttpError(404, 'Assessment draft not found');
+  }
+
+  const normalizedEmail = input.email.trim().toLowerCase();
+  const alreadyExists = existingList.items.some((item) => item.email.toLowerCase() === normalizedEmail);
+
+  if (!alreadyExists) {
+    await assertParticipantCapacity(input.customerAccountId);
+  }
+
   const participant = await upsertCustomerAssessmentParticipant(input);
 
   if (!participant) {

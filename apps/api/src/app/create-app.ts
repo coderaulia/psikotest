@@ -17,6 +17,7 @@ import { reportRoutes } from '../modules/reports/report.routes.js';
 import { resultRoutes } from '../modules/results/result.routes.js';
 import { settingsRoutes } from '../modules/settings/settings.routes.js';
 import { siteAuthRoutes } from '../modules/site-auth/site-auth.routes.js';
+import { siteBillingRoutes } from '../modules/site-billing/site-billing.routes.js';
 import { siteOnboardingRoutes } from '../modules/site-onboarding/site-onboarding.routes.js';
 import { siteWorkspaceRoutes } from '../modules/site-workspace/site-workspace.routes.js';
 import { customersRoutes } from '../modules/customers/customers.routes.js';
@@ -73,6 +74,7 @@ export function createApp() {
   app.use('/api/health', healthRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api/site-auth', siteAuthRoutes);
+  app.use('/api/site-billing', requireCustomerAuth, siteBillingRoutes);
   app.use('/api/site-onboarding', requireCustomerAuth, siteOnboardingRoutes);
   app.use('/api/site-workspace', requireCustomerAuth, siteWorkspaceRoutes);
   app.use('/api/dashboard', requireAdminAuth, dashboardRoutes);

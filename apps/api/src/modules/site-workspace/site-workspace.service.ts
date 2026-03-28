@@ -1,5 +1,6 @@
 import { createAuditEvent } from '../../lib/audit-log.js';
 import { HttpError } from '../../lib/http-error.js';
+import { assertTeamMemberCapacity } from '../site-billing/site-billing.service.js';
 import { findActiveCustomerById } from '../site-auth/site-auth.repository.js';
 import {
   fetchCustomerWorkspaceMembers,
@@ -165,6 +166,13 @@ export async function addCustomerWorkspaceMember(input: {
 
   if (normalizedEmail === account.email.toLowerCase()) {
     throw new HttpError(409, 'The workspace owner is already part of this team');
+  }
+
+  const existingMembers = await fetchCustomerWorkspaceMembers(input.accountId);
+  const memberAlreadyExists = existingMembers.some((member) => member.email.toLowerCase() === normalizedEmail);
+
+  if (!memberAlreadyExists) {
+    await assertTeamMemberCapacity(input.accountId);
   }
 
   const member = await upsertCustomerWorkspaceMember({

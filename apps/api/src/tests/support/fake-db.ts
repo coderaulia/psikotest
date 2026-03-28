@@ -58,6 +58,40 @@ interface FakeCustomerAssessment {
   updated_at?: string;
 }
 
+interface FakeWorkspaceSubscription {
+  id: number;
+  customer_account_id: number;
+  plan_code: 'starter' | 'growth' | 'research';
+  status: 'trial' | 'active' | 'past_due' | 'suspended';
+  billing_cycle: 'monthly' | 'annual';
+  assessment_limit: number;
+  participant_limit: number;
+  team_member_limit: number;
+  started_at: string;
+  trial_ends_at: string | null;
+  renews_at: string | null;
+  updated_at: string;
+}
+
+interface FakeCustomerAssessmentParticipant {
+  id: number;
+  customer_assessment_id: number;
+  participant_id: number;
+  invite_status: 'draft' | 'sent';
+}
+
+interface FakeWorkspaceMember {
+  id: number;
+  customer_account_id: number;
+  full_name: string;
+  email: string;
+  role: 'admin' | 'operator' | 'reviewer';
+  invitation_status: 'active' | 'invited';
+  invited_at: string | null;
+  last_notified_at: string | null;
+  created_at: string;
+}
+
 interface FakeQuestion {
   id: number;
   test_type_id: number;
@@ -157,6 +191,9 @@ export interface FakeDbState {
   admins: FakeAdmin[];
   customerAccounts: FakeCustomerAccount[];
   customerAssessments: FakeCustomerAssessment[];
+  workspaceSubscriptions: FakeWorkspaceSubscription[];
+  customerAssessmentParticipants: FakeCustomerAssessmentParticipant[];
+  workspaceMembers: FakeWorkspaceMember[];
   testTypes: FakeTestType[];
   sessions: FakeSession[];
   questions: FakeQuestion[];
@@ -190,6 +227,9 @@ export class FakeDbPool implements DbPoolLike {
   private nextCustomerAccountId = 10;
   private nextSessionId = 30;
   private nextCustomerAssessmentId = 40;
+  private nextWorkspaceSubscriptionId = 60;
+  private nextCustomerAssessmentParticipantId = 70;
+  private nextWorkspaceMemberId = 80;
   private nextParticipantId = 100;
   private nextSubmissionId = 500;
   private nextAnswerId = 800;
@@ -208,6 +248,18 @@ export class FakeDbPool implements DbPoolLike {
 
     if (state.customerAssessments.length > 0) {
       this.nextCustomerAssessmentId = Math.max(...state.customerAssessments.map((item) => item.id)) + 1;
+    }
+
+    if (state.workspaceSubscriptions.length > 0) {
+      this.nextWorkspaceSubscriptionId = Math.max(...state.workspaceSubscriptions.map((item) => item.id)) + 1;
+    }
+
+    if (state.customerAssessmentParticipants.length > 0) {
+      this.nextCustomerAssessmentParticipantId = Math.max(...state.customerAssessmentParticipants.map((item) => item.id)) + 1;
+    }
+
+    if (state.workspaceMembers.length > 0) {
+      this.nextWorkspaceMemberId = Math.max(...state.workspaceMembers.map((item) => item.id)) + 1;
     }
 
     if (state.participants.length > 0) {
@@ -324,6 +376,49 @@ export class FakeDbPool implements DbPoolLike {
       };
       this.state.customerAccounts.push(account);
       return [{ insertId: account.id }, []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('select id, customer_account_id, plan_code, status, billing_cycle, assessment_limit, participant_limit, team_member_limit, started_at, trial_ends_at, renews_at from workspace_subscriptions where customer_account_id = ? limit 1')) {
+      const customerAccountId = Number(params[0]);
+      const subscription = this.state.workspaceSubscriptions.find((item) => item.customer_account_id === customerAccountId);
+      return [[subscription].filter(Boolean), []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('insert into workspace_subscriptions')) {
+      const now = new Date().toISOString();
+      const subscription: FakeWorkspaceSubscription = {
+        id: this.nextWorkspaceSubscriptionId++,
+        customer_account_id: Number(params[0]),
+        plan_code: params[1] as FakeWorkspaceSubscription['plan_code'],
+        status: params[2] as FakeWorkspaceSubscription['status'],
+        billing_cycle: params[3] as FakeWorkspaceSubscription['billing_cycle'],
+        assessment_limit: Number(params[4]),
+        participant_limit: Number(params[5]),
+        team_member_limit: Number(params[6]),
+        started_at: now,
+        trial_ends_at: params[7] ? String(params[7]) : null,
+        renews_at: params[8] ? String(params[8]) : null,
+        updated_at: now,
+      };
+      this.state.workspaceSubscriptions.push(subscription);
+      return [{ insertId: subscription.id }, []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('update workspace_subscriptions set plan_code = ?, status = ?, billing_cycle = ?, assessment_limit = ?, participant_limit = ?, team_member_limit = ?, trial_ends_at = ?, renews_at = ?, updated_at = current_timestamp where customer_account_id = ?')) {
+      const customerAccountId = Number(params[8]);
+      const subscription = this.state.workspaceSubscriptions.find((item) => item.customer_account_id === customerAccountId);
+      if (subscription) {
+        subscription.plan_code = params[0] as FakeWorkspaceSubscription['plan_code'];
+        subscription.status = params[1] as FakeWorkspaceSubscription['status'];
+        subscription.billing_cycle = params[2] as FakeWorkspaceSubscription['billing_cycle'];
+        subscription.assessment_limit = Number(params[3]);
+        subscription.participant_limit = Number(params[4]);
+        subscription.team_member_limit = Number(params[5]);
+        subscription.trial_ends_at = params[6] ? String(params[6]) : null;
+        subscription.renews_at = params[7] ? String(params[7]) : null;
+        subscription.updated_at = new Date().toISOString();
+      }
+      return [[{ affectedRows: subscription ? 1 : 0 }], []] as unknown as [any, any];
     }
 
     if (normalized.startsWith('update customer_accounts set session_version = session_version + 1,')) {
@@ -456,6 +551,34 @@ export class FakeDbPool implements DbPoolLike {
       return [[row].filter(Boolean), []] as unknown as [any, any];
     }
 
+    if (normalized.startsWith("select count(*) as total from customer_assessments ca inner join test_sessions ts on ts.id = ca.test_session_id where ca.customer_account_id = ? and ts.status in ('draft', 'active')")) {
+      const customerAccountId = Number(params[0]);
+      const total = this.state.customerAssessments.filter((assessment) => {
+        if (assessment.customer_account_id !== customerAccountId) {
+          return false;
+        }
+
+        const session = this.state.sessions.find((item) => item.id === assessment.test_session_id);
+        return session ? session.status === 'draft' || session.status === 'active' : false;
+      }).length;
+      return [[{ total }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('select count(*) as total from customer_assessment_participants cap inner join customer_assessments ca on ca.id = cap.customer_assessment_id where ca.customer_account_id = ?')) {
+      const customerAccountId = Number(params[0]);
+      const total = this.state.customerAssessmentParticipants.filter((item) => {
+        const assessment = this.state.customerAssessments.find((candidate) => candidate.id === item.customer_assessment_id);
+        return assessment?.customer_account_id === customerAccountId;
+      }).length;
+      return [[{ total }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('select count(*) as total from customer_workspace_members where customer_account_id = ?')) {
+      const customerAccountId = Number(params[0]);
+      const total = this.state.workspaceMembers.filter((item) => item.customer_account_id === customerAccountId).length;
+      return [[{ total }], []] as unknown as [any, any];
+    }
+
     if (normalized.includes('from customer_assessments ca inner join test_sessions ts on ts.id = ca.test_session_id inner join test_types tt on tt.id = ts.test_type_id where ca.customer_account_id = ? order by ca.created_at desc')) {
       const accountId = Number(params[0]);
       const rows = this.state.customerAssessments
@@ -523,6 +646,63 @@ export class FakeDbPool implements DbPoolLike {
           is_correct: item.is_correct,
         }));
       return [rows, []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('select id, full_name, email, role, invitation_status, invited_at, last_notified_at from customer_workspace_members where customer_account_id = ? order by created_at asc, id asc')) {
+      const customerAccountId = Number(params[0]);
+      const rows = this.state.workspaceMembers
+        .filter((item) => item.customer_account_id === customerAccountId)
+        .sort((left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime() || left.id - right.id)
+        .map((item) => ({
+          id: item.id,
+          full_name: item.full_name,
+          email: item.email,
+          role: item.role,
+          invitation_status: item.invitation_status,
+          invited_at: item.invited_at,
+          last_notified_at: item.last_notified_at,
+        }));
+      return [rows, []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('insert into customer_workspace_members')) {
+      const now = new Date().toISOString();
+      const customerAccountId = Number(params[0]);
+      const email = String(params[2] ?? '').trim().toLowerCase();
+      const existing = this.state.workspaceMembers.find((item) => item.customer_account_id === customerAccountId && item.email === email);
+
+      if (existing) {
+        existing.full_name = String(params[1] ?? existing.full_name);
+        existing.role = params[3] as FakeWorkspaceMember['role'];
+        return [{ insertId: existing.id }, []] as unknown as [any, any];
+      }
+
+      const member: FakeWorkspaceMember = {
+        id: this.nextWorkspaceMemberId++,
+        customer_account_id: customerAccountId,
+        full_name: String(params[1] ?? ''),
+        email,
+        role: params[3] as FakeWorkspaceMember['role'],
+        invitation_status: 'invited',
+        invited_at: null,
+        last_notified_at: null,
+        created_at: now,
+      };
+      this.state.workspaceMembers.push(member);
+      return [{ insertId: member.id }, []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith("update customer_workspace_members set invitation_status = 'invited', invited_at = coalesce(invited_at, current_timestamp), last_notified_at = current_timestamp, updated_at = current_timestamp where id = ? and customer_account_id = ?")) {
+      const memberId = Number(params[0]);
+      const customerAccountId = Number(params[1]);
+      const member = this.state.workspaceMembers.find((item) => item.id === memberId && item.customer_account_id === customerAccountId);
+      if (member) {
+        const now = new Date().toISOString();
+        member.invitation_status = 'invited';
+        member.invited_at = member.invited_at ?? now;
+        member.last_notified_at = now;
+      }
+      return [[{ affectedRows: member ? 1 : 0 }], []] as unknown as [any, any];
     }
 
     if (normalized.includes('select id from participants where email = ?')) {
