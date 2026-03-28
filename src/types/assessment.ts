@@ -168,6 +168,9 @@ export type CustomerAssessmentParticipantStatus = 'draft' | 'invited' | 'in_prog
 export type CustomerAssessmentInviteChannel = 'email' | 'link';
 export type DummyCheckoutPlan = 'starter' | 'growth' | 'research';
 export type DummyCheckoutBillingCycle = 'monthly' | 'annual';
+export type WorkspacePlanCode = DummyCheckoutPlan;
+export type WorkspaceBillingCycle = DummyCheckoutBillingCycle;
+export type WorkspaceSubscriptionStatus = 'trial' | 'active' | 'past_due' | 'suspended';
 export type CustomerWorkspaceMemberRole = 'owner' | 'admin' | 'operator' | 'reviewer';
 export type CustomerWorkspaceMemberStatus = 'active' | 'invited';
 
@@ -222,6 +225,52 @@ export interface CustomerWorkspaceTeamResponse {
     accountType: CustomerAccountType;
   };
   items: CustomerWorkspaceMemberItem[];
+}
+
+export interface WorkspaceSubscriptionRecord {
+  id: number;
+  customerAccountId: number;
+  planCode: WorkspacePlanCode;
+  status: WorkspaceSubscriptionStatus;
+  billingCycle: WorkspaceBillingCycle;
+  assessmentLimit: number;
+  participantLimit: number;
+  teamMemberLimit: number;
+  startedAt: string;
+  trialEndsAt: string | null;
+  renewsAt: string | null;
+  planLabel: string;
+  planDescription: string;
+}
+
+export interface WorkspaceUsageSummary {
+  activeAssessmentCount: number;
+  participantRecordCount: number;
+  teamSeatCount: number;
+  remainingAssessmentSlots: number;
+  remainingParticipantSlots: number;
+  remainingTeamSeats: number;
+}
+
+export interface WorkspacePlanDefinition {
+  planCode: WorkspacePlanCode;
+  label: string;
+  description: string;
+  assessmentLimit: number;
+  participantLimit: number;
+  teamMemberLimit: number;
+}
+
+export interface CustomerBillingOverviewResponse {
+  account: CustomerUser;
+  subscription: WorkspaceSubscriptionRecord;
+  usage: WorkspaceUsageSummary;
+  plans: WorkspacePlanDefinition[];
+}
+
+export interface UpdateWorkspaceSubscriptionPayload {
+  selectedPlan: WorkspacePlanCode;
+  billingCycle: WorkspaceBillingCycle;
 }
 
 export interface UpdateCustomerWorkspaceSettingsPayload {

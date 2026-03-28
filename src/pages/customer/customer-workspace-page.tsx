@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Copy, ExternalLink, FlaskConical, Link as LinkIcon, ShieldCheck, Users } from 'lucide-react';
+import { Copy, ExternalLink, FlaskConical, Link as LinkIcon, ShieldCheck, Sparkles, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { formatDateTime, formatTokenLabel } from '@/lib/formatters';
+import { getCustomerBillingOverview } from '@/services/customer-billing';
 import { listCustomerAssessments } from '@/services/customer-onboarding';
-import type { CustomerAssessmentItem } from '@/types/assessment';
+import type { CustomerAssessmentItem, CustomerBillingOverviewResponse } from '@/types/assessment';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +16,7 @@ function renderAudienceSummary(item: CustomerAssessmentItem) {
 
 export function CustomerWorkspacePage() {
   const [items, setItems] = useState<CustomerAssessmentItem[]>([]);
+  const [billing, setBilling] = useState<CustomerBillingOverviewResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -22,11 +24,14 @@ export function CustomerWorkspacePage() {
   useEffect(() => {
     let mounted = true;
 
-    void listCustomerAssessments()
-      .then((payload) => {
-        if (mounted) {
-          setItems(payload);
+    Promise.all([listCustomerAssessments(), getCustomerBillingOverview()])
+      .then(([assessmentItems, billingOverview]) => {
+        if (!mounted) {
+          return;
         }
+
+        setItems(assessmentItems);
+        setBilling(billingOverview);
       })
       .catch((error) => {
         if (mounted) {
@@ -69,23 +74,8 @@ export function CustomerWorkspacePage() {
     );
   }
 
-  if (items.length === 0) {
-    return (
-      <Card className="bg-white/82">
-        <CardHeader>
-          <CardTitle>No assessment drafts yet</CardTitle>
-          <CardDescription>Create your first guided assessment draft to generate a participant link and preview experience.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3 sm:flex-row">
-          <Button asChild>
-            <Link to="/workspace/create">Create first assessment</Link>
-          </Button>
-          <Button variant="secondary" asChild>
-            <Link to="/workspace/settings">Review workspace settings</Link>
-          </Button>
-        </CardContent>
-      </Card>
-    );
+  if (!billing) {
+    return null;
   }
 
   return (
@@ -97,6 +87,9 @@ export function CustomerWorkspacePage() {
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
           <Button variant="secondary" asChild>
+            <Link to="/workspace/billing">Workspace billing</Link>
+          </Button>
+          <Button variant="secondary" asChild>
             <Link to="/workspace/team">Workspace team</Link>
           </Button>
           <Button variant="secondary" asChild>
@@ -107,6 +100,75 @@ export function CustomerWorkspacePage() {
           </Button>
         </div>
       </div>
+
+      <div className="grid gap-4 lg:grid-cols-4">
+        <Card className="bg-white/84">
+          <CardHeader className="space-y-1">
+            <CardDescription>Current plan</CardDescription>
+            <CardTitle>{billing.subscription.planLabel}</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-slate-500">{billing.subscription.planDescription}</CardContent>
+        </Card>
+        <Card className="bg-white/84">
+          <CardHeader className="space-y-1">
+            <CardDescription>Assessment capacity</CardDescription>
+            <CardTitle>{billing.usage.activeAssessmentCount} / {billing.subscription.assessmentLimit}</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-slate-500">{billing.usage.remainingAssessmentSlots} draft/live slots remaining</CardContent>
+        </Card>
+        <Card className="bg-white/84">
+          <CardHeader className="space-y-1">
+            <CardDescription>Participant records</CardDescription>
+            <CardTitle>{billing.usage.participantRecordCount} / {billing.subscription.participantLimit}</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-slate-500">{billing.usage.remainingParticipantSlots} participant records remaining</CardContent>
+        </Card>
+        <Card className="bg-white/84">
+          <CardHeader className="space-y-1">
+            <CardDescription>Team seats</CardDescription>
+            <CardTitle>{billing.usage.teamSeatCount} / {billing.subscription.teamMemberLimit}</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-slate-500">{billing.usage.remainingTeamSeats} seats remaining</CardContent>
+        </Card>
+      </div>
+
+      <Card className="bg-slate-950 text-white">
+        <CardContent className="flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/55">
+              <Sparkles className="h-3.5 w-3.5" />
+              Dummy billing mode
+            </p>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-white/70">
+              Plan limits are enforced in the workspace already. Upgrade the dummy subscription before you run out of draft, participant, or team capacity.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge className="border-white/10 bg-white/10 text-white">{formatTokenLabel(billing.subscription.status)}</Badge>
+            <Badge className="border-white/10 bg-white/10 text-white">{formatTokenLabel(billing.subscription.billingCycle)}</Badge>
+            <Button variant="secondary" asChild>
+              <Link to="/workspace/billing">Manage plan</Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {items.length === 0 ? (
+        <Card className="bg-white/82">
+          <CardHeader>
+            <CardTitle>No assessment drafts yet</CardTitle>
+            <CardDescription>Create your first guided assessment draft to generate a participant link and preview experience.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 sm:flex-row">
+            <Button asChild>
+              <Link to="/workspace/create">Create first assessment</Link>
+            </Button>
+            <Button variant="secondary" asChild>
+              <Link to="/workspace/settings">Review workspace settings</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {successMessage ? <p className="text-sm text-emerald-700">{successMessage}</p> : null}
 

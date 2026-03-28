@@ -2,51 +2,36 @@ import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CreditCard, ShieldCheck } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
+import { formatDateTime } from '@/lib/formatters';
+import { getCustomerBillingOverview } from '@/services/customer-billing';
 import { completeCustomerAssessmentCheckout, getCustomerAssessment } from '@/services/customer-onboarding';
-import type { CustomerAssessmentCheckoutPayload, CustomerAssessmentDetail, DummyCheckoutBillingCycle, DummyCheckoutPlan } from '@/types/assessment';
+import type {
+  CustomerAssessmentCheckoutPayload,
+  CustomerAssessmentDetail,
+  CustomerBillingOverviewResponse,
+  DummyCheckoutBillingCycle,
+  DummyCheckoutPlan,
+} from '@/types/assessment';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-const plans: Array<{
-  value: DummyCheckoutPlan;
-  title: string;
-  subtitle: string;
-  priceMonthly: string;
-  priceAnnual: string;
-  features: string[];
-}> = [
-  {
-    value: 'starter',
-    title: 'Starter',
-    subtitle: 'For one team validating the first workflow.',
-    priceMonthly: '$0',
-    priceAnnual: '$0',
-    features: ['Single workspace', 'Draft to live participant flow', 'Dummy payment mode'],
-  },
-  {
-    value: 'growth',
-    title: 'Growth',
-    subtitle: 'For companies onboarding multiple hiring or development assessments.',
-    priceMonthly: '$29',
-    priceAnnual: '$290',
-    features: ['Higher participant caps', 'Team operations flow', 'Invite management'],
-  },
-  {
-    value: 'research',
-    title: 'Research',
-    subtitle: 'For lecturers, labs, and academic questionnaire projects.',
-    priceMonthly: '$39',
-    priceAnnual: '$390',
-    features: ['Custom assessments', 'Structured participant datasets', 'Research-oriented defaults'],
-  },
-];
+const dummyPrices: Record<DummyCheckoutPlan, Record<DummyCheckoutBillingCycle, string>> = {
+  starter: { monthly: '$0', annual: '$0' },
+  growth: { monthly: '$29', annual: '$290' },
+  research: { monthly: '$39', annual: '$390' },
+};
+
+function getRecommendedPlan(testType: CustomerAssessmentDetail['testType']) {
+  return testType === 'custom' ? 'research' : 'growth';
+}
 
 export function CustomerAssessmentCheckoutPage() {
   const { assessmentId = '' } = useParams();
   const navigate = useNavigate();
   const parsedAssessmentId = Number(assessmentId);
   const [detail, setDetail] = useState<CustomerAssessmentDetail | null>(null);
+  const [billingOverview, setBillingOverview] = useState<CustomerBillingOverviewResponse | null>(null);
   const [billingCycle, setBillingCycle] = useState<DummyCheckoutBillingCycle>('monthly');
   const [selectedPlan, setSelectedPlan] = useState<DummyCheckoutPlan>('starter');
   const [isLoading, setIsLoading] = useState(true);
@@ -63,14 +48,17 @@ export function CustomerAssessmentCheckoutPage() {
 
     let mounted = true;
 
-    void getCustomerAssessment(parsedAssessmentId)
-      .then((payload) => {
+    Promise.all([getCustomerAssessment(parsedAssessmentId), getCustomerBillingOverview()])
+      .then(([assessment, overview]) => {
         if (!mounted) {
           return;
         }
 
-        setDetail(payload);
-        setSelectedPlan(payload.testType === 'custom' ? 'research' : 'growth');
+        const recommendedPlan = assessment.planStatus === 'upgraded' ? overview.subscription.planCode : getRecommendedPlan(assessment.testType);
+        setDetail(assessment);
+        setBillingOverview(overview);
+        setSelectedPlan(recommendedPlan);
+        setBillingCycle(overview.subscription.billingCycle);
       })
       .catch((error) => {
         if (mounted) {
@@ -88,7 +76,10 @@ export function CustomerAssessmentCheckoutPage() {
     };
   }, [parsedAssessmentId]);
 
-  const selectedPlanCard = useMemo(() => plans.find((plan) => plan.value === selectedPlan) ?? plans[0], [selectedPlan]);
+  const selectedPlanCard = useMemo(
+    () => billingOverview?.plans.find((plan) => plan.planCode === selectedPlan) ?? null,
+    [billingOverview, selectedPlan],
+  );
 
   async function handleCheckout() {
     if (!detail) {
@@ -105,7 +96,9 @@ export function CustomerAssessmentCheckoutPage() {
         billingCycle,
       };
       const nextDetail = await completeCustomerAssessmentCheckout(detail.assessmentId, payload);
+      const nextBillingOverview = await getCustomerBillingOverview();
       setDetail(nextDetail);
+      setBillingOverview(nextBillingOverview);
       setSuccessMessage('Dummy payment completed. Participant sharing is now activated for this assessment.');
       navigate(`/workspace/assessments/${detail.assessmentId}/participants`, { replace: true });
     } catch (error) {
@@ -123,7 +116,7 @@ export function CustomerAssessmentCheckoutPage() {
     );
   }
 
-  if (errorMessage || !detail) {
+  if (errorMessage || !detail || !billingOverview) {
     return (
       <Card className="bg-white/82">
         <CardContent className="p-8 text-sm text-rose-600">{errorMessage ?? 'Assessment draft not found'}</CardContent>
@@ -158,25 +151,34 @@ export function CustomerAssessmentCheckoutPage() {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-3">
-            {plans.map((plan) => (
+            {billingOverview.plans.map((plan) => (
               <button
-                key={plan.value}
+                key={plan.planCode}
                 type="button"
-                onClick={() => setSelectedPlan(plan.value)}
-                className={`rounded-[26px] border p-5 text-left transition ${selectedPlan === plan.value ? 'border-slate-950 bg-slate-950 text-white shadow-lg' : 'border-slate-200 bg-slate-50/70 hover:border-slate-300 hover:bg-white'}`}
+                onClick={() => setSelectedPlan(plan.planCode)}
+                className={`rounded-[26px] border p-5 text-left transition ${selectedPlan === plan.planCode ? 'border-slate-950 bg-slate-950 text-white shadow-lg' : 'border-slate-200 bg-slate-50/70 hover:border-slate-300 hover:bg-white'}`}
               >
-                <p className="text-sm font-medium">{plan.title}</p>
-                <p className={`mt-2 text-3xl font-semibold ${selectedPlan === plan.value ? 'text-white' : 'text-slate-950'}`}>
-                  {billingCycle === 'monthly' ? plan.priceMonthly : plan.priceAnnual}
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium">{plan.label}</p>
+                  {billingOverview.subscription.planCode === plan.planCode ? <Badge className="border-white/10 bg-white/10 text-white">Current</Badge> : null}
+                </div>
+                <p className={`mt-2 text-3xl font-semibold ${selectedPlan === plan.planCode ? 'text-white' : 'text-slate-950'}`}>
+                  {dummyPrices[plan.planCode][billingCycle]}
                 </p>
-                <p className={`mt-2 text-sm leading-7 ${selectedPlan === plan.value ? 'text-white/70' : 'text-slate-500'}`}>{plan.subtitle}</p>
+                <p className={`mt-2 text-sm leading-7 ${selectedPlan === plan.planCode ? 'text-white/70' : 'text-slate-500'}`}>{plan.description}</p>
                 <div className="mt-4 space-y-2 text-sm">
-                  {plan.features.map((feature) => (
-                    <div key={feature} className="flex items-start gap-2">
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                      <span>{feature}</span>
-                    </div>
-                  ))}
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{plan.assessmentLimit} draft/live assessments</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{plan.participantLimit} participant records</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{plan.teamMemberLimit} team seats</span>
+                  </div>
                 </div>
               </button>
             ))}
@@ -187,7 +189,7 @@ export function CustomerAssessmentCheckoutPage() {
 
           <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm text-slate-500">
-              Selected plan: <span className="font-medium text-slate-950">{selectedPlanCard.title}</span> ({billingCycle})
+              Selected plan: <span className="font-medium text-slate-950">{selectedPlanCard?.label ?? billingOverview.subscription.planLabel}</span> ({billingCycle})
             </div>
             <Button type="button" size="lg" onClick={handleCheckout} disabled={isSubmitting || detail.sessionStatus === 'active'}>
               {detail.sessionStatus === 'active' ? 'Already activated' : isSubmitting ? 'Processing dummy payment...' : 'Complete dummy payment'}
@@ -204,11 +206,21 @@ export function CustomerAssessmentCheckoutPage() {
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-slate-500">
             <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+              <p className="font-medium text-slate-950">Current workspace subscription</p>
+              <p className="mt-2">{billingOverview.subscription.planLabel} ({billingOverview.subscription.billingCycle})</p>
+              <p className="mt-1 text-xs text-slate-400">
+                Trial ends: {billingOverview.subscription.trialEndsAt ? formatDateTime(billingOverview.subscription.trialEndsAt) : 'No active trial window'}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                Next renewal: {billingOverview.subscription.renewsAt ? formatDateTime(billingOverview.subscription.renewsAt) : 'Renewal appears after dummy activation'}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
               <p className="font-medium text-slate-950">What checkout unlocks</p>
               <ul className="mt-3 space-y-2 leading-7">
                 <li>Participant sharing moves from private draft to active link.</li>
                 <li>Invitation list becomes operational for email or direct link sharing.</li>
-                <li>Workspace can start collecting real participant responses.</li>
+                <li>Workspace plan and usage are updated for SaaS flow validation.</li>
               </ul>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
@@ -227,10 +239,13 @@ export function CustomerAssessmentCheckoutPage() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-white/75">
             <p>No real billing provider is connected yet.</p>
-            <p>The selected plan is stored only to validate SaaS flow transitions.</p>
+            <p>The selected plan is stored to validate workspace limits, upgrade flow, and activation behavior.</p>
             <div className="flex flex-col gap-3 pt-2">
               <Button variant="secondary" className="w-full justify-between" asChild>
                 <Link to={`/workspace/assessments/${detail.assessmentId}`}>Back to assessment overview</Link>
+              </Button>
+              <Button variant="outline" className="w-full justify-between border-white/20 bg-white/10 text-white hover:bg-white/15 hover:text-white" asChild>
+                <Link to="/workspace/billing">Open workspace billing</Link>
               </Button>
               <Button variant="outline" className="w-full justify-between border-white/20 bg-white/10 text-white hover:bg-white/15 hover:text-white" asChild>
                 <Link to={`/workspace/assessments/${detail.assessmentId}/setup`}>Edit setup first</Link>
