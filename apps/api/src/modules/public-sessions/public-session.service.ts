@@ -7,11 +7,14 @@ import { scoreAssessment } from '../scoring/score-assessment.js';
 import {
   createSubmissionForToken,
   findPublicSessionByToken,
+  loadSubmissionQuestionWindow,
   loadSubmissionScoringContext,
   replaceSubmissionAnswers,
 } from './public-session.repository.js';
 import type {
+  AssessmentQuestion,
   ParticipantIdentityInput,
+  ProgressiveQuestionWindow,
   SubmissionAnswerInput,
 } from './public-session.types.js';
 
@@ -25,17 +28,36 @@ function assertSubmissionAccess(submissionId: number, submissionAccessToken: str
   return claims;
 }
 
+function sanitizeQuestions(questions: AssessmentQuestion[]) {
+  return questions.map((question) => ({
+    ...question,
+    options: question.options.map(({ isCorrect: _isCorrect, ...option }) => option),
+  }));
+}
+
 function sanitizePublicSessionDefinition(definition: Awaited<ReturnType<typeof findPublicSessionByToken>>) {
   if (!definition) {
     return null;
   }
 
+  const questions = definition.session.delivery.mode === 'progressive'
+    ? []
+    : sanitizeQuestions(definition.questions);
+
   return {
     ...definition,
-    questions: definition.questions.map((question) => ({
-      ...question,
-      options: question.options.map(({ isCorrect: _isCorrect, ...option }) => option),
-    })),
+    questions,
+  };
+}
+
+function sanitizeQuestionWindow(window: ProgressiveQuestionWindow | null) {
+  if (!window) {
+    return null;
+  }
+
+  return {
+    ...window,
+    questions: sanitizeQuestions(window.questions),
   };
 }
 
@@ -45,7 +67,7 @@ function createReviewNote(reviewStatus: StoredResultDetailRecord['reviewStatus']
   }
 
   if (reviewStatus === 'reviewed') {
-    return 'Your responses have been reviewed and are awaiting formal release.';
+    return 'Your responses have been reviewed and are awaiting authorized release.';
   }
 
   if (reviewStatus === 'in_review') {
@@ -106,7 +128,6 @@ function sanitizeParticipantResult(
     } satisfies StoredResultDetailRecord;
   }
 
-  // participantResultAccess === 'summary'
   if (participantResultMode === 'instant_summary' || result.reviewStatus === 'released') {
     return {
       ...result,
@@ -169,36 +190,52 @@ export async function startPublicSubmission(token: string, participant: Particip
     },
   });
 
+  const accessToken = createSubmissionAccessToken({
+    submissionId: submission.submissionId,
+    participantId: submission.participantId,
+  });
+
   return {
     ...submission,
-    submissionAccessToken: createSubmissionAccessToken({
-      submissionId: submission.submissionId,
-      participantId: submission.participantId,
-    }),
+    submissionAccessToken: accessToken.token,
+    submissionAccessExpiresAt: accessToken.expiresAt,
   };
+}
+
+export async function getSubmissionQuestionWindow(
+  submissionId: number,
+  submissionAccessToken: string,
+  groupIndex: number,
+) {
+  assertSubmissionAccess(submissionId, submissionAccessToken);
+  const window = await loadSubmissionQuestionWindow(submissionId, groupIndex);
+
+  if (!window) {
+    throw new HttpError(404, 'Submission not found');
+  }
+
+  return sanitizeQuestionWindow(window);
 }
 
 export async function saveSubmissionAnswers(
   submissionId: number,
   submissionAccessToken: string,
+  answerSequence: number,
   answers: SubmissionAnswerInput[],
 ) {
   assertSubmissionAccess(submissionId, submissionAccessToken);
-  return replaceSubmissionAnswers(submissionId, answers);
+  return replaceSubmissionAnswers(submissionId, answers, answerSequence);
 }
 
 export async function submitPublicSubmission(
   submissionId: number,
   submissionAccessToken: string,
+  answerSequence?: number,
   answers?: SubmissionAnswerInput[],
 ) {
   assertSubmissionAccess(submissionId, submissionAccessToken);
 
-  if (answers && answers.length > 0) {
-    await replaceSubmissionAnswers(submissionId, answers);
-  }
-
-  const context = await loadSubmissionScoringContext(submissionId);
+  let context = await loadSubmissionScoringContext(submissionId);
 
   if (!context) {
     throw new HttpError(404, 'Submission not found');
@@ -216,6 +253,33 @@ export async function submitPublicSubmission(
         context.definition.session.compliance.participantResultAccess,
       ),
     };
+  }
+
+  if (answers && answers.length > 0) {
+    if (typeof answerSequence !== 'number') {
+      throw new HttpError(400, 'Answer sequence is required when submitting new answers');
+    }
+
+    await replaceSubmissionAnswers(submissionId, answers, answerSequence);
+    context = await loadSubmissionScoringContext(submissionId);
+
+    if (!context) {
+      throw new HttpError(404, 'Submission not found');
+    }
+
+    if (context.status === 'scored' && context.existingResult) {
+      return {
+        submissionId: context.submissionId,
+        participantId: context.participantId,
+        status: 'scored' as const,
+        resultId: context.existingResult.id,
+        result: sanitizeParticipantResult(
+          context.existingResult,
+          context.definition.session.compliance.participantResultMode,
+          context.definition.session.compliance.participantResultAccess,
+        ),
+      };
+    }
   }
 
   if (context.status !== 'in_progress') {

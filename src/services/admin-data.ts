@@ -3,6 +3,8 @@ import type {
   AdminTestSessionDetail,
   AdminTestSessionListItem,
   CreateTestSessionPayload,
+  CustomerAccountStatus,
+  CustomerListItem,
   DashboardSummaryResponse,
   ParticipantListItem,
   QuestionBankQuestionDetail,
@@ -192,3 +194,25 @@ export async function updateSessionDefaults(payload: SettingsOverviewResponse['s
     body: JSON.stringify(payload),
   });
 }
+
+export async function fetchCustomers(filters: {
+  search?: string;
+  status?: CustomerAccountStatus | 'all';
+  accountType?: 'business' | 'researcher' | 'all';
+} = {}) {
+  const params = new URLSearchParams();
+  if (filters.search) params.set('search', filters.search);
+  if (filters.status && filters.status !== 'all') params.set('status', filters.status);
+  if (filters.accountType && filters.accountType !== 'all') params.set('accountType', filters.accountType);
+  const query = params.toString() ? `?${params.toString()}` : '';
+  const payload = await adminFetchJson<{ items: CustomerListItem[] }>(`/customers${query}`);
+  return payload.items;
+}
+
+export async function updateCustomerStatus(id: number, status: CustomerAccountStatus) {
+  return adminFetchJson<{ id: number; status: CustomerAccountStatus }>(`/customers/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+}
+

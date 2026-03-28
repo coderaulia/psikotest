@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { ClipboardList, FileCog, FileStack, LayoutGrid, LineChart, LogOut, Settings, Users } from 'lucide-react';
+import { ClipboardList, FileCog, FileStack, LayoutGrid, LineChart, LogOut, Settings, Users, Building2 } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 
 import { LanguageToggle } from '@/components/common/language-toggle';
@@ -28,6 +28,7 @@ const copy = {
       reports: 'Reports',
       settings: 'Settings',
       reviewerQueue: 'Reviewer Queue',
+      customers: 'Customers',
     },
   },
   id: {
@@ -47,6 +48,7 @@ const copy = {
       reports: 'Laporan',
       settings: 'Pengaturan',
       reviewerQueue: 'Antrian Reviewer',
+      customers: 'Pelanggan',
     },
   },
 } as const;
@@ -56,6 +58,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const adminSession = loadAdminSession();
   const { language } = useLanguage();
   const t = copy[language];
+  const isSuperAdmin = adminSession?.admin.role === 'super_admin';
   const canReview = ['super_admin', 'psychologist_reviewer'].includes(adminSession?.admin.role ?? '');
   const baseNavItems = [
     { to: '/admin/dashboard', label: t.nav.dashboard, icon: LayoutGrid },
@@ -64,6 +67,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     { to: '/admin/question-bank', label: t.nav.questionBank, icon: FileCog },
     { to: '/admin/results', label: t.nav.results, icon: LineChart },
     { to: '/admin/reports', label: t.nav.reports, icon: LineChart },
+    ...(isSuperAdmin ? [{ to: '/admin/customers', label: t.nav.customers, icon: Building2 }] : []),
     { to: '/admin/settings', label: t.nav.settings, icon: Settings },
   ];
   const reviewerNavItem = { to: '/admin/reviewer-queue', label: t.nav.reviewerQueue, icon: ClipboardList };

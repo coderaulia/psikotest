@@ -107,6 +107,7 @@ const ResultDetailPage = lazyNamed(() => import('@/pages/admin/result-detail-pag
 const ReviewerQueuePage = lazyNamed(() => import('@/pages/admin/reviewer-queue-page'), 'ReviewerQueuePage');
 const ReportsPage = lazyNamed(() => import('@/pages/admin/reports-page'), 'ReportsPage');
 const SettingsPage = lazyNamed(() => import('@/pages/admin/settings-page'), 'SettingsPage');
+const CustomersPage = lazyNamed(() => import('@/pages/admin/customers-page'), 'CustomersPage');
 const ParticipantConsentPage = lazyNamed(() => import('@/pages/participant/consent-page'), 'ParticipantConsentPage');
 const ParticipantIdentityPage = lazyNamed(() => import('@/pages/participant/identity-page'), 'ParticipantIdentityPage');
 const ParticipantInstructionsPage = lazyNamed(() => import('@/pages/participant/instructions-page'), 'ParticipantInstructionsPage');
@@ -169,6 +170,7 @@ export const router = createBrowserRouter([
       { path: 'reviewer-queue', element: withSuspense(<ReviewerQueuePage />), errorElement: routeErrorElement },
       { path: 'reports', element: withSuspense(<ReportsPage />), errorElement: routeErrorElement },
       { path: 'settings', element: withSuspense(<SettingsPage />), errorElement: routeErrorElement },
+      { path: 'customers', element: withSuspense(<CustomersPage />), errorElement: routeErrorElement },
     ],
   },
   {

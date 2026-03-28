@@ -2,6 +2,8 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { env } from '../config/env.js';
 
+const FOUR_HOURS_IN_SECONDS = 60 * 60 * 4;
+
 interface SignedTokenPayloadBase {
   type: 'admin' | 'customer' | 'submission';
   exp: number;
@@ -135,12 +137,17 @@ export function createSubmissionAccessToken(input: {
   submissionId: number;
   participantId: number;
 }) {
-  return signToken<SubmissionAccessClaims>({
-    type: 'submission',
-    submissionId: input.submissionId,
-    participantId: input.participantId,
-    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
-  });
+  const exp = Math.floor(Date.now() / 1000) + FOUR_HOURS_IN_SECONDS;
+
+  return {
+    token: signToken<SubmissionAccessClaims>({
+      type: 'submission',
+      submissionId: input.submissionId,
+      participantId: input.participantId,
+      exp,
+    }),
+    expiresAt: new Date(exp * 1000).toISOString(),
+  };
 }
 
 export function verifySubmissionAccessToken(token: string) {

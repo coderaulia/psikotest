@@ -11,6 +11,18 @@ export type DistributionPolicy = 'hr_only' | 'participant_summary' | 'full_repor
 export type ParticipantResultAccess = 'none' | 'summary' | 'full_released';
 export type HrResultAccess = 'none' | 'summary' | 'full';
 
+export interface CustomerListItem {
+  id: number;
+  fullName: string;
+  email: string;
+  accountType: CustomerAccountType;
+  organizationName: string;
+  status: CustomerAccountStatus;
+  lastLoginAt: string | null;
+  createdAt: string | null;
+  assessmentCount: number;
+}
+
 export interface TestSessionComplianceSettings {
   assessmentPurpose: AssessmentPurpose;
   administrationMode: AdministrationMode;
@@ -119,6 +131,7 @@ export interface AdminLoginResponse {
 }
 
 export type CustomerAccountType = 'business' | 'researcher';
+export type CustomerAccountStatus = 'active' | 'inactive';
 export type CustomerAssessmentResultVisibility = 'participant_summary' | 'review_required';
 
 export interface CustomerUser {

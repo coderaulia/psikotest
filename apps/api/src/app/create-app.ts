@@ -19,6 +19,7 @@ import { settingsRoutes } from '../modules/settings/settings.routes.js';
 import { siteAuthRoutes } from '../modules/site-auth/site-auth.routes.js';
 import { siteOnboardingRoutes } from '../modules/site-onboarding/site-onboarding.routes.js';
 import { siteWorkspaceRoutes } from '../modules/site-workspace/site-workspace.routes.js';
+import { customersRoutes } from '../modules/customers/customers.routes.js';
 import { testSessionRoutes } from '../modules/test-sessions/test-session.routes.js';
 
 const allowedOrigins = env.APP_ORIGIN
@@ -81,6 +82,7 @@ export function createApp() {
   app.use('/api/reports', requireAdminAuth, reportRoutes);
   app.use('/api/question-bank', requireAdminAuth, questionBankRoutes);
   app.use('/api/settings', requireAdminAuth, settingsRoutes);
+  app.use('/api/customers', requireAdminAuth, customersRoutes);
   app.use('/api/public', publicSessionRoutes);
 
   app.use(notFoundHandler);

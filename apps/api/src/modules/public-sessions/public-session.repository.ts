@@ -8,9 +8,12 @@ import {
   parseTestSessionSettings,
 } from '../test-sessions/session-settings.js';
 import type {
+  AssessmentQuestion,
   ParticipantIdentityInput,
+  ProgressiveQuestionWindow,
   PublicSessionDefinition,
   PublicTestTypeCode,
+  SaveSubmissionAnswersResponse,
   SubmissionAnswerInput,
 } from './public-session.types.js';
 
@@ -31,8 +34,10 @@ interface QuestionRow extends RowDataPacket {
   question_code: string;
   instruction_text: string | null;
   prompt: string | null;
+  question_group_key: string | null;
   dimension_key: string | null;
   question_type: 'single_choice' | 'forced_choice' | 'likert';
+  question_order: number;
 }
 
 interface OptionRow extends RowDataPacket {
@@ -50,8 +55,17 @@ interface SubmissionContextRow extends RowDataPacket {
   participant_id: number;
   participant_name: string;
   session_id: number;
+  access_token: string;
   test_type_code: PublicTestTypeCode;
   submission_status: 'not_started' | 'in_progress' | 'submitted' | 'scored';
+  answer_sequence: number;
+}
+
+interface SubmissionStatusRow extends RowDataPacket {
+  id: number;
+  status: 'not_started' | 'in_progress' | 'submitted' | 'scored';
+  test_type_id: number;
+  answer_sequence: number;
 }
 
 interface StoredAnswerRow extends RowDataPacket {
@@ -61,11 +75,36 @@ interface StoredAnswerRow extends RowDataPacket {
   value_number: number | null;
 }
 
+interface AnswerCountRow extends RowDataPacket {
+  answered_question_count: number;
+}
+
+interface QuestionGroup {
+  key: string;
+  questions: AssessmentQuestion[];
+}
+
 function parseInstructions(instructions: string | null) {
   return (instructions ?? '')
     .split(/\r?\n/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function buildQuestionGroups(questions: AssessmentQuestion[]) {
+  const groups = new Map<string, AssessmentQuestion[]>();
+
+  for (const question of questions) {
+    const key = question.questionGroupKey?.trim() || `question-${question.id}`;
+    const existing = groups.get(key) ?? [];
+    existing.push(question);
+    groups.set(key, existing);
+  }
+
+  return [...groups.entries()].map(([key, groupedQuestions]) => ({
+    key,
+    questions: groupedQuestions,
+  })) satisfies QuestionGroup[];
 }
 
 function validateSubmissionAnswers(
@@ -94,7 +133,7 @@ function validateSubmissionAnswers(
     const allowedOptionIds = new Set(question.options.map((option) => option.id));
     const assertOptionId = (optionId: number | undefined, label: string) => {
       if (optionId !== undefined && !allowedOptionIds.has(optionId)) {
-        throw new HttpError(400, 'Answer contains an invalid ' + label + ' option reference');
+        throw new HttpError(400, `Answer contains an invalid ${label} option reference`);
       }
     };
 
@@ -114,6 +153,19 @@ function validateSubmissionAnswers(
       throw new HttpError(400, 'Scale answers must reference a valid option');
     }
   }
+}
+
+async function countAnsweredQuestions(executor: Pick<PoolConnection, 'query'>, submissionId: number) {
+  const [rows] = await executor.query<AnswerCountRow[]>(
+    `
+      SELECT COUNT(DISTINCT question_id) AS answered_question_count
+      FROM answers
+      WHERE submission_id = ?
+    `,
+    [submissionId],
+  );
+
+  return Number(rows[0]?.answered_question_count ?? 0);
 }
 
 async function loadSessionRowByToken(token: string) {
@@ -176,8 +228,10 @@ async function loadQuestionsByTestType(testTypeId: number) {
         q.question_code,
         q.instruction_text,
         q.prompt,
+        q.question_group_key,
         q.dimension_key,
-        q.question_type
+        q.question_type,
+        q.question_order
       FROM questions q
       WHERE q.test_type_id = ?
         AND q.status = 'active'
@@ -215,7 +269,9 @@ async function loadQuestionsByTestType(testTypeId: number) {
     questionType: question.question_type,
     instructionText: question.instruction_text ?? undefined,
     prompt: question.prompt ?? undefined,
+    questionGroupKey: question.question_group_key ?? undefined,
     dimensionKey: question.dimension_key ?? undefined,
+    orderIndex: question.question_order,
     options: optionRows
       .filter((option) => option.question_id === question.id)
       .map((option) => ({
@@ -229,15 +285,9 @@ async function loadQuestionsByTestType(testTypeId: number) {
   }));
 }
 
-export async function findPublicSessionByToken(token: string): Promise<PublicSessionDefinition | null> {
-  const sessionRow = await loadSessionRowByToken(token);
-
-  if (!sessionRow) {
-    return null;
-  }
-
+function buildSessionDefinition(sessionRow: SessionRow, questions: AssessmentQuestion[]): PublicSessionDefinition {
   const settings = parseTestSessionSettings(sessionRow.settings_json);
-  const questions = await loadQuestionsByTestType(sessionRow.test_type_id);
+  const questionGroups = buildQuestionGroups(questions);
 
   return {
     session: {
@@ -251,9 +301,95 @@ export async function findPublicSessionByToken(token: string): Promise<PublicSes
         ...settings,
         participantResultMode: getParticipantResultMode(settings),
       },
+      delivery: {
+        mode: settings.protectedDeliveryMode ? 'progressive' : 'full',
+        totalQuestions: questions.length,
+        totalGroups: questionGroups.length,
+      },
     },
     questions,
   };
+}
+
+async function loadSubmissionContextRow(submissionId: number) {
+  const pool = getDbPool();
+  const [rows] = await pool.query<SubmissionContextRow[]>(
+    `
+      SELECT
+        s.id AS submission_id,
+        s.participant_id,
+        p.full_name AS participant_name,
+        ts.id AS session_id,
+        ts.access_token,
+        tt.code AS test_type_code,
+        s.status AS submission_status,
+        s.answer_sequence
+      FROM submissions s
+      INNER JOIN participants p ON p.id = s.participant_id
+      INNER JOIN test_sessions ts ON ts.id = s.test_session_id
+      INNER JOIN test_types tt ON tt.id = ts.test_type_id
+      WHERE s.id = ?
+      LIMIT 1
+    `,
+    [submissionId],
+  );
+
+  return rows[0] ?? null;
+}
+
+async function loadStoredAnswers(submissionId: number) {
+  const pool = getDbPool();
+  const [answerRows] = await pool.query<StoredAnswerRow[]>(
+    `
+      SELECT
+        question_id,
+        answer_role,
+        selected_option_id,
+        value_number
+      FROM answers
+      WHERE submission_id = ?
+      ORDER BY question_id ASC, id ASC
+    `,
+    [submissionId],
+  );
+
+  const answerMap = new Map<number, SubmissionAnswerInput>();
+
+  for (const row of answerRows) {
+    const current: SubmissionAnswerInput = answerMap.get(row.question_id) ?? { questionId: row.question_id };
+
+    if (row.answer_role === 'most') {
+      current.mostOptionId = row.selected_option_id ?? undefined;
+    }
+
+    if (row.answer_role === 'least') {
+      current.leastOptionId = row.selected_option_id ?? undefined;
+    }
+
+    if (row.answer_role === 'single') {
+      current.selectedOptionId = row.selected_option_id ?? undefined;
+    }
+
+    if (row.answer_role === 'scale') {
+      current.selectedOptionId = row.selected_option_id ?? undefined;
+      current.value = row.value_number ?? undefined;
+    }
+
+    answerMap.set(row.question_id, current);
+  }
+
+  return answerMap;
+}
+
+export async function findPublicSessionByToken(token: string): Promise<PublicSessionDefinition | null> {
+  const sessionRow = await loadSessionRowByToken(token);
+
+  if (!sessionRow) {
+    return null;
+  }
+
+  const questions = await loadQuestionsByTestType(sessionRow.test_type_id);
+  return buildSessionDefinition(sessionRow, questions);
 }
 
 async function resolveParticipantId(
@@ -403,9 +539,10 @@ export async function createSubmissionForToken(token: string, participant: Parti
           started_at,
           consent_given_at,
           consent_payload_json,
-          identity_snapshot_json
+          identity_snapshot_json,
+          answer_sequence
         )
-        VALUES (?, ?, ?, 'in_progress', NOW(), ?, ?, ?)
+        VALUES (?, ?, ?, 'in_progress', NOW(), ?, ?, ?, 0)
       `,
       [
         sessionRow.session_id,
@@ -423,6 +560,7 @@ export async function createSubmissionForToken(token: string, participant: Parti
       submissionId: Number((insertResult as { insertId: number }).insertId),
       participantId,
       token,
+      answerSequence: 0,
       status: 'in_progress' as const,
       testType: sessionRow.test_type_code,
       participantResultMode,
@@ -435,16 +573,20 @@ export async function createSubmissionForToken(token: string, participant: Parti
   }
 }
 
-export async function replaceSubmissionAnswers(submissionId: number, answers: SubmissionAnswerInput[]) {
+export async function replaceSubmissionAnswers(
+  submissionId: number,
+  answers: SubmissionAnswerInput[],
+  answerSequence: number,
+): Promise<SaveSubmissionAnswersResponse> {
   const pool = getDbPool();
   const connection = await pool.getConnection();
 
   try {
     await connection.beginTransaction();
 
-    const [submissionRows] = await connection.query<RowDataPacket[]>(
+    const [submissionRows] = await connection.query<SubmissionStatusRow[]>(
       `
-        SELECT s.id, s.status, ts.test_type_id
+        SELECT s.id, s.status, ts.test_type_id, s.answer_sequence
         FROM submissions s
         INNER JOIN test_sessions ts ON ts.id = s.test_session_id
         WHERE s.id = ?
@@ -455,17 +597,35 @@ export async function replaceSubmissionAnswers(submissionId: number, answers: Su
 
     const submissionRow = submissionRows[0];
     if (!submissionRow) {
-      throw new Error('Submission not found');
+      throw new HttpError(404, 'Submission not found');
     }
 
     if (submissionRow.status !== 'in_progress') {
       throw new HttpError(409, 'Submission is already finalized');
     }
 
+    const currentSequence = Number(submissionRow.answer_sequence ?? 0);
+    if (answerSequence <= currentSequence) {
+      throw new HttpError(409, 'Stale or replayed answer sequence');
+    }
+
+    if (answerSequence !== currentSequence + 1) {
+      throw new HttpError(409, 'Answer sequence is out of order');
+    }
+
+    if (answers.length === 0) {
+      throw new HttpError(400, 'Cannot save an empty answer set');
+    }
+
     const questions = await loadQuestionsByTestType(Number(submissionRow.test_type_id));
     validateSubmissionAnswers(questions, answers);
 
-    await connection.query('DELETE FROM answers WHERE submission_id = ?', [submissionId]);
+    const answeredQuestionIds = answers.map((answer) => answer.questionId);
+    const placeholders = answeredQuestionIds.map(() => '?').join(', ');
+    await connection.query(
+      `DELETE FROM answers WHERE submission_id = ? AND question_id IN (${placeholders})`,
+      [submissionId, ...answeredQuestionIds],
+    );
 
     for (const answer of answers) {
       if (answer.mostOptionId) {
@@ -480,7 +640,7 @@ export async function replaceSubmissionAnswers(submissionId: number, answers: Su
             )
             VALUES (?, ?, 'most', ?, ?)
           `,
-          [submissionId, answer.questionId, answer.mostOptionId, JSON.stringify({ source: 'api' })],
+          [submissionId, answer.questionId, answer.mostOptionId, JSON.stringify({ source: 'api', answerSequence })],
         );
       }
 
@@ -496,7 +656,7 @@ export async function replaceSubmissionAnswers(submissionId: number, answers: Su
             )
             VALUES (?, ?, 'least', ?, ?)
           `,
-          [submissionId, answer.questionId, answer.leastOptionId, JSON.stringify({ source: 'api' })],
+          [submissionId, answer.questionId, answer.leastOptionId, JSON.stringify({ source: 'api', answerSequence })],
         );
       }
 
@@ -520,14 +680,31 @@ export async function replaceSubmissionAnswers(submissionId: number, answers: Su
             answerRole,
             answer.selectedOptionId,
             answer.value ?? null,
-            JSON.stringify({ source: 'api' }),
+            JSON.stringify({ source: 'api', answerSequence }),
           ],
         );
       }
     }
 
+    await connection.query(
+      `
+        UPDATE submissions
+        SET answer_sequence = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `,
+      [answerSequence, submissionId],
+    );
+
+    const answeredQuestionCount = await countAnsweredQuestions(connection, submissionId);
+
     await connection.commit();
-    return { submissionId, saved: true, answerCount: answers.length, status: 'in_progress' as const };
+    return {
+      submissionId,
+      saved: true,
+      answerSequence,
+      answeredQuestionCount,
+      status: 'in_progress',
+    };
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -536,28 +713,53 @@ export async function replaceSubmissionAnswers(submissionId: number, answers: Su
   }
 }
 
-export async function loadSubmissionScoringContext(submissionId: number) {
-  const pool = getDbPool();
-  const [contextRows] = await pool.query<SubmissionContextRow[]>(
-    `
-      SELECT
-        s.id AS submission_id,
-        s.participant_id,
-        p.full_name AS participant_name,
-        ts.id AS session_id,
-        tt.code AS test_type_code,
-        s.status AS submission_status
-      FROM submissions s
-      INNER JOIN participants p ON p.id = s.participant_id
-      INNER JOIN test_sessions ts ON ts.id = s.test_session_id
-      INNER JOIN test_types tt ON tt.id = ts.test_type_id
-      WHERE s.id = ?
-      LIMIT 1
-    `,
-    [submissionId],
-  );
+export async function loadSubmissionQuestionWindow(submissionId: number, groupIndex: number): Promise<ProgressiveQuestionWindow | null> {
+  const contextRow = await loadSubmissionContextRow(submissionId);
 
-  const contextRow = contextRows[0];
+  if (!contextRow) {
+    return null;
+  }
+
+  if (contextRow.submission_status !== 'in_progress') {
+    throw new HttpError(409, 'Submission is already finalized');
+  }
+
+  const sessionRow = await loadSessionRowById(contextRow.session_id);
+  if (!sessionRow) {
+    return null;
+  }
+
+  const questions = await loadQuestionsByTestType(sessionRow.test_type_id);
+  const groups = buildQuestionGroups(questions);
+
+  if (groups.length === 0) {
+    throw new HttpError(404, 'This session has no active questions');
+  }
+
+  const normalizedGroupIndex = Math.max(0, Math.min(groupIndex, groups.length - 1));
+  const group = groups[normalizedGroupIndex];
+  const storedAnswers = await loadStoredAnswers(submissionId);
+  const savedAnswers = group.questions
+    .map((question) => storedAnswers.get(question.id))
+    .filter((answer): answer is SubmissionAnswerInput => Boolean(answer));
+
+  return {
+    submissionId,
+    status: 'in_progress',
+    answerSequence: contextRow.answer_sequence,
+    groupIndex: normalizedGroupIndex,
+    totalGroups: groups.length,
+    totalQuestions: questions.length,
+    answeredQuestionCount: storedAnswers.size,
+    groupKey: group.key,
+    questions: group.questions,
+    savedAnswers,
+  };
+}
+
+export async function loadSubmissionScoringContext(submissionId: number) {
+  const contextRow = await loadSubmissionContextRow(submissionId);
+
   if (!contextRow) {
     return null;
   }
@@ -573,45 +775,7 @@ export async function loadSubmissionScoringContext(submissionId: number) {
   }
 
   const existingResult = await fetchResultBySubmissionId(submissionId);
-
-  const [answerRows] = await pool.query<StoredAnswerRow[]>(
-    `
-      SELECT
-        question_id,
-        answer_role,
-        selected_option_id,
-        value_number
-      FROM answers
-      WHERE submission_id = ?
-      ORDER BY question_id ASC, id ASC
-    `,
-    [submissionId],
-  );
-
-  const answerMap = new Map<number, SubmissionAnswerInput>();
-
-  for (const row of answerRows) {
-    const current: SubmissionAnswerInput = answerMap.get(row.question_id) ?? { questionId: row.question_id };
-
-    if (row.answer_role === 'most') {
-      current.mostOptionId = row.selected_option_id ?? undefined;
-    }
-
-    if (row.answer_role === 'least') {
-      current.leastOptionId = row.selected_option_id ?? undefined;
-    }
-
-    if (row.answer_role === 'single') {
-      current.selectedOptionId = row.selected_option_id ?? undefined;
-    }
-
-    if (row.answer_role === 'scale') {
-      current.selectedOptionId = row.selected_option_id ?? undefined;
-      current.value = row.value_number ?? undefined;
-    }
-
-    answerMap.set(row.question_id, current);
-  }
+  const answerMap = await loadStoredAnswers(submissionId);
 
   return {
     submissionId: contextRow.submission_id,
@@ -619,13 +783,9 @@ export async function loadSubmissionScoringContext(submissionId: number) {
     participantName: contextRow.participant_name,
     testType: contextRow.test_type_code,
     status: contextRow.submission_status,
+    answerSequence: contextRow.answer_sequence,
     definition,
     answers: [...answerMap.values()],
     existingResult,
   };
 }
-
-
-
-
-
