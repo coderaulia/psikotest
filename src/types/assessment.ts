@@ -164,6 +164,10 @@ export interface AdminLoginResponse {
 export type CustomerAccountType = 'business' | 'researcher';
 export type CustomerAccountStatus = 'active' | 'inactive';
 export type CustomerAssessmentResultVisibility = 'participant_summary' | 'review_required';
+export type CustomerAssessmentParticipantStatus = 'draft' | 'invited' | 'in_progress' | 'completed';
+export type CustomerAssessmentInviteChannel = 'email' | 'link';
+export type DummyCheckoutPlan = 'starter' | 'growth' | 'research';
+export type DummyCheckoutBillingCycle = 'monthly' | 'annual';
 
 export interface CustomerUser {
   id: number;
@@ -243,6 +247,58 @@ export interface CreateCustomerAssessmentPayload {
   timeLimitMinutes: number | null;
   participantLimit: number | null;
   resultVisibility: CustomerAssessmentResultVisibility;
+  protectedDeliveryMode: boolean;
+}
+
+export interface UpdateCustomerAssessmentPayload extends CreateCustomerAssessmentPayload {}
+
+export interface CustomerAssessmentCheckoutPayload {
+  selectedPlan: DummyCheckoutPlan;
+  billingCycle: DummyCheckoutBillingCycle;
+}
+
+export interface CustomerAssessmentParticipantItem {
+  id: number;
+  fullName: string;
+  email: string;
+  employeeCode: string | null;
+  department: string | null;
+  positionTitle: string | null;
+  note: string | null;
+  status: CustomerAssessmentParticipantStatus;
+  invitedVia: CustomerAssessmentInviteChannel | null;
+  invitedAt: string | null;
+  lastSubmittedAt: string | null;
+  submissionStatus: 'not_started' | 'in_progress' | 'submitted' | 'scored' | null;
+  resultId: number | null;
+}
+
+export interface CreateCustomerAssessmentParticipantPayload {
+  fullName: string;
+  email: string;
+  employeeCode: string | null;
+  department: string | null;
+  positionTitle: string | null;
+  note: string | null;
+}
+
+export interface SendCustomerAssessmentParticipantInvitePayload {
+  channel: CustomerAssessmentInviteChannel;
+}
+
+export interface CustomerAssessmentParticipantSummary {
+  total: number;
+  draft: number;
+  invited: number;
+  inProgress: number;
+  completed: number;
+}
+
+export interface CustomerAssessmentParticipantListResponse {
+  assessmentId: number;
+  shareLink: string;
+  summary: CustomerAssessmentParticipantSummary;
+  items: CustomerAssessmentParticipantItem[];
 }
 
 export interface CustomerAssessmentDetail extends CustomerAssessmentItem {

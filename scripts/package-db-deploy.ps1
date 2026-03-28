@@ -9,6 +9,7 @@ $upgradeDir = Join-Path $deployDir 'upgrade'
 $sourceDir = Join-Path $deployDir 'source'
 $zipPath = Join-Path $deployDir 'api2-codeyourcareer-database.zip'
 $migrationsDir = Join-Path $root 'apps/api/src/database/migrations'
+$seedsDir = Join-Path $root 'apps/api/src/database/seeds'
 
 $seedSourceFiles = @(
   '001_seed_test_types.sql',
@@ -17,7 +18,8 @@ $seedSourceFiles = @(
   '004_seed_workload_questions.sql',
   '005_seed_demo_sessions.sql',
   '008_seed_custom_research_questions.sql',
-  '009_seed_custom_demo_session.sql'
+  '009_seed_custom_demo_session.sql',
+  '010_seed_dummy_customer_accounts.sql'
 )
 
 $legacyRootFiles = @(
@@ -40,9 +42,14 @@ foreach ($fileName in $legacyRootFiles) {
 foreach ($fileName in $seedSourceFiles) {
   $rootFile = Join-Path $deployDir $fileName
   $sourceFile = Join-Path $sourceDir $fileName
+  $seedFile = Join-Path $seedsDir $fileName
 
   if ((Test-Path $rootFile) -and -not (Test-Path $sourceFile)) {
     Move-Item $rootFile $sourceFile
+  }
+
+  if (-not (Test-Path $sourceFile) -and (Test-Path $seedFile)) {
+    Copy-Item $seedFile $sourceFile
   }
 }
 
@@ -58,7 +65,8 @@ $questionSeedFiles = @(
 
 $demoSeedFiles = @(
   '005_seed_demo_sessions.sql',
-  '009_seed_custom_demo_session.sql'
+  '009_seed_custom_demo_session.sql',
+  '010_seed_dummy_customer_accounts.sql'
 ) | ForEach-Object { Join-Path $sourceDir $_ }
 
 $questionBundle = @()
@@ -87,13 +95,13 @@ Run the files in this order:
 1. `01_schema_current.sql`
 2. `02_seed_test_catalog.sql`
 3. `03_seed_assessment_questions.sql`
-4. `04_seed_demo_sessions.sql` (optional demo data)
+4. `04_seed_demo_sessions.sql` (optional demo data, including demo customer accounts)
 
 Notes:
 
 - `01_schema_current.sql` already includes the current schema, including workspace settings, reviewer workflow support, report access logging, and answer sequence tracking for protected sessions.
 - Distribution policy and protected delivery are stored in both session settings JSON and the current schema for easier legacy compatibility.
-- `04_seed_demo_sessions.sql` is optional. Skip it in production if you do not want demo sessions and tokens.
+- `04_seed_demo_sessions.sql` is optional. Skip it in production if you do not want demo sessions, demo tokens, and demo customer accounts.
 "@
 Set-Content (Join-Path $installDir 'README.md') $installReadme
 
@@ -105,7 +113,8 @@ $upgradeFiles = @(
   '006_session_security.sql',
   '007_customer_workspace_settings.sql',
   '008_distribution_and_security.sql',
-  '009_submission_progressive_security.sql'
+  '009_submission_progressive_security.sql',
+  '010_customer_assessment_participants.sql'
 ) | ForEach-Object { Join-Path $migrationsDir $_ }
 
 $upgradeBundle = @()
@@ -133,6 +142,7 @@ This bundled upgrade adds:
 - reviewer role support on the `admins` table
 - distribution policy and protected delivery compatibility fields
 - submission answer sequence tracking for replay protection in protected sessions
+- customer assessment participant invite records for SaaS onboarding and sharing workflows
 "@
 Set-Content (Join-Path $upgradeDir 'README.md') $upgradeReadme
 

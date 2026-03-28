@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { ArrowRight, LogOut, Sparkles } from 'lucide-react';
+import { ArrowRight, Building2, LogOut, Sparkles } from 'lucide-react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 
 import { LanguageToggle } from '@/components/common/language-toggle';
@@ -14,19 +14,20 @@ const copy = {
     brand: 'Vanaila Psikotest',
     workspaceTitle: 'Customer workspace',
     nav: {
-      workspace: 'Workspace',
+      workspace: 'Assessments',
+      company: 'Company',
       createAssessment: 'Create Assessment',
       settings: 'Settings',
       signOut: 'Sign out',
     },
     hero: {
       badge: 'Guided onboarding',
-      title: 'Create assessment drafts before you publish or upgrade.',
+      title: 'Prepare assessment drafts, setup your company profile, then share when the flow is ready.',
       description:
-        'Set the purpose, participant cap, and visibility model first. The participant link is prepared during onboarding and can be activated later.',
-      currentAccess: 'Current customer access',
+        'Workspace onboarding now covers company defaults, assessment setup, dummy checkout, and participant invitations before external rollout.',
+      currentAccess: 'Current workspace mode',
       currentAccessDescription:
-        'Trial workspaces can prepare assessment drafts and preview the participant experience before sharing externally.',
+        'Trial workspaces can prepare drafts, preview the participant experience, simulate payment, and manage invitations before wider distribution.',
       createDraft: 'Create a new draft',
       workspaceFallback: 'Workspace',
     },
@@ -35,19 +36,20 @@ const copy = {
     brand: 'Vanaila Psikotest',
     workspaceTitle: 'Workspace pelanggan',
     nav: {
-      workspace: 'Workspace',
+      workspace: 'Asesmen',
+      company: 'Perusahaan',
       createAssessment: 'Buat Asesmen',
       settings: 'Pengaturan',
       signOut: 'Keluar',
     },
     hero: {
       badge: 'Onboarding terpandu',
-      title: 'Buat draft asesmen sebelum dipublikasikan atau di-upgrade.',
+      title: 'Siapkan draft asesmen, atur profil perusahaan, lalu bagikan saat alurnya sudah siap.',
       description:
-        'Atur tujuan, batas peserta, dan model visibilitas terlebih dahulu. Link peserta disiapkan saat onboarding dan bisa diaktifkan nanti.',
-      currentAccess: 'Akses pelanggan saat ini',
+        'Onboarding workspace kini mencakup profil perusahaan, setup asesmen, checkout dummy, dan undangan peserta sebelum distribusi eksternal.',
+      currentAccess: 'Mode workspace saat ini',
       currentAccessDescription:
-        'Workspace trial dapat menyiapkan draft asesmen dan meninjau pengalaman peserta sebelum dibagikan ke luar.',
+        'Workspace trial dapat menyiapkan draft, meninjau pengalaman peserta, mensimulasikan pembayaran, dan mengelola undangan sebelum distribusi lebih luas.',
       createDraft: 'Buat draft baru',
       workspaceFallback: 'Workspace',
     },
@@ -62,6 +64,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
 
   const navItems = [
     { to: '/workspace', label: t.nav.workspace },
+    { to: '/workspace/company', label: t.nav.company },
     { to: '/workspace/create', label: t.nav.createAssessment },
     { to: '/workspace/settings', label: t.nav.settings },
   ];
@@ -133,9 +136,15 @@ export function CustomerShell({ children }: { children: ReactNode }) {
           <div className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5">
             <p className="text-sm font-medium text-slate-950">{t.hero.currentAccess}</p>
             <p className="mt-2 text-sm leading-7 text-slate-500">{t.hero.currentAccessDescription}</p>
-            <Link to="/workspace/create" className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-slate-950">
-              {t.hero.createDraft} <ArrowRight className="h-4 w-4" />
-            </Link>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link to="/workspace/create" className="inline-flex items-center gap-2 text-sm font-medium text-slate-950">
+                {t.hero.createDraft} <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link to="/workspace/company" className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-950">
+                <Building2 className="h-4 w-4" />
+                {t.nav.company}
+              </Link>
+            </div>
           </div>
         </div>
 

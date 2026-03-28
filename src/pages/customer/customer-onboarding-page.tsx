@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Brain, ClipboardCheck, Copy, ExternalLink, FileText, Gauge, Sparkles } from 'lucide-react';
+import { Brain, ClipboardCheck, Copy, CreditCard, ExternalLink, FileText, Gauge, Settings2, ShieldCheck, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { loadCustomerSession } from '@/lib/customer-session';
@@ -93,9 +93,12 @@ export function CustomerOnboardingPage() {
     timeLimitMinutes: 15,
     participantLimit: customerSession?.account.accountType === 'researcher' ? 100 : 25,
     resultVisibility: customerSession?.account.accountType === 'researcher' ? 'participant_summary' : 'review_required',
+    protectedDeliveryMode: false,
   });
 
   const progressValue = useMemo(() => (step / totalSteps) * 100, [step]);
+  const selectedType = assessmentTypeOptions.find((item) => item.value === form.testType);
+  const selectedVisibility = resultVisibilityOptions.find((item) => item.value === form.resultVisibility);
 
   function updateForm<K extends keyof CreateCustomerAssessmentPayload>(key: K, value: CreateCustomerAssessmentPayload[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -130,7 +133,7 @@ export function CustomerOnboardingPage() {
     try {
       const assessment = await createCustomerAssessment(form);
       setCreatedAssessment(assessment);
-      setSuccessMessage('Participant link generated. The draft remains private until you activate sharing.');
+      setSuccessMessage('Draft created. Continue to setup or dummy payment before sharing it with participants.');
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to create assessment draft');
     } finally {
@@ -146,8 +149,6 @@ export function CustomerOnboardingPage() {
     await navigator.clipboard.writeText(createdAssessment.participantLink);
     setSuccessMessage('Participant link copied to clipboard.');
   }
-
-  const selectedType = assessmentTypeOptions.find((item) => item.value === form.testType);
 
   return (
     <div className="grid gap-6 xl:grid-cols-[0.94fr_1.06fr]">
@@ -259,10 +260,24 @@ export function CustomerOnboardingPage() {
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </Select>
-                  <p className="text-xs leading-6 text-slate-400">
-                    {resultVisibilityOptions.find((item) => item.value === form.resultVisibility)?.description}
-                  </p>
+                  <p className="text-xs leading-6 text-slate-400">{selectedVisibility?.description}</p>
                 </div>
+              </div>
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-4">
+                <label className="flex items-start gap-3 text-sm text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={form.protectedDeliveryMode}
+                    onChange={(event) => updateForm('protectedDeliveryMode', event.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-950 focus:ring-slate-300"
+                  />
+                  <span>
+                    <span className="inline-flex items-center gap-2 font-medium text-slate-950"><ShieldCheck className="h-4 w-4" /> Protected delivery mode</span>
+                    <span className="mt-1 block leading-7 text-slate-500">
+                      Deliver questions progressively for more controlled participant sessions and stronger test security.
+                    </span>
+                  </span>
+                </label>
               </div>
             </div>
           ) : null}
@@ -291,8 +306,9 @@ export function CustomerOnboardingPage() {
                   <p className="mt-2 text-sm text-slate-600">{form.organizationName || 'Not set yet'}</p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Participant cap</p>
-                  <p className="mt-2 text-sm text-slate-600">{form.participantLimit ?? 'Flexible'} participants</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Delivery</p>
+                  <p className="mt-2 text-sm text-slate-600">{form.protectedDeliveryMode ? 'Protected progressive mode' : 'Full session delivery'}</p>
+                  <p className="mt-1 text-sm text-slate-600">{form.participantLimit ?? 'Flexible'} participants</p>
                 </div>
               </div>
 
@@ -311,7 +327,7 @@ export function CustomerOnboardingPage() {
                     </div>
                     <div>
                       <p className="font-medium text-slate-950">Draft link is ready</p>
-                      <p className="text-sm text-slate-600">Use the demo preview now, then activate sharing later.</p>
+                      <p className="text-sm text-slate-600">Use the demo preview now, then continue to setup and dummy payment.</p>
                     </div>
                   </div>
                   <div className="rounded-2xl border border-emerald-100 bg-white p-4 text-sm text-slate-600">
@@ -319,7 +335,7 @@ export function CustomerOnboardingPage() {
                     <p className="mt-2 break-all">{createdAssessment.participantLink}</p>
                     <p className="mt-2 text-xs text-slate-400">This link stays private during trial onboarding. Preview the demo flow before you share it broadly.</p>
                   </div>
-                  <div className="flex flex-col gap-3 sm:flex-row">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                     <Button type="button" variant="secondary" className="sm:flex-1" onClick={handleCopyLink}>
                       Copy link <Copy className="ml-2 h-4 w-4" />
                     </Button>
@@ -328,12 +344,19 @@ export function CustomerOnboardingPage() {
                         Preview experience <ExternalLink className="ml-2 h-4 w-4" />
                       </a>
                     </Button>
-                    <Button type="button" variant="outline" className="sm:flex-1" disabled>
-                      Upgrade to share
+                    <Button type="button" variant="outline" className="sm:flex-1" asChild>
+                      <Link to={`/workspace/assessments/${createdAssessment.assessmentId}/setup`}>
+                        Review setup <Settings2 className="ml-2 h-4 w-4" />
+                      </Link>
+                    </Button>
+                    <Button type="button" className="sm:flex-1" asChild>
+                      <Link to={`/workspace/assessments/${createdAssessment.assessmentId}/checkout`}>
+                        Dummy payment <CreditCard className="ml-2 h-4 w-4" />
+                      </Link>
                     </Button>
                   </div>
                   <div className="flex flex-col gap-3 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-                    <Link to={`/workspace/assessments/${createdAssessment.assessmentId}`} className="font-medium text-slate-950">Review draft before sharing</Link>
+                    <Link to={`/workspace/assessments/${createdAssessment.assessmentId}`} className="font-medium text-slate-950">Review draft overview</Link>
                     <Link to="/workspace" className="text-slate-500 underline-offset-4 hover:text-slate-950 hover:underline">Return to workspace</Link>
                   </div>
                 </div>
@@ -368,8 +391,9 @@ export function CustomerOnboardingPage() {
               'Landing page',
               'Try demo / sign up',
               'Create first assessment',
-              'Preview experience',
-              'Upgrade to share',
+              'Review setup',
+              'Dummy payment',
+              'Invite participants',
             ].map((item, index) => (
               <div key={item} className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-600">
                 <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-950 text-white">{index + 1}</div>
@@ -382,16 +406,15 @@ export function CustomerOnboardingPage() {
         <Card className="bg-slate-950 text-white">
           <CardHeader>
             <CardTitle>Compliance-aware defaults</CardTitle>
-            <CardDescription className="text-white/70">The onboarding draft already captures purpose, administration mode, consent framing, and result visibility intent.</CardDescription>
+            <CardDescription className="text-white/70">The onboarding draft already captures purpose, administration mode, consent framing, result visibility, and protected delivery intent.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm leading-7 text-white/75">
             <p>Assessment purpose is required before the participant link is prepared.</p>
             <p>Visibility defaults distinguish indicative participant summaries from reviewer-first interpretation workflows.</p>
-            <p>Research and custom questionnaires default to a more appropriate consent and privacy posture.</p>
+            <p>Protected delivery can be turned on from the very first draft when assessment security matters.</p>
           </CardContent>
         </Card>
       </div>
     </div>
   );
 }
-

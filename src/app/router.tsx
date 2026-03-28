@@ -93,8 +93,12 @@ const WhiteLabelPage = lazyNamed(() => import('@/pages/white-label-page'), 'Whit
 const CustomerSignupPage = lazyNamed(() => import('@/pages/customer/customer-signup-page'), 'CustomerSignupPage');
 const CustomerLoginPage = lazyNamed(() => import('@/pages/customer/customer-login-page'), 'CustomerLoginPage');
 const CustomerWorkspacePage = lazyNamed(() => import('@/pages/customer/customer-workspace-page'), 'CustomerWorkspacePage');
+const CustomerCompanyPage = lazyNamed(() => import('@/pages/customer/customer-company-page'), 'CustomerCompanyPage');
 const CustomerOnboardingPage = lazyNamed(() => import('@/pages/customer/customer-onboarding-page'), 'CustomerOnboardingPage');
 const CustomerAssessmentDetailPage = lazyNamed(() => import('@/pages/customer/customer-assessment-detail-page'), 'CustomerAssessmentDetailPage');
+const CustomerAssessmentSetupPage = lazyNamed(() => import('@/pages/customer/customer-assessment-setup-page'), 'CustomerAssessmentSetupPage');
+const CustomerAssessmentCheckoutPage = lazyNamed(() => import('@/pages/customer/customer-assessment-checkout-page'), 'CustomerAssessmentCheckoutPage');
+const CustomerAssessmentParticipantsPage = lazyNamed(() => import('@/pages/customer/customer-assessment-participants-page'), 'CustomerAssessmentParticipantsPage');
 const CustomerWorkspaceSettingsPage = lazyNamed(() => import('@/pages/customer/customer-workspace-settings-page'), 'CustomerWorkspaceSettingsPage');
 const AdminLoginPage = lazyNamed(() => import('@/pages/admin/admin-login-page'), 'AdminLoginPage');
 const DashboardPage = lazyNamed(() => import('@/pages/admin/dashboard-page'), 'DashboardPage');
@@ -149,8 +153,12 @@ export const router = createBrowserRouter([
     errorElement: routeErrorElement,
     children: [
       { index: true, element: withSuspense(<CustomerWorkspacePage />), errorElement: routeErrorElement },
+      { path: 'company', element: withSuspense(<CustomerCompanyPage />), errorElement: routeErrorElement },
       { path: 'create', element: withSuspense(<CustomerOnboardingPage />), errorElement: routeErrorElement },
       { path: 'assessments/:assessmentId', element: withSuspense(<CustomerAssessmentDetailPage />), errorElement: routeErrorElement },
+      { path: 'assessments/:assessmentId/setup', element: withSuspense(<CustomerAssessmentSetupPage />), errorElement: routeErrorElement },
+      { path: 'assessments/:assessmentId/checkout', element: withSuspense(<CustomerAssessmentCheckoutPage />), errorElement: routeErrorElement },
+      { path: 'assessments/:assessmentId/participants', element: withSuspense(<CustomerAssessmentParticipantsPage />), errorElement: routeErrorElement },
       { path: 'settings', element: withSuspense(<CustomerWorkspaceSettingsPage />), errorElement: routeErrorElement },
     ],
   },

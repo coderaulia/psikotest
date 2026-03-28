@@ -8,11 +8,19 @@ import {
   activateCustomerAssessmentRecord,
   fetchCustomerAssessmentById,
   fetchCustomerAssessmentBySessionId,
+  fetchCustomerAssessmentParticipants,
   fetchCustomerAssessments,
   insertCustomerAssessment,
+  markCustomerAssessmentParticipantInvited,
+  type CustomerAssessmentInviteChannel,
+  type CustomerAssessmentParticipantListResponse,
+  upsertCustomerAssessmentParticipant,
+  updateCustomerAssessmentRecord,
 } from './site-onboarding.repository.js';
 
 export type CustomerAssessmentResultVisibility = 'participant_summary' | 'review_required';
+export type DummyCheckoutPlan = 'starter' | 'growth' | 'research';
+export type DummyCheckoutBillingCycle = 'monthly' | 'annual';
 
 function getDefaultTimeLimit(testType: PublicTestTypeCode) {
   if (testType === 'iq') {
@@ -69,6 +77,60 @@ function buildDescription(organizationName: string, purpose: AssessmentPurpose, 
   return `Draft ${testType.toUpperCase()} assessment for ${organizationName.trim()} (${purposeLabel}).`;
 }
 
+function resolveInterpretationMode(resultVisibility: CustomerAssessmentResultVisibility): InterpretationMode {
+  return resultVisibility === 'review_required' ? 'professional_review' : 'self_assessment';
+}
+
+function buildAssessmentSettings(input: {
+  workspaceDefaults: ReturnType<typeof parseCustomerWorkspaceSettings>;
+  organizationName: string;
+  purpose: AssessmentPurpose;
+  administrationMode: AdministrationMode;
+  participantLimit: number | null;
+  resultVisibility: CustomerAssessmentResultVisibility;
+  protectedDeliveryMode: boolean;
+}) {
+  return {
+    assessmentPurpose: input.purpose,
+    administrationMode: input.administrationMode,
+    interpretationMode: resolveInterpretationMode(input.resultVisibility),
+    participantLimit: input.participantLimit ?? input.workspaceDefaults.defaultParticipantLimit,
+    consentStatement: renderWorkspaceTemplate(input.workspaceDefaults.defaultConsentStatement, {
+      organizationName: input.organizationName,
+      brandName: input.workspaceDefaults.brandName,
+      contactPerson: input.workspaceDefaults.contactPerson,
+      supportEmail: input.workspaceDefaults.supportEmail,
+    }),
+    privacyStatement: renderWorkspaceTemplate(input.workspaceDefaults.defaultPrivacyStatement, {
+      organizationName: input.organizationName,
+      brandName: input.workspaceDefaults.brandName,
+      contactPerson: input.workspaceDefaults.contactPerson,
+      supportEmail: input.workspaceDefaults.supportEmail,
+    }),
+    contactPerson: input.workspaceDefaults.contactPerson,
+    distributionPolicy: input.resultVisibility === 'review_required' ? 'full_report_with_consent' : 'participant_summary',
+    protectedDeliveryMode: input.protectedDeliveryMode,
+    participantResultAccess: input.resultVisibility === 'review_required' ? 'full_released' : 'summary',
+    hrResultAccess: 'full',
+  } satisfies TestSessionSettings;
+}
+
+async function requireActiveCustomer(customerAccountId: number) {
+  const account = await findCustomerById(customerAccountId);
+
+  if (!account || account.status !== 'active') {
+    throw new HttpError(401, 'Customer account is not active');
+  }
+
+  return account;
+}
+
+async function normalizeOrganization(accountId: number, currentOrganizationName: string, nextOrganizationName: string) {
+  if (nextOrganizationName !== currentOrganizationName) {
+    await updateCustomerOrganizationName(accountId, nextOrganizationName);
+  }
+}
+
 export async function listCustomerAssessmentItems(customerAccountId: number) {
   return fetchCustomerAssessments(customerAccountId);
 }
@@ -87,18 +149,12 @@ export async function createCustomerAssessment(input: {
   participantLimit: number | null;
   timeLimitMinutes: number | null;
   resultVisibility: CustomerAssessmentResultVisibility;
+  protectedDeliveryMode: boolean;
 }) {
-  const account = await findCustomerById(input.customerAccountId);
-
-  if (!account || account.status !== 'active') {
-    throw new HttpError(401, 'Customer account is not active');
-  }
-
+  const account = await requireActiveCustomer(input.customerAccountId);
   const normalizedOrganizationName = input.organizationName.trim();
 
-  if (normalizedOrganizationName !== account.organization_name) {
-    await updateCustomerOrganizationName(account.id, normalizedOrganizationName);
-  }
+  await normalizeOrganization(account.id, account.organization_name, normalizedOrganizationName);
 
   const workspaceSettings = parseCustomerWorkspaceSettings(account.settings_json, {
     organizationName: normalizedOrganizationName,
@@ -107,31 +163,15 @@ export async function createCustomerAssessment(input: {
     accountType: account.account_type,
   });
 
-  const interpretationMode: InterpretationMode = input.resultVisibility === 'review_required' ? 'professional_review' : 'self_assessment';
-
-  const settings: TestSessionSettings = {
-    assessmentPurpose: input.purpose,
+  const settings = buildAssessmentSettings({
+    workspaceDefaults: workspaceSettings,
+    organizationName: normalizedOrganizationName,
+    purpose: input.purpose,
     administrationMode: input.administrationMode,
-    interpretationMode,
-    participantLimit: input.participantLimit ?? workspaceSettings.defaultParticipantLimit,
-    consentStatement: renderWorkspaceTemplate(workspaceSettings.defaultConsentStatement, {
-      organizationName: normalizedOrganizationName,
-      brandName: workspaceSettings.brandName,
-      contactPerson: workspaceSettings.contactPerson,
-      supportEmail: workspaceSettings.supportEmail,
-    }),
-    privacyStatement: renderWorkspaceTemplate(workspaceSettings.defaultPrivacyStatement, {
-      organizationName: normalizedOrganizationName,
-      brandName: workspaceSettings.brandName,
-      contactPerson: workspaceSettings.contactPerson,
-      supportEmail: workspaceSettings.supportEmail,
-    }),
-    contactPerson: workspaceSettings.contactPerson,
-    distributionPolicy: input.resultVisibility === 'review_required' ? 'full_report_with_consent' : 'participant_summary',
-    protectedDeliveryMode: false,
-    participantResultAccess: input.resultVisibility === 'review_required' ? 'full_released' : 'summary',
-    hrResultAccess: 'full',
-  };
+    participantLimit: input.participantLimit,
+    resultVisibility: input.resultVisibility,
+    protectedDeliveryMode: input.protectedDeliveryMode,
+  });
 
   const created = await insertCustomerAssessment({
     customerAccountId: input.customerAccountId,
@@ -160,6 +200,7 @@ export async function createCustomerAssessment(input: {
       timeLimitMinutes: input.timeLimitMinutes ?? workspaceSettings.defaultTimeLimitMinutes ?? getDefaultTimeLimit(input.testType),
       supportEmail: workspaceSettings.supportEmail,
       brandName: workspaceSettings.brandName,
+      protectedDeliveryMode: input.protectedDeliveryMode,
     },
   });
 
@@ -172,14 +213,94 @@ export async function createCustomerAssessment(input: {
   return assessment;
 }
 
-export async function activateCustomerAssessment(customerAccountId: number, assessmentId: number) {
-  const account = await findCustomerById(customerAccountId);
+export async function updateCustomerAssessment(input: {
+  customerAccountId: number;
+  assessmentId: number;
+  testType: PublicTestTypeCode;
+  title: string;
+  organizationName: string;
+  purpose: AssessmentPurpose;
+  administrationMode: AdministrationMode;
+  participantLimit: number | null;
+  timeLimitMinutes: number | null;
+  resultVisibility: CustomerAssessmentResultVisibility;
+  protectedDeliveryMode: boolean;
+}) {
+  const account = await requireActiveCustomer(input.customerAccountId);
+  const normalizedOrganizationName = input.organizationName.trim();
 
-  if (!account || account.status !== 'active') {
-    throw new HttpError(401, 'Customer account is not active');
+  await normalizeOrganization(account.id, account.organization_name, normalizedOrganizationName);
+
+  const workspaceSettings = parseCustomerWorkspaceSettings(account.settings_json, {
+    organizationName: normalizedOrganizationName,
+    fullName: account.full_name,
+    email: account.email,
+    accountType: account.account_type,
+  });
+
+  let updated: Awaited<ReturnType<typeof updateCustomerAssessmentRecord>>;
+
+  try {
+    updated = await updateCustomerAssessmentRecord({
+      customerAccountId: input.customerAccountId,
+      assessmentId: input.assessmentId,
+      organizationName: normalizedOrganizationName,
+      testType: input.testType,
+      title: input.title,
+      description: buildDescription(normalizedOrganizationName, input.purpose, input.testType),
+      instructions: getParticipantInstructions(input.testType, input.purpose),
+      timeLimitMinutes: input.timeLimitMinutes ?? workspaceSettings.defaultTimeLimitMinutes ?? getDefaultTimeLimit(input.testType),
+      settings: buildAssessmentSettings({
+        workspaceDefaults: workspaceSettings,
+        organizationName: normalizedOrganizationName,
+        purpose: input.purpose,
+        administrationMode: input.administrationMode,
+        participantLimit: input.participantLimit,
+        resultVisibility: input.resultVisibility,
+        protectedDeliveryMode: input.protectedDeliveryMode,
+      }),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Only draft assessments can be edited') {
+      throw new HttpError(409, error.message);
+    }
+
+    throw error;
   }
 
-  const assessment = await activateCustomerAssessmentRecord(customerAccountId, assessmentId);
+  if (!updated) {
+    throw new HttpError(404, 'Assessment draft not found');
+  }
+
+  await createAuditEvent({
+    actorType: 'system',
+    entityType: 'customer_assessment',
+    entityId: updated.assessmentId,
+    action: 'customer_assessment.updated',
+    metadata: {
+      customerAccountId: input.customerAccountId,
+      sessionId: updated.sessionId,
+      testType: input.testType,
+      purpose: input.purpose,
+      administrationMode: input.administrationMode,
+      resultVisibility: input.resultVisibility,
+      participantLimit: updated.participantLimit,
+      timeLimitMinutes: updated.timeLimitMinutes,
+      protectedDeliveryMode: input.protectedDeliveryMode,
+    },
+  });
+
+  return updated;
+}
+
+export async function completeCustomerAssessmentCheckout(input: {
+  customerAccountId: number;
+  assessmentId: number;
+  plan: DummyCheckoutPlan;
+  billingCycle: DummyCheckoutBillingCycle;
+}) {
+  const account = await requireActiveCustomer(input.customerAccountId);
+  const assessment = await activateCustomerAssessmentRecord(input.customerAccountId, input.assessmentId);
 
   if (!assessment) {
     throw new HttpError(404, 'Assessment draft not found');
@@ -188,17 +309,109 @@ export async function activateCustomerAssessment(customerAccountId: number, asse
   await createAuditEvent({
     actorType: 'system',
     entityType: 'customer_assessment',
-    entityId: assessmentId,
-    action: 'customer_assessment.activated',
+    entityId: input.assessmentId,
+    action: 'customer_assessment.checkout_completed',
     metadata: {
-      customerAccountId,
+      customerAccountId: account.id,
       sessionId: assessment.sessionId,
-      participantLink: assessment.participantLink,
+      plan: input.plan,
+      billingCycle: input.billingCycle,
       sessionStatus: assessment.sessionStatus,
+      participantLink: assessment.participantLink,
+      dummyMode: true,
     },
   });
 
   return assessment;
 }
 
+export async function activateCustomerAssessment(customerAccountId: number, assessmentId: number) {
+  return completeCustomerAssessmentCheckout({
+    customerAccountId,
+    assessmentId,
+    plan: 'starter',
+    billingCycle: 'monthly',
+  });
+}
 
+export async function listCustomerAssessmentParticipants(customerAccountId: number, assessmentId: number) {
+  const list = await fetchCustomerAssessmentParticipants(customerAccountId, assessmentId);
+
+  if (!list) {
+    throw new HttpError(404, 'Assessment draft not found');
+  }
+
+  return list;
+}
+
+export async function addCustomerAssessmentParticipant(input: {
+  customerAccountId: number;
+  assessmentId: number;
+  fullName: string;
+  email: string;
+  employeeCode: string | null;
+  department: string | null;
+  positionTitle: string | null;
+  note: string | null;
+}) {
+  await requireActiveCustomer(input.customerAccountId);
+  const participant = await upsertCustomerAssessmentParticipant(input);
+
+  if (!participant) {
+    throw new HttpError(404, 'Assessment draft not found');
+  }
+
+  await createAuditEvent({
+    actorType: 'system',
+    entityType: 'customer_assessment_participant',
+    entityId: participant.id,
+    action: 'customer_assessment_participant.upserted',
+    metadata: {
+      customerAccountId: input.customerAccountId,
+      assessmentId: input.assessmentId,
+      email: participant.email,
+      status: participant.status,
+    },
+  });
+
+  return participant;
+}
+
+export async function sendCustomerAssessmentParticipantInvite(input: {
+  customerAccountId: number;
+  assessmentId: number;
+  participantRecordId: number;
+  channel: CustomerAssessmentInviteChannel;
+}) {
+  await requireActiveCustomer(input.customerAccountId);
+  const participant = await markCustomerAssessmentParticipantInvited(input);
+  const participantList = await fetchCustomerAssessmentParticipants(input.customerAccountId, input.assessmentId);
+
+  if (!participant || !participantList) {
+    throw new HttpError(404, 'Participant invite record not found');
+  }
+
+  await createAuditEvent({
+    actorType: 'system',
+    entityType: 'customer_assessment_participant',
+    entityId: participant.id,
+    action: 'customer_assessment_participant.invited',
+    metadata: {
+      customerAccountId: input.customerAccountId,
+      assessmentId: input.assessmentId,
+      channel: input.channel,
+      shareLink: participantList.shareLink,
+      email: participant.email,
+      dummyMode: true,
+    },
+  });
+
+  return {
+    participant,
+    shareLink: participantList.shareLink,
+    deliveryPreview:
+      input.channel === 'email'
+        ? `Dummy email queued for ${participant.email}. Share link: ${participantList.shareLink}`
+        : `Share this link with ${participant.fullName}: ${participantList.shareLink}`,
+  };
+}

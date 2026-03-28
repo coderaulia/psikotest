@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+import type { PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 
 import { env } from '../../config/env.js';
 import { getDbPool } from '../../database/mysql.js';
@@ -15,6 +15,8 @@ import type { PublicTestTypeCode } from '../public-sessions/public-session.types
 export type CustomerAccountType = 'business' | 'researcher';
 export type CustomerAssessmentPlanStatus = 'trial' | 'upgraded';
 export type CustomerAssessmentResultVisibility = 'participant_summary' | 'review_required';
+export type CustomerAssessmentParticipantStatus = 'draft' | 'invited' | 'in_progress' | 'completed';
+export type CustomerAssessmentInviteChannel = 'email' | 'link';
 
 export interface CustomerAssessmentListItem {
   assessmentId: number;
@@ -48,6 +50,37 @@ export interface CustomerAssessmentDetail extends CustomerAssessmentListItem {
   canActivateSharing: boolean;
 }
 
+export interface CustomerAssessmentParticipantItem {
+  id: number;
+  fullName: string;
+  email: string;
+  employeeCode: string | null;
+  department: string | null;
+  positionTitle: string | null;
+  note: string | null;
+  status: CustomerAssessmentParticipantStatus;
+  invitedVia: CustomerAssessmentInviteChannel | null;
+  invitedAt: string | null;
+  lastSubmittedAt: string | null;
+  submissionStatus: 'not_started' | 'in_progress' | 'submitted' | 'scored' | null;
+  resultId: number | null;
+}
+
+export interface CustomerAssessmentParticipantSummary {
+  total: number;
+  draft: number;
+  invited: number;
+  inProgress: number;
+  completed: number;
+}
+
+export interface CustomerAssessmentParticipantListResponse {
+  assessmentId: number;
+  shareLink: string;
+  summary: CustomerAssessmentParticipantSummary;
+  items: CustomerAssessmentParticipantItem[];
+}
+
 interface PlatformAdminRow extends RowDataPacket {
   id: number;
 }
@@ -72,6 +105,26 @@ interface CustomerAssessmentRow extends RowDataPacket {
   created_at: string | Date;
 }
 
+interface CustomerAssessmentParticipantRow extends RowDataPacket {
+  id: number;
+  full_name: string;
+  email: string;
+  employee_code: string | null;
+  department: string | null;
+  position_title: string | null;
+  note: string | null;
+  invitation_status: 'draft' | 'invited';
+  invited_via: CustomerAssessmentInviteChannel | null;
+  invited_at: string | Date | null;
+}
+
+interface SubmissionMatchRow extends RowDataPacket {
+  email: string;
+  submission_status: 'not_started' | 'in_progress' | 'submitted' | 'scored';
+  submitted_at: string | Date | null;
+  result_id: number | null;
+}
+
 function slugify(value: string) {
   const slug = value
     .toLowerCase()
@@ -89,7 +142,7 @@ function createAccessToken(testType: PublicTestTypeCode, title: string) {
 
 function toIsoString(value: string | Date | null) {
   if (!value) {
-    return new Date().toISOString();
+    return null;
   }
 
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -144,7 +197,7 @@ function mapAssessmentRow(row: CustomerAssessmentRow): CustomerAssessmentListIte
     planStatus: row.plan_status,
     participantLink: `${env.APP_ORIGIN}/t/${row.access_token}`,
     previewDemoLink: `${env.APP_ORIGIN}/t/${getPreviewDemoToken(row.test_type)}`,
-    createdAt: toIsoString(row.created_at),
+    createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
   };
 }
 
@@ -331,6 +384,96 @@ export async function fetchCustomerAssessments(customerAccountId: number) {
   return rows.map(mapAssessmentRow);
 }
 
+export async function updateCustomerAssessmentRecord(input: {
+  customerAccountId: number;
+  assessmentId: number;
+  organizationName: string;
+  testType: PublicTestTypeCode;
+  title: string;
+  description: string | null;
+  instructions: string;
+  timeLimitMinutes: number | null;
+  settings: TestSessionSettings;
+}) {
+  const testTypeId = await resolveTestTypeId(input.testType);
+  if (!testTypeId) {
+    throw new Error(`Unknown test type: ${input.testType}`);
+  }
+
+  const pool = getDbPool();
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [existingRows] = await connection.query<RowDataPacket[]>(
+      `
+        SELECT ca.id AS assessment_id, ts.id AS session_id, ts.status AS session_status
+        FROM customer_assessments ca
+        INNER JOIN test_sessions ts ON ts.id = ca.test_session_id
+        WHERE ca.customer_account_id = ?
+          AND ca.id = ?
+        LIMIT 1
+      `,
+      [input.customerAccountId, input.assessmentId],
+    );
+
+    const existing = existingRows[0];
+    const sessionId = Number(existing?.session_id ?? 0);
+    const sessionStatus = String(existing?.session_status ?? '');
+
+    if (!sessionId) {
+      await connection.rollback();
+      return null;
+    }
+
+    if (sessionStatus !== 'draft') {
+      throw new Error('Only draft assessments can be edited');
+    }
+
+    await connection.query<ResultSetHeader>(
+      `
+        UPDATE test_sessions
+        SET test_type_id = ?,
+            title = ?,
+            description = ?,
+            instructions = ?,
+            settings_json = ?,
+            time_limit_minutes = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `,
+      [
+        testTypeId,
+        input.title.trim(),
+        input.description,
+        input.instructions.trim(),
+        JSON.stringify(input.settings),
+        input.timeLimitMinutes,
+        sessionId,
+      ],
+    );
+
+    await connection.query<ResultSetHeader>(
+      `
+        UPDATE customer_assessments
+        SET organization_name_snapshot = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `,
+      [input.organizationName.trim(), input.assessmentId],
+    );
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+
+  return fetchCustomerAssessmentById(input.customerAccountId, input.assessmentId);
+}
+
 export async function activateCustomerAssessmentRecord(customerAccountId: number, assessmentId: number) {
   const pool = getDbPool();
   const connection = await pool.getConnection();
@@ -386,4 +529,203 @@ export async function activateCustomerAssessmentRecord(customerAccountId: number
   }
 }
 
+function mapSubmissionStatusToParticipantStatus(
+  invitationStatus: 'draft' | 'invited',
+  submissionStatus: 'not_started' | 'in_progress' | 'submitted' | 'scored' | null,
+): CustomerAssessmentParticipantStatus {
+  if (submissionStatus === 'submitted' || submissionStatus === 'scored') {
+    return 'completed';
+  }
 
+  if (submissionStatus === 'in_progress') {
+    return 'in_progress';
+  }
+
+  return invitationStatus;
+}
+
+async function fetchParticipantSubmissionMatches(sessionId: number, emails: string[]) {
+  if (emails.length === 0) {
+    return new Map<string, SubmissionMatchRow>();
+  }
+
+  const placeholders = emails.map(() => '?').join(', ');
+  const pool = getDbPool();
+  const [rows] = await pool.query<SubmissionMatchRow[]>(
+    `
+      SELECT
+        LOWER(p.email) AS email,
+        s.status AS submission_status,
+        s.submitted_at,
+        r.id AS result_id
+      FROM participants p
+      INNER JOIN submissions s ON s.participant_id = p.id
+      LEFT JOIN results r ON r.submission_id = s.id
+      WHERE s.test_session_id = ?
+        AND LOWER(p.email) IN (${placeholders})
+      ORDER BY COALESCE(s.submitted_at, s.updated_at, s.created_at) DESC, s.id DESC
+    `,
+    [sessionId, ...emails.map((email) => email.toLowerCase())],
+  );
+
+  const map = new Map<string, SubmissionMatchRow>();
+  for (const row of rows) {
+    if (!map.has(row.email)) {
+      map.set(row.email, row);
+    }
+  }
+
+  return map;
+}
+
+export async function fetchCustomerAssessmentParticipants(customerAccountId: number, assessmentId: number): Promise<CustomerAssessmentParticipantListResponse | null> {
+  const assessment = await fetchCustomerAssessmentById(customerAccountId, assessmentId);
+  if (!assessment) {
+    return null;
+  }
+
+  const pool = getDbPool();
+  const [rows] = await pool.query<CustomerAssessmentParticipantRow[]>(
+    `
+      SELECT
+        cap.id,
+        cap.full_name,
+        cap.email,
+        cap.employee_code,
+        cap.department,
+        cap.position_title,
+        cap.note,
+        cap.invitation_status,
+        cap.invited_via,
+        cap.invited_at
+      FROM customer_assessment_participants cap
+      WHERE cap.customer_assessment_id = ?
+      ORDER BY cap.created_at DESC, cap.id DESC
+    `,
+    [assessmentId],
+  );
+
+  const submissionMap = await fetchParticipantSubmissionMatches(
+    assessment.sessionId,
+    rows.map((row) => row.email),
+  );
+
+  const items = rows.map((row) => {
+    const match = submissionMap.get(row.email.toLowerCase()) ?? null;
+    return {
+      id: row.id,
+      fullName: row.full_name,
+      email: row.email,
+      employeeCode: row.employee_code,
+      department: row.department,
+      positionTitle: row.position_title,
+      note: row.note,
+      status: mapSubmissionStatusToParticipantStatus(row.invitation_status, match?.submission_status ?? null),
+      invitedVia: row.invited_via,
+      invitedAt: toIsoString(row.invited_at),
+      lastSubmittedAt: toIsoString(match?.submitted_at ?? null),
+      submissionStatus: match?.submission_status ?? null,
+      resultId: match?.result_id ?? null,
+    } satisfies CustomerAssessmentParticipantItem;
+  });
+
+  const summary: CustomerAssessmentParticipantSummary = {
+    total: items.length,
+    draft: items.filter((item) => item.status === 'draft').length,
+    invited: items.filter((item) => item.status === 'invited').length,
+    inProgress: items.filter((item) => item.status === 'in_progress').length,
+    completed: items.filter((item) => item.status === 'completed').length,
+  };
+
+  return {
+    assessmentId,
+    shareLink: assessment.participantLink,
+    summary,
+    items,
+  };
+}
+
+export async function upsertCustomerAssessmentParticipant(input: {
+  customerAccountId: number;
+  assessmentId: number;
+  fullName: string;
+  email: string;
+  employeeCode: string | null;
+  department: string | null;
+  positionTitle: string | null;
+  note: string | null;
+}) {
+  const assessment = await fetchCustomerAssessmentById(input.customerAccountId, input.assessmentId);
+  if (!assessment) {
+    return null;
+  }
+
+  const pool = getDbPool();
+  await pool.query<ResultSetHeader>(
+    `
+      INSERT INTO customer_assessment_participants (
+        customer_assessment_id,
+        full_name,
+        email,
+        employee_code,
+        department,
+        position_title,
+        note,
+        invitation_status
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'draft')
+      ON DUPLICATE KEY UPDATE
+        full_name = VALUES(full_name),
+        employee_code = VALUES(employee_code),
+        department = VALUES(department),
+        position_title = VALUES(position_title),
+        note = VALUES(note),
+        updated_at = CURRENT_TIMESTAMP
+    `,
+    [
+      input.assessmentId,
+      input.fullName.trim(),
+      input.email.trim().toLowerCase(),
+      input.employeeCode,
+      input.department,
+      input.positionTitle,
+      input.note,
+    ],
+  );
+
+  const participantList = await fetchCustomerAssessmentParticipants(input.customerAccountId, input.assessmentId);
+  return participantList?.items.find((item) => item.email.toLowerCase() === input.email.trim().toLowerCase()) ?? null;
+}
+
+export async function markCustomerAssessmentParticipantInvited(input: {
+  customerAccountId: number;
+  assessmentId: number;
+  participantRecordId: number;
+  channel: CustomerAssessmentInviteChannel;
+}) {
+  const assessment = await fetchCustomerAssessmentById(input.customerAccountId, input.assessmentId);
+  if (!assessment) {
+    return null;
+  }
+
+  const pool = getDbPool();
+  const [result] = await pool.query<ResultSetHeader>(
+    `
+      UPDATE customer_assessment_participants
+      SET invitation_status = 'invited',
+          invited_via = ?,
+          invited_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+        AND customer_assessment_id = ?
+    `,
+    [input.channel, input.participantRecordId, input.assessmentId],
+  );
+
+  if (result.affectedRows === 0) {
+    return null;
+  }
+
+  const participantList = await fetchCustomerAssessmentParticipants(input.customerAccountId, input.assessmentId);
+  return participantList?.items.find((item) => item.id === input.participantRecordId) ?? null;
+}

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Copy, ExternalLink, Link as LinkIcon, LockKeyhole, ShieldCheck, Sparkles, Users } from 'lucide-react';
-import { useParams } from 'react-router-dom';
+import { CheckCircle2, Copy, CreditCard, ExternalLink, Link as LinkIcon, LockKeyhole, Settings2, ShieldCheck, Sparkles, Users } from 'lucide-react';
+import { Link, useParams } from 'react-router-dom';
 
 import { formatDateTime, formatTokenLabel } from '@/lib/formatters';
-import { activateCustomerAssessment, getCustomerAssessment } from '@/services/customer-onboarding';
+import { getCustomerAssessment } from '@/services/customer-onboarding';
 import type { CustomerAssessmentDetail } from '@/types/assessment';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,6 @@ export function CustomerAssessmentDetailPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isActivating, setIsActivating] = useState(false);
 
   useEffect(() => {
     if (!Number.isFinite(parsedAssessmentId) || parsedAssessmentId <= 0) {
@@ -65,38 +64,13 @@ export function CustomerAssessmentDetailPage() {
     };
   }, [parsedAssessmentId]);
 
-  const canCopyLiveLink = detail?.sessionStatus === 'active';
   const headerBadgeLabel = useMemo(() => {
     if (!detail) {
       return null;
     }
 
-    if (detail.sessionStatus === 'active') {
-      return 'Sharing active';
-    }
-
-    return 'Draft review';
+    return detail.sessionStatus === 'active' ? 'Sharing active' : 'Draft review';
   }, [detail]);
-
-  async function handleActivateSharing() {
-    if (!detail) {
-      return;
-    }
-
-    setIsActivating(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    try {
-      const nextDetail = await activateCustomerAssessment(detail.assessmentId);
-      setDetail(nextDetail);
-      setSuccessMessage('Participant sharing is now active. The prepared link can be distributed to participants.');
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to activate sharing');
-    } finally {
-      setIsActivating(false);
-    }
-  }
 
   async function handleCopyLink() {
     if (!detail?.participantLink || typeof navigator === 'undefined' || !navigator.clipboard) {
@@ -233,8 +207,8 @@ export function CustomerAssessmentDetailPage() {
       <div className="space-y-6">
         <Card className="bg-white/84">
           <CardHeader>
-            <CardTitle>Participant link readiness</CardTitle>
-            <CardDescription>Drafts stay private until you explicitly activate sharing for participants.</CardDescription>
+            <CardTitle>Commercial onboarding actions</CardTitle>
+            <CardDescription>Move through setup, dummy payment, and participant operations in order.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-slate-500">
             <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
@@ -247,19 +221,27 @@ export function CustomerAssessmentDetailPage() {
               <p className="mt-2 text-xs text-slate-400">
                 {detail.sessionStatus === 'active'
                   ? 'This link is active and ready to be shared with participants.'
-                  : 'This link is prepared but still private until you activate sharing.'}
+                  : 'This link is prepared but still private until dummy checkout is completed.'}
               </p>
             </div>
-            {errorMessage ? <p className="text-sm text-rose-600">{errorMessage}</p> : null}
             {successMessage ? <p className="text-sm text-emerald-700">{successMessage}</p> : null}
             <div className="flex flex-col gap-3">
-              {detail.canActivateSharing ? (
-                <Button type="button" size="lg" onClick={handleActivateSharing} disabled={isActivating}>
-                  {isActivating ? 'Activating sharing...' : 'Upgrade to share'}
+              <Button type="button" size="lg" variant="secondary" asChild>
+                <Link to={`/workspace/assessments/${detail.assessmentId}/setup`}>
+                  Edit assessment setup <Settings2 className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+              {detail.sessionStatus === 'draft' ? (
+                <Button type="button" size="lg" asChild>
+                  <Link to={`/workspace/assessments/${detail.assessmentId}/checkout`}>
+                    Continue to dummy payment <CreditCard className="ml-2 h-4 w-4" />
+                  </Link>
                 </Button>
               ) : (
-                <Button type="button" size="lg" variant="secondary" onClick={handleCopyLink} disabled={!canCopyLiveLink}>
-                  Copy live participant link <Copy className="ml-2 h-4 w-4" />
+                <Button type="button" size="lg" asChild>
+                  <Link to={`/workspace/assessments/${detail.assessmentId}/participants`}>
+                    Manage participants <Users className="ml-2 h-4 w-4" />
+                  </Link>
                 </Button>
               )}
               <Button type="button" variant="outline" size="lg" asChild>
@@ -267,13 +249,9 @@ export function CustomerAssessmentDetailPage() {
                   Preview demo flow <ExternalLink className="ml-2 h-4 w-4" />
                 </a>
               </Button>
-              {detail.sessionStatus === 'active' ? (
-                <Button type="button" variant="outline" size="lg" asChild>
-                  <a href={detail.participantLink} target="_blank" rel="noreferrer">
-                    Open live participant link <LinkIcon className="ml-2 h-4 w-4" />
-                  </a>
-                </Button>
-              ) : null}
+              <Button type="button" variant="outline" size="lg" onClick={() => void handleCopyLink()}>
+                Copy participant link <Copy className="ml-2 h-4 w-4" />
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -303,21 +281,21 @@ export function CustomerAssessmentDetailPage() {
 
         <Card className="bg-slate-950 text-white">
           <CardHeader>
-            <CardTitle>Review checklist before sharing</CardTitle>
-            <CardDescription className="text-white/70">Aligned with the intended psychological assessment flow rather than just raw questionnaire distribution.</CardDescription>
+            <CardTitle>Readiness checklist</CardTitle>
+            <CardDescription className="text-white/70">The SaaS onboarding still follows the ethical assessment workflow under the hood.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm leading-7 text-white/75">
             <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-              <p className="inline-flex items-center gap-2 font-medium text-white"><CheckCircle2 className="h-4 w-4" /> Purpose clarified</p>
-              <p className="mt-2">Interpretation will be anchored to {formatTokenLabel(detail.assessmentPurpose)}.</p>
+              <p className="inline-flex items-center gap-2 font-medium text-white"><CheckCircle2 className="h-4 w-4" /> Setup reviewed</p>
+              <p className="mt-2">Assessment type, timing, protected delivery, and result visibility should be finalized first.</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-              <p className="inline-flex items-center gap-2 font-medium text-white"><CheckCircle2 className="h-4 w-4" /> Consent and privacy text prepared</p>
-              <p className="mt-2">Participants will see purpose, privacy, voluntary participation, and contact information before identity collection.</p>
+              <p className="inline-flex items-center gap-2 font-medium text-white"><CheckCircle2 className="h-4 w-4" /> Dummy payment completed</p>
+              <p className="mt-2">Sharing only becomes active after the commercial step is acknowledged.</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-              <p className="inline-flex items-center gap-2 font-medium text-white"><CheckCircle2 className="h-4 w-4" /> Interpretation mode confirmed</p>
-              <p className="mt-2">Current interpretation mode: {formatTokenLabel(detail.interpretationMode)}.</p>
+              <p className="inline-flex items-center gap-2 font-medium text-white"><CheckCircle2 className="h-4 w-4" /> Participant list prepared</p>
+              <p className="mt-2">Use the participant page to manage invites and share the live assessment link.</p>
             </div>
           </CardContent>
         </Card>
