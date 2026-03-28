@@ -37,6 +37,44 @@ interface ManualTrack {
 
 const manualTracks: ManualTrack[] = [
   {
+    id: 'super-admin',
+    label: 'Platform Manager Guide',
+    title: 'How a Super Admin operates the SaaS',
+    description:
+      'Super admins oversee the entire platform, managing settings, monitoring registered customers, and ensuring smooth operation across all workspaces.',
+    icon: ShieldCheck,
+    accentClass:
+      'border-amber-200/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.98),rgba(254,252,232,0.94)_58%,rgba(254,249,195,0.76))]',
+    steps: [
+      {
+        step: '01',
+        title: 'Sign in to the Admin Console',
+        detail: 'Log into the protected admin workflow (separate from customer workspace) using authorized credentials.',
+      },
+      {
+        step: '02',
+        title: 'Manage Customer Accounts',
+        detail: 'Access the dedicated Customers tab to view all signed-up companies and researchers. Monitor assessment volume and last login activity.',
+      },
+      {
+        step: '03',
+        title: 'Activate or Deactivate Workspaces',
+        detail: 'Control platform access with one-click toggles to activate or deactivate customer accounts (e.g., for billing or compliance reasons).',
+      },
+      {
+        step: '04',
+        title: 'Configure Global Settings',
+        detail: 'Set default session templates, system limits, and review the global audit trail across all platform activity.',
+      },
+      {
+        step: '05',
+        title: 'Monitor the Reviewer Queue',
+        detail: 'Like psychologist reviewers, super admins can access the reviewer queue to help reassign or unblock assessments.',
+      },
+    ],
+    checklist: ['Keep admin credentials strictly secure', 'Review the audit log regularly', 'Communicate any workspace deactivations to customers'],
+  },
+  {
     id: 'participant',
     label: 'Participant Guide',
     title: 'How participants move through an assessment',
@@ -239,7 +277,7 @@ export function ManualPage() {
             <Card className="overflow-hidden border-white/80 bg-white/86 shadow-[0_30px_90px_-60px_rgba(15,23,42,0.28)] backdrop-blur-xl">
               <CardHeader className="border-b border-slate-100/80">
                 <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Role overview</p>
-                <CardTitle className="text-2xl">Three operational tracks</CardTitle>
+                <CardTitle className="text-2xl">Four operational tracks</CardTitle>
                 <CardDescription className="text-sm leading-7 text-slate-600">
                   The app is used differently depending on whether someone is taking an assessment, managing distribution, or reviewing results professionally.
                 </CardDescription>
@@ -277,7 +315,7 @@ export function ManualPage() {
           title="Choose the workflow that matches your role"
           description="Each audience uses the same platform differently, so the manual is organized by the operational journey, not by feature list alone."
         />
-        <div className="mt-10 grid gap-6 lg:grid-cols-3">
+        <div className="mt-10 grid gap-6 lg:grid-cols-2 xl:grid-cols-4">
           {manualTracks.map((track, index) => {
             const Icon = track.icon;
             return (

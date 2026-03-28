@@ -30,7 +30,8 @@ This document describes the current authentication model and the intended direct
 
 ### Super admin
 - platform owner
-- can manage all admin features and operational settings
+- can manage all admin features, operational settings, and registered customer accounts
+- has exclusive access to the Customer management dashboard
 
 ### Admin
 - internal platform operator
