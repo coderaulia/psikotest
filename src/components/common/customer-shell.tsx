@@ -25,6 +25,7 @@ const copy = {
       company: 'Company',
       billing: 'Billing',
       results: 'Results',
+      activity: 'Activity',
       team: 'Team',
       createAssessment: 'Create Assessment',
       settings: 'Settings',
@@ -51,6 +52,7 @@ const copy = {
       company: 'Perusahaan',
       billing: 'Billing',
       results: 'Hasil',
+      activity: 'Aktivitas',
       team: 'Tim',
       createAssessment: 'Buat Asesmen',
       settings: 'Pengaturan',
@@ -87,6 +89,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
     { to: '/workspace/company', label: t.nav.company, visible: canAccessWorkspaceSettings(role) },
     { to: '/workspace/billing', label: t.nav.billing, visible: canAccessWorkspaceBilling(role) },
     { to: '/workspace/results', label: t.nav.results, visible: canViewWorkspaceResults(role) },
+    { to: '/workspace/activity', label: t.nav.activity, visible: true },
     { to: '/workspace/team', label: t.nav.team, visible: canAccessWorkspaceTeam(role) },
     { to: '/workspace/create', label: t.nav.createAssessment, visible: canOperateAssessments(role) },
     { to: '/workspace/settings', label: t.nav.settings, visible: canAccessWorkspaceSettings(role) },
@@ -186,3 +189,4 @@ export function CustomerShell({ children }: { children: ReactNode }) {
     </div>
   );
 }
+

@@ -15,6 +15,18 @@ interface WorkspaceMemberRow extends RowDataPacket {
   last_login_at: string | Date | null;
 }
 
+interface WorkspaceActivityRow extends RowDataPacket {
+  id: number;
+  actor_type: 'admin' | 'participant' | 'system';
+  actor_admin_id: number | null;
+  actor_name: string | null;
+  entity_type: string;
+  entity_id: number | null;
+  action: string;
+  metadata_json: string | null;
+  created_at: string | Date;
+}
+
 function toIsoString(value: string | Date | null) {
   if (!value) {
     return null;
@@ -25,6 +37,19 @@ function toIsoString(value: string | Date | null) {
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function normalizeJson(value: string | null) {
+  if (!value) {
+    return {} as Record<string, unknown>;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    return typeof parsed === 'object' && parsed ? parsed : {};
+  } catch {
+    return {} as Record<string, unknown>;
+  }
 }
 
 function mapWorkspaceMember(row: WorkspaceMemberRow) {
@@ -40,6 +65,20 @@ function mapWorkspaceMember(row: WorkspaceMemberRow) {
     activatedAt: toIsoString(row.activated_at),
     activationExpiresAt: toIsoString(row.activation_expires_at),
     lastLoginAt: toIsoString(row.last_login_at),
+  };
+}
+
+function mapWorkspaceActivity(row: WorkspaceActivityRow) {
+  return {
+    id: row.id,
+    actorType: row.actor_type,
+    actorAdminId: row.actor_admin_id,
+    actorName: row.actor_name,
+    entityType: row.entity_type,
+    entityId: row.entity_id,
+    action: row.action,
+    metadata: normalizeJson(row.metadata_json),
+    createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
   };
 }
 
@@ -84,6 +123,33 @@ export async function fetchCustomerWorkspaceMembers(customerAccountId: number) {
   );
 
   return rows.map(mapWorkspaceMember);
+}
+
+export async function fetchCustomerWorkspaceActivity(customerAccountId: number, limit = 20) {
+  const pool = getDbPool();
+  const safeLimit = Math.max(1, Math.min(limit, 60));
+  const [rows] = await pool.query<WorkspaceActivityRow[]>(
+    `
+      SELECT
+        al.id,
+        al.actor_type,
+        al.actor_admin_id,
+        al.entity_type,
+        al.entity_id,
+        al.action,
+        al.metadata_json,
+        al.created_at,
+        a.full_name AS actor_name
+      FROM audit_logs al
+      LEFT JOIN admins a ON a.id = al.actor_admin_id
+      WHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(al.metadata_json, '$.customerAccountId')) AS UNSIGNED) = ?
+      ORDER BY al.created_at DESC, al.id DESC
+      LIMIT ${safeLimit}
+    `,
+    [customerAccountId],
+  );
+
+  return rows.map(mapWorkspaceActivity);
 }
 
 export async function findCustomerWorkspaceMemberById(input: {

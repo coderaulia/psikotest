@@ -191,6 +191,7 @@ interface FakeAuditLog {
   entity_id: number | null;
   action: string;
   metadata_json: string | null;
+  created_at: string;
 }
 
 export interface FakeDbState {
@@ -1250,6 +1251,31 @@ export class FakeDbPool implements DbPoolLike {
       return [[{ affectedRows: submission ? 1 : 0 }], []] as unknown as [any, any];
     }
 
+    if (normalized.includes('from audit_logs al') && normalized.includes("json_extract(al.metadata_json, '$.customeraccountid')")) {
+      const customerAccountId = Number(params[0]);
+      const rows = this.state.auditLogs
+        .filter((item) => {
+          if (!item.metadata_json) {
+            return false;
+          }
+
+          try {
+            const metadata = JSON.parse(item.metadata_json) as Record<string, unknown>;
+            return Number(metadata.customerAccountId ?? -1) === customerAccountId;
+          } catch {
+            return false;
+          }
+        })
+        .sort((left, right) => {
+          const createdAtDelta = new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+          return createdAtDelta || right.id - left.id;
+        })
+        .map((item) => ({
+          ...item,
+          actor_name: this.state.admins.find((admin) => admin.id === item.actor_admin_id)?.full_name ?? null,
+        }));
+      return [rows, []] as unknown as [any, any];
+    }
     if (normalized.startsWith('insert into audit_logs')) {
       const auditLog: FakeAuditLog = {
         id: this.nextAuditId++,
@@ -1259,6 +1285,7 @@ export class FakeDbPool implements DbPoolLike {
         entity_id: (params[3] as number | null) ?? null,
         action: String(params[4] ?? ''),
         metadata_json: (params[5] as string | null) ?? null,
+        created_at: new Date().toISOString(),
       };
       this.state.auditLogs.push(auditLog);
       return [{ insertId: auditLog.id }, []] as unknown as [any, any];
@@ -1267,6 +1294,8 @@ export class FakeDbPool implements DbPoolLike {
     throw new Error(`Unsupported fake DB query: ${sql}`);
   }
 }
+
+
 
 
 

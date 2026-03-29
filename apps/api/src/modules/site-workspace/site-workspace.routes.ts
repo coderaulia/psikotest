@@ -6,6 +6,7 @@ import { HttpError } from '../../lib/http-error.js';
 import { requireCustomerWorkspaceRole } from '../../middleware/require-customer-workspace-role.js';
 import {
   addCustomerWorkspaceMember,
+  getCustomerWorkspaceActivity,
   getCustomerWorkspaceSettings,
   listCustomerWorkspaceMembers,
   sendCustomerWorkspaceMemberInvite,
@@ -64,6 +65,17 @@ siteWorkspaceRoutes.patch(
 );
 
 siteWorkspaceRoutes.get(
+  '/activity',
+  asyncHandler(async (request, response) => {
+    if (!request.customerSession) {
+      throw new HttpError(401, 'Customer session is required');
+    }
+
+    const payload = await getCustomerWorkspaceActivity(request.customerSession.accountId);
+    response.json(payload);
+  }),
+);
+siteWorkspaceRoutes.get(
   '/team',
   asyncHandler(async (request, response) => {
     if (!request.customerSession) {
@@ -107,3 +119,4 @@ siteWorkspaceRoutes.post(
     response.json(payload);
   }),
 );
+

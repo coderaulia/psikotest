@@ -103,6 +103,9 @@ export function CustomerWorkspacePage() {
           <Button variant="secondary" asChild>
             <Link to="/workspace/results">Workspace results</Link>
           </Button>
+          <Button variant="secondary" asChild>
+            <Link to="/workspace/activity">Workspace activity</Link>
+          </Button>
           {canAccessWorkspaceSettings(role) ? (
             <Button variant="secondary" asChild>
               <Link to="/workspace/settings">Workspace settings</Link>
@@ -292,5 +295,6 @@ export function CustomerWorkspacePage() {
     </div>
   );
 }
+
 
 

@@ -234,6 +234,35 @@ export interface CustomerWorkspaceTeamResponse {
   items: CustomerWorkspaceMemberItem[];
 }
 
+export interface CustomerWorkspaceActivityItem {
+  id: number;
+  actorType: 'admin' | 'participant' | 'system';
+  actorAdminId: number | null;
+  actorName: string | null;
+  entityType: string;
+  entityId: number | null;
+  action: string;
+  category: 'assessment' | 'participant_delivery' | 'team' | 'billing' | 'workspace';
+  label: string;
+  description: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface CustomerWorkspaceActivityResponse {
+  workspace: {
+    organizationName: string;
+    accountType: CustomerAccountType;
+  };
+  summary: {
+    totalEvents: number;
+    assessmentEvents: number;
+    participantDeliveryEvents: number;
+    teamEvents: number;
+    billingEvents: number;
+  };
+  items: CustomerWorkspaceActivityItem[];
+}
 export interface WorkspaceSubscriptionRecord {
   id: number;
   customerAccountId: number;
@@ -787,6 +816,7 @@ export interface SettingsOverviewResponse {
   sessionDefaults: SessionDefaultsSettings;
   auditFeed: AuditFeedItem[];
 }
+
 
 
 

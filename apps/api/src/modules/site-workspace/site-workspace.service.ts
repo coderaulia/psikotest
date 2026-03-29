@@ -6,6 +6,7 @@ import { HttpError } from '../../lib/http-error.js';
 import { assertTeamMemberCapacity } from '../site-billing/site-billing.service.js';
 import { findActiveCustomerById } from '../site-auth/site-auth.repository.js';
 import {
+  fetchCustomerWorkspaceActivity,
   fetchCustomerWorkspaceMembers,
   findCustomerWorkspaceMemberById,
   issueCustomerWorkspaceMemberInvite,
@@ -303,5 +304,144 @@ export async function sendCustomerWorkspaceMemberInvite(input: {
     loginLink: null,
     expiresAt: activationExpiresAt,
     deliveryPreview: `Activation link prepared for ${member.email}. It expires in ${INVITE_TTL_IN_HOURS} hours.`,
+  };
+}
+
+
+function formatActivityLabel(action: string) {
+  switch (action) {
+    case 'customer_assessment.created':
+      return 'Assessment draft created';
+    case 'customer_assessment.updated':
+      return 'Assessment updated';
+    case 'customer_assessment.checkout_completed':
+      return 'Plan checkout completed';
+    case 'customer_assessment_participant.upserted':
+      return 'Participant saved';
+    case 'customer_assessment_participant.imported':
+      return 'Participant list imported';
+    case 'customer_assessment_participant.bulk_invited':
+      return 'Bulk invitations prepared';
+    case 'customer_assessment_participant.bulk_reminded':
+      return 'Bulk reminders prepared';
+    case 'customer_assessment_participant.invited':
+      return 'Participant invitation prepared';
+    case 'customer_assessment_participant.reminded':
+      return 'Participant reminder prepared';
+    case 'customer_workspace.settings_updated':
+      return 'Workspace settings updated';
+    case 'customer_workspace.member_upserted':
+      return 'Workspace member saved';
+    case 'customer_workspace.member_invited':
+      return 'Workspace invite prepared';
+    case 'customer_workspace.member_login_reminder_sent':
+      return 'Workspace login reminder sent';
+    case 'customer_workspace.member_activated':
+      return 'Workspace member activated';
+    case 'workspace_subscription.updated':
+      return 'Workspace subscription changed';
+    default:
+      return action.replace(/[._]/g, ' ').replace(/\b\w/g, (value) => value.toUpperCase());
+  }
+}
+
+function formatActivityDescription(action: string, metadata: Record<string, unknown>) {
+  switch (action) {
+    case 'customer_assessment.created':
+      return `${String(metadata.testType ?? 'assessment').toUpperCase()} draft created for ${String(metadata.organizationName ?? 'the workspace')}.`;
+    case 'customer_assessment.updated':
+      return `${String(metadata.testType ?? 'assessment').toUpperCase()} draft updated with refreshed configuration.`;
+    case 'customer_assessment.checkout_completed':
+      return `Dummy checkout completed on ${String(metadata.plan ?? 'current')} (${String(metadata.billingCycle ?? 'monthly')}) to unlock sharing.`;
+    case 'customer_assessment_participant.imported':
+      return `${Number(metadata.importedCount ?? 0)} participant rows imported and ${Number(metadata.updatedCount ?? 0)} updated.`;
+    case 'customer_assessment_participant.bulk_invited':
+      return `${Number(metadata.invitedCount ?? 0)} invites prepared via ${String(metadata.channel ?? 'email')}.`;
+    case 'customer_assessment_participant.bulk_reminded':
+      return `${Number(metadata.remindedCount ?? 0)} reminders prepared via ${String(metadata.channel ?? 'email')}.`;
+    case 'customer_assessment_participant.invited':
+      return `Invitation prepared for ${String(metadata.email ?? 'participant')} via ${String(metadata.channel ?? 'email')}.`;
+    case 'customer_assessment_participant.reminded':
+      return `Reminder prepared for ${String(metadata.email ?? 'participant')} via ${String(metadata.channel ?? 'email')}.`;
+    case 'customer_assessment_participant.upserted':
+      return `Participant record saved for ${String(metadata.email ?? 'participant')}.`;
+    case 'customer_workspace.settings_updated':
+      return 'Consent text, privacy text, and default assessment settings were updated.';
+    case 'customer_workspace.member_upserted':
+      return `Workspace member ${String(metadata.email ?? '')} was saved as ${String(metadata.role ?? 'member')}.`;
+    case 'customer_workspace.member_invited':
+      return `Activation link prepared for ${String(metadata.email ?? 'the invited member')}.`;
+    case 'customer_workspace.member_login_reminder_sent':
+      return `Login reminder prepared for ${String(metadata.email ?? 'the workspace member')}.`;
+    case 'customer_workspace.member_activated':
+      return `${String(metadata.email ?? 'A workspace member')} activated workspace access.`;
+    case 'workspace_subscription.updated':
+      return `Plan changed to ${String(metadata.nextPlanCode ?? metadata.planCode ?? 'current')} on ${String(metadata.billingCycle ?? 'monthly')}.`;
+    default:
+      return 'Workspace activity recorded for audit and operational tracking.';
+  }
+}
+
+function categorizeActivity(action: string) {
+  if (action.startsWith('customer_assessment_participant.')) {
+    return 'participant_delivery' as const;
+  }
+
+  if (action.startsWith('customer_assessment.')) {
+    return 'assessment' as const;
+  }
+
+  if (action.startsWith('customer_workspace.member_')) {
+    return 'team' as const;
+  }
+
+  if (action.startsWith('workspace_subscription.')) {
+    return 'billing' as const;
+  }
+
+  return 'workspace' as const;
+}
+
+export async function getCustomerWorkspaceActivity(accountId: number, limit = 24) {
+  const account = await requireActiveCustomer(accountId);
+  const items = (await fetchCustomerWorkspaceActivity(accountId, limit)).map((item) => ({
+    ...item,
+    category: categorizeActivity(item.action),
+    label: formatActivityLabel(item.action),
+    description: formatActivityDescription(item.action, item.metadata),
+  }));
+
+  const summary = items.reduce(
+    (accumulator, item) => {
+      accumulator.totalEvents += 1;
+
+      if (item.category === 'assessment') {
+        accumulator.assessmentEvents += 1;
+      } else if (item.category === 'participant_delivery') {
+        accumulator.participantDeliveryEvents += 1;
+      } else if (item.category === 'team') {
+        accumulator.teamEvents += 1;
+      } else if (item.category === 'billing') {
+        accumulator.billingEvents += 1;
+      }
+
+      return accumulator;
+    },
+    {
+      totalEvents: 0,
+      assessmentEvents: 0,
+      participantDeliveryEvents: 0,
+      teamEvents: 0,
+      billingEvents: 0,
+    },
+  );
+
+  return {
+    workspace: {
+      organizationName: account.organization_name,
+      accountType: account.account_type,
+    },
+    summary,
+    items,
   };
 }

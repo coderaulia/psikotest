@@ -5,6 +5,7 @@ import type {
   SendCustomerWorkspaceMemberInviteResponse,
   UpdateCustomerWorkspaceSettingsPayload,
   CustomerWorkspaceTeamResponse,
+  CustomerWorkspaceActivityResponse,
 } from '@/types/assessment';
 
 import { refreshCustomerProfile } from './customer-api';
@@ -39,4 +40,8 @@ export async function sendCustomerWorkspaceMemberInvite(memberId: number) {
   return customerFetchJson<SendCustomerWorkspaceMemberInviteResponse>(`/site-workspace/team/${memberId}/send`, {
     method: 'POST',
   });
+}
+
+export async function getCustomerWorkspaceActivity() {
+  return customerFetchJson<CustomerWorkspaceActivityResponse>('/site-workspace/activity');
 }
