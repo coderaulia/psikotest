@@ -93,6 +93,9 @@ export function CustomerWorkspacePage() {
             <Link to="/workspace/team">Workspace team</Link>
           </Button>
           <Button variant="secondary" asChild>
+            <Link to="/workspace/results">Workspace results</Link>
+          </Button>
+          <Button variant="secondary" asChild>
             <Link to="/workspace/settings">Workspace settings</Link>
           </Button>
           <Button asChild>

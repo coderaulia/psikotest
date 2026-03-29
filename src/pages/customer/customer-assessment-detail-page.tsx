@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Copy, CreditCard, ExternalLink, Link as LinkIcon, LockKeyhole, Settings2, ShieldCheck, Sparkles, Users } from 'lucide-react';
+import { CheckCircle2, Copy, CreditCard, ExternalLink, FileText, Link as LinkIcon, LockKeyhole, Settings2, ShieldCheck, Sparkles, Users } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 
 import { formatDateTime, formatTokenLabel } from '@/lib/formatters';
@@ -238,11 +238,18 @@ export function CustomerAssessmentDetailPage() {
                   </Link>
                 </Button>
               ) : (
-                <Button type="button" size="lg" asChild>
-                  <Link to={`/workspace/assessments/${detail.assessmentId}/participants`}>
-                    Manage participants <Users className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
+                <>
+                  <Button type="button" size="lg" asChild>
+                    <Link to={`/workspace/assessments/${detail.assessmentId}/participants`}>
+                      Manage participants <Users className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Button type="button" size="lg" variant="secondary" asChild>
+                    <Link to="/workspace/results">
+                      View released results <FileText className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                </>
               )}
               <Button type="button" variant="outline" size="lg" asChild>
                 <a href={detail.previewDemoLink} target="_blank" rel="noreferrer">

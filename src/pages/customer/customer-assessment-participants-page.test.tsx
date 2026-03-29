@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
@@ -160,10 +160,11 @@ describe('CustomerAssessmentParticipantsPage', () => {
     const user = userEvent.setup();
 
     await screen.findByText('Nadia Pratama');
-    await user.type(
-      screen.getByPlaceholderText(/full name, email, employee code/i),
-      'Sinta Dewi, sinta@example.com, EMP-003, HR, Analyst, Shortlist{enter}Bima Putra, bima@example.com, EMP-004, Ops, Lead, Priority',
-    );
+    fireEvent.change(screen.getByPlaceholderText(/full name, email, employee code/i), {
+      target: {
+        value: 'Sinta Dewi, sinta@example.com, EMP-003, HR, Analyst, Shortlist\nBima Putra, bima@example.com, EMP-004, Ops, Lead, Priority',
+      },
+    });
     await user.click(screen.getByRole('button', { name: /import participant list/i }));
 
     expect(importCustomerAssessmentParticipantsMock).toHaveBeenCalledWith(52, {

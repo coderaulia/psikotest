@@ -415,6 +415,36 @@ export interface CustomerAssessmentDetail extends CustomerAssessmentItem {
   canActivateSharing: boolean;
 }
 
+export interface CustomerWorkspaceResultItem {
+  resultId: number;
+  assessmentId: number;
+  assessmentTitle: string;
+  participantName: string;
+  participantEmail: string;
+  testType: TestTypeCode;
+  submittedAt: string;
+  scoreTotal: number | null;
+  scoreBand: string | null;
+  profileCode: string | null;
+  reviewStatus: ResultReviewStatus;
+  distributionPolicy: DistributionPolicy;
+  participantResultAccess: ParticipantResultAccess;
+  hrResultAccess: HrResultAccess;
+  protectedDeliveryMode: boolean;
+  releasedSummary: string | null;
+  visibilityNote: string;
+}
+
+export interface CustomerWorkspaceResultsResponse {
+  summary: {
+    total: number;
+    released: number;
+    awaitingReview: number;
+    hiddenDrafts: number;
+  };
+  items: CustomerWorkspaceResultItem[];
+}
+
 export interface DashboardSummaryCard {
   label: string;
   value: string;

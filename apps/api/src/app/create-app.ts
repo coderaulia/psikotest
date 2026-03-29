@@ -19,6 +19,7 @@ import { settingsRoutes } from '../modules/settings/settings.routes.js';
 import { siteAuthRoutes } from '../modules/site-auth/site-auth.routes.js';
 import { siteBillingRoutes } from '../modules/site-billing/site-billing.routes.js';
 import { siteOnboardingRoutes } from '../modules/site-onboarding/site-onboarding.routes.js';
+import { siteResultsRoutes } from '../modules/site-results/site-results.routes.js';
 import { siteWorkspaceRoutes } from '../modules/site-workspace/site-workspace.routes.js';
 import { customersRoutes } from '../modules/customers/customers.routes.js';
 import { testSessionRoutes } from '../modules/test-sessions/test-session.routes.js';
@@ -76,6 +77,7 @@ export function createApp() {
   app.use('/api/site-auth', siteAuthRoutes);
   app.use('/api/site-billing', requireCustomerAuth, siteBillingRoutes);
   app.use('/api/site-onboarding', requireCustomerAuth, siteOnboardingRoutes);
+  app.use('/api/site-results', requireCustomerAuth, siteResultsRoutes);
   app.use('/api/site-workspace', requireCustomerAuth, siteWorkspaceRoutes);
   app.use('/api/dashboard', requireAdminAuth, dashboardRoutes);
   app.use('/api/participants', requireAdminAuth, participantRoutes);
