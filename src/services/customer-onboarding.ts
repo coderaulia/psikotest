@@ -7,6 +7,8 @@ import type {
   CustomerAssessmentItem,
   CustomerAssessmentParticipantListResponse,
   CustomerAssessmentParticipantItem,
+  ImportCustomerAssessmentParticipantsPayload,
+  ImportCustomerAssessmentParticipantsResponse,
   SendCustomerAssessmentBulkInvitePayload,
   SendCustomerAssessmentParticipantInvitePayload,
   UpdateCustomerAssessmentPayload,
@@ -81,6 +83,16 @@ export async function sendCustomerAssessmentBulkInvites(
   payload: SendCustomerAssessmentBulkInvitePayload,
 ) {
   return customerFetchJson<CustomerAssessmentBulkInviteResponse>(`/site-onboarding/assessments/${assessmentId}/participants/send-bulk`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function importCustomerAssessmentParticipants(
+  assessmentId: number,
+  payload: ImportCustomerAssessmentParticipantsPayload,
+) {
+  return customerFetchJson<ImportCustomerAssessmentParticipantsResponse>(`/site-onboarding/assessments/${assessmentId}/participants/import`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });

@@ -380,6 +380,16 @@ export interface CustomerAssessmentBulkInviteResponse {
   deliveryPreview: string;
 }
 
+export interface ImportCustomerAssessmentParticipantsPayload {
+  rows: CreateCustomerAssessmentParticipantPayload[];
+}
+
+export interface ImportCustomerAssessmentParticipantsResponse {
+  importedCount: number;
+  updatedCount: number;
+  totalRows: number;
+}
+
 export interface CustomerAssessmentParticipantSummary {
   total: number;
   draft: number;

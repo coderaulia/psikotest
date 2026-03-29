@@ -6,6 +6,7 @@ import { formatDateTime, formatTokenLabel } from '@/lib/formatters';
 import {
   createCustomerAssessmentParticipant,
   getCustomerAssessment,
+  importCustomerAssessmentParticipants,
   listCustomerAssessmentParticipants,
   sendCustomerAssessmentBulkInvites,
   sendCustomerAssessmentParticipantInvite,
@@ -20,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 const initialForm: CreateCustomerAssessmentParticipantPayload = {
   fullName: '',
@@ -30,14 +32,49 @@ const initialForm: CreateCustomerAssessmentParticipantPayload = {
   note: null,
 };
 
+function parseParticipantImportRows(value: string): CreateCustomerAssessmentParticipantPayload[] {
+  const lines = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) {
+    return [];
+  }
+
+  const firstRow = lines[0]?.toLowerCase() ?? '';
+  const dataLines = firstRow.includes('full name') && firstRow.includes('email') ? lines.slice(1) : lines;
+
+  return dataLines.map((line, index) => {
+    const rawColumns = line.includes('\t') ? line.split('\t') : line.split(',');
+    const columns = rawColumns.map((item) => item.trim());
+    const [fullName = '', email = '', employeeCode = '', department = '', positionTitle = '', note = ''] = columns;
+
+    if (!fullName || !email) {
+      throw new Error(`Row ${index + 1} must include at least full name and email.`);
+    }
+
+    return {
+      fullName,
+      email,
+      employeeCode: employeeCode || null,
+      department: department || null,
+      positionTitle: positionTitle || null,
+      note: note || null,
+    } satisfies CreateCustomerAssessmentParticipantPayload;
+  });
+}
+
 export function CustomerAssessmentParticipantsPage() {
   const { assessmentId = '' } = useParams();
   const parsedAssessmentId = Number(assessmentId);
   const [detail, setDetail] = useState<CustomerAssessmentDetail | null>(null);
   const [participantData, setParticipantData] = useState<CustomerAssessmentParticipantListResponse | null>(null);
   const [form, setForm] = useState<CreateCustomerAssessmentParticipantPayload>(initialForm);
+  const [importText, setImportText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [sendingId, setSendingId] = useState<number | null>(null);
   const [isSendingBulk, setIsSendingBulk] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -128,6 +165,32 @@ export function CustomerAssessmentParticipantsPage() {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to add participant');
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleImportParticipants() {
+    if (!detail) {
+      return;
+    }
+
+    setIsImporting(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const rows = parseParticipantImportRows(importText);
+      if (rows.length === 0) {
+        throw new Error('Paste at least one participant row to import.');
+      }
+
+      const payload = await importCustomerAssessmentParticipants(detail.assessmentId, { rows });
+      await loadData();
+      setImportText('');
+      setSuccessMessage(`Imported ${payload.importedCount} participant(s) and updated ${payload.updatedCount} existing row(s).`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to import participants');
+    } finally {
+      setIsImporting(false);
     }
   }
 
@@ -238,6 +301,25 @@ export function CustomerAssessmentParticipantsPage() {
 
             {errorMessage ? <p className="text-sm text-rose-600">{errorMessage}</p> : null}
             {successMessage ? <p className="text-sm text-emerald-700">{successMessage}</p> : null}
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-slate-950">Paste participant list</p>
+                <p className="text-sm text-slate-500">Use comma or tab separated rows in this order: full name, email, employee code, department, position, note.</p>
+              </div>
+              <Textarea
+                className="mt-4 min-h-36 bg-white"
+                value={importText}
+                onChange={(event) => setImportText(event.target.value)}
+                placeholder={'Full name, email, employee code, department, position, note\nNadia Pratama, nadia@example.com, EMP-001, People Ops, Recruiter, Priority shortlist'}
+              />
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-slate-400">Header row is optional. Duplicate emails will update the existing participant entry.</p>
+                <Button type="button" size="lg" disabled={isImporting || !importText.trim()} onClick={() => void handleImportParticipants()}>
+                  {isImporting ? 'Importing...' : 'Import participant list'} <Plus className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </div>
 
             <form className="space-y-4" onSubmit={handleAddParticipant}>
               <div className="grid gap-4 md:grid-cols-2">
@@ -356,7 +438,7 @@ export function CustomerAssessmentParticipantsPage() {
             <CardTitle>Assessment state</CardTitle>
             <CardDescription>Current operational state for participant delivery.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-4 text-sm text-slate-500">
+          <CardContent className="grid gap-3 text-sm text-slate-500 sm:grid-cols-4">
             <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
               <p className="inline-flex items-center gap-2 font-medium text-slate-950"><Users className="h-4 w-4" /> Status</p>
               <p className="mt-2">{formatTokenLabel(detail.sessionStatus)}</p>

@@ -8,6 +8,7 @@ import {
   addCustomerAssessmentParticipant,
   completeCustomerAssessmentCheckout,
   createCustomerAssessment,
+  importCustomerAssessmentParticipants,
   getCustomerAssessmentDetail,
   listCustomerAssessmentItems,
   listCustomerAssessmentParticipants,
@@ -44,6 +45,10 @@ const participantCreateSchema = z.object({
 
 const participantSendSchema = z.object({
   channel: z.enum(['email', 'link']).default('email'),
+});
+
+const participantImportSchema = z.object({
+  rows: z.array(participantCreateSchema).min(1).max(250),
 });
 
 const participantBulkSendSchema = z.object({
@@ -210,6 +215,32 @@ siteOnboardingRoutes.post(
     });
 
     response.status(201).json(participant);
+  }),
+);
+
+siteOnboardingRoutes.post(
+  '/assessments/:id/participants/import',
+  asyncHandler(async (request, response) => {
+    if (!request.customerSession) {
+      throw new HttpError(401, 'Customer session is required');
+    }
+
+    const { id } = assessmentParamsSchema.parse(request.params);
+    const payload = participantImportSchema.parse(request.body ?? {});
+    const summary = await importCustomerAssessmentParticipants({
+      customerAccountId: request.customerSession.accountId,
+      assessmentId: id,
+      rows: payload.rows.map((row) => ({
+        fullName: row.fullName,
+        email: row.email,
+        employeeCode: row.employeeCode ?? null,
+        department: row.department ?? null,
+        positionTitle: row.positionTitle ?? null,
+        note: row.note ?? null,
+      })),
+    });
+
+    response.status(201).json(summary);
   }),
 );
 

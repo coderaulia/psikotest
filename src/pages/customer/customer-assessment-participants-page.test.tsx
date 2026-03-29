@@ -10,6 +10,7 @@ import { CustomerAssessmentParticipantsPage } from './customer-assessment-partic
 const getCustomerAssessmentMock = vi.fn();
 const listCustomerAssessmentParticipantsMock = vi.fn();
 const createCustomerAssessmentParticipantMock = vi.fn();
+const importCustomerAssessmentParticipantsMock = vi.fn();
 const sendCustomerAssessmentParticipantInviteMock = vi.fn();
 const sendCustomerAssessmentBulkInvitesMock = vi.fn();
 
@@ -17,6 +18,7 @@ vi.mock('@/services/customer-onboarding', () => ({
   getCustomerAssessment: (...args: unknown[]) => getCustomerAssessmentMock(...args),
   listCustomerAssessmentParticipants: (...args: unknown[]) => listCustomerAssessmentParticipantsMock(...args),
   createCustomerAssessmentParticipant: (...args: unknown[]) => createCustomerAssessmentParticipantMock(...args),
+  importCustomerAssessmentParticipants: (...args: unknown[]) => importCustomerAssessmentParticipantsMock(...args),
   sendCustomerAssessmentParticipantInvite: (...args: unknown[]) => sendCustomerAssessmentParticipantInviteMock(...args),
   sendCustomerAssessmentBulkInvites: (...args: unknown[]) => sendCustomerAssessmentBulkInvitesMock(...args),
 }));
@@ -101,6 +103,7 @@ describe('CustomerAssessmentParticipantsPage', () => {
     getCustomerAssessmentMock.mockReset();
     listCustomerAssessmentParticipantsMock.mockReset();
     createCustomerAssessmentParticipantMock.mockReset();
+    importCustomerAssessmentParticipantsMock.mockReset();
     sendCustomerAssessmentParticipantInviteMock.mockReset();
     sendCustomerAssessmentBulkInvitesMock.mockReset();
 
@@ -138,5 +141,51 @@ describe('CustomerAssessmentParticipantsPage', () => {
 
     expect(sendCustomerAssessmentBulkInvitesMock).toHaveBeenCalledWith(52, { channel: 'email' });
     expect(await screen.findByText(/dummy email invites queued for 2 participant/i)).toBeInTheDocument();
+  });
+
+  it('imports pasted participant rows before invite delivery', async () => {
+    getCustomerAssessmentMock.mockResolvedValue(detail);
+    listCustomerAssessmentParticipantsMock.mockResolvedValue(participantList);
+    importCustomerAssessmentParticipantsMock.mockResolvedValue({
+      importedCount: 2,
+      updatedCount: 0,
+      totalRows: 2,
+    });
+
+    renderWithRoute(<CustomerAssessmentParticipantsPage />, {
+      route: '/workspace/assessments/52/participants',
+      path: '/workspace/assessments/:assessmentId/participants',
+    });
+
+    const user = userEvent.setup();
+
+    await screen.findByText('Nadia Pratama');
+    await user.type(
+      screen.getByPlaceholderText(/full name, email, employee code/i),
+      'Sinta Dewi, sinta@example.com, EMP-003, HR, Analyst, Shortlist{enter}Bima Putra, bima@example.com, EMP-004, Ops, Lead, Priority',
+    );
+    await user.click(screen.getByRole('button', { name: /import participant list/i }));
+
+    expect(importCustomerAssessmentParticipantsMock).toHaveBeenCalledWith(52, {
+      rows: [
+        {
+          fullName: 'Sinta Dewi',
+          email: 'sinta@example.com',
+          employeeCode: 'EMP-003',
+          department: 'HR',
+          positionTitle: 'Analyst',
+          note: 'Shortlist',
+        },
+        {
+          fullName: 'Bima Putra',
+          email: 'bima@example.com',
+          employeeCode: 'EMP-004',
+          department: 'Ops',
+          positionTitle: 'Lead',
+          note: 'Priority',
+        },
+      ],
+    });
+    expect(await screen.findByText(/imported 2 participant\(s\) and updated 0 existing row/i)).toBeInTheDocument();
   });
 });

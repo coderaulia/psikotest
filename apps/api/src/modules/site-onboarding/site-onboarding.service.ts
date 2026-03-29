@@ -400,6 +400,84 @@ export async function addCustomerAssessmentParticipant(input: {
   return participant;
 }
 
+export async function importCustomerAssessmentParticipants(input: {
+  customerAccountId: number;
+  assessmentId: number;
+  rows: Array<{
+    fullName: string;
+    email: string;
+    employeeCode: string | null;
+    department: string | null;
+    positionTitle: string | null;
+    note: string | null;
+  }>;
+}) {
+  await requireActiveCustomer(input.customerAccountId);
+  const existingList = await fetchCustomerAssessmentParticipants(input.customerAccountId, input.assessmentId);
+
+  if (!existingList) {
+    throw new HttpError(404, 'Assessment draft not found');
+  }
+
+  const existingEmails = new Set(existingList.items.map((item) => item.email.toLowerCase()));
+  const normalizedRows = new Map();
+
+  for (const row of input.rows) {
+    const normalizedEmail = row.email.trim().toLowerCase();
+    normalizedRows.set(normalizedEmail, {
+      fullName: row.fullName.trim(),
+      email: normalizedEmail,
+      employeeCode: row.employeeCode,
+      department: row.department,
+      positionTitle: row.positionTitle,
+      note: row.note,
+    });
+  }
+
+  let importedCount = 0;
+  let updatedCount = 0;
+
+  for (const row of normalizedRows.values()) {
+    const participant = await addCustomerAssessmentParticipant({
+      customerAccountId: input.customerAccountId,
+      assessmentId: input.assessmentId,
+      fullName: row.fullName,
+      email: row.email,
+      employeeCode: row.employeeCode,
+      department: row.department,
+      positionTitle: row.positionTitle,
+      note: row.note,
+    });
+
+    if (existingEmails.has(participant.email.toLowerCase())) {
+      updatedCount += 1;
+    } else {
+      importedCount += 1;
+      existingEmails.add(participant.email.toLowerCase());
+    }
+  }
+
+  await createAuditEvent({
+    actorType: 'system',
+    entityType: 'customer_assessment_participant',
+    entityId: input.assessmentId,
+    action: 'customer_assessment_participant.imported',
+    metadata: {
+      customerAccountId: input.customerAccountId,
+      assessmentId: input.assessmentId,
+      importedCount,
+      updatedCount,
+      totalRows: normalizedRows.size,
+    },
+  });
+
+  return {
+    importedCount,
+    updatedCount,
+    totalRows: normalizedRows.size,
+  };
+}
+
 export async function sendCustomerAssessmentBulkInvites(input: {
   customerAccountId: number;
   assessmentId: number;
