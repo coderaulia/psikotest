@@ -1,9 +1,16 @@
 import type { ReactNode } from 'react';
 
-import { ArrowRight, Building2, LogOut, Sparkles } from 'lucide-react';
+import { ArrowRight, Building2, LogOut, ShieldCheck, Sparkles } from 'lucide-react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 
 import { LanguageToggle } from '@/components/common/language-toggle';
+import {
+  canAccessWorkspaceBilling,
+  canAccessWorkspaceSettings,
+  canAccessWorkspaceTeam,
+  canOperateAssessments,
+  canViewWorkspaceResults,
+} from '@/lib/customer-access';
 import { loadCustomerSession } from '@/lib/customer-session';
 import { cn } from '@/lib/cn';
 import { useLanguage } from '@/lib/language';
@@ -30,9 +37,10 @@ const copy = {
         'Workspace onboarding now covers company defaults, assessment setup, dummy checkout, and participant invitations before external rollout.',
       currentAccess: 'Current workspace mode',
       currentAccessDescription:
-        'Trial workspaces can prepare drafts, preview the participant experience, simulate payment, and manage invitations before wider distribution.',
+        'Workspace access now adapts to the active role, so owners, admins, operators, and reviewers only see the areas they need.',
       createDraft: 'Create a new draft',
       workspaceFallback: 'Workspace',
+      role: 'Current role',
     },
   },
   id: {
@@ -55,28 +63,34 @@ const copy = {
         'Onboarding workspace kini mencakup profil perusahaan, setup asesmen, checkout dummy, dan undangan peserta sebelum distribusi eksternal.',
       currentAccess: 'Mode workspace saat ini',
       currentAccessDescription:
-        'Workspace trial dapat menyiapkan draft, meninjau pengalaman peserta, mensimulasikan pembayaran, dan mengelola undangan sebelum distribusi lebih luas.',
+        'Akses workspace kini menyesuaikan peran aktif, sehingga owner, admin, operator, dan reviewer hanya melihat area yang relevan.',
       createDraft: 'Buat draft baru',
       workspaceFallback: 'Workspace',
+      role: 'Peran saat ini',
     },
   },
 } as const;
+
+function formatRole(role: string) {
+  return role.replace(/_/g, ' ').replace(/\b\w/g, (value) => value.toUpperCase());
+}
 
 export function CustomerShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const customerSession = loadCustomerSession();
   const { language } = useLanguage();
   const t = copy[language];
+  const role = customerSession?.account.workspaceRole ?? 'owner';
 
   const navItems = [
-    { to: '/workspace', label: t.nav.workspace },
-    { to: '/workspace/company', label: t.nav.company },
-    { to: '/workspace/billing', label: t.nav.billing },
-    { to: '/workspace/results', label: t.nav.results },
-    { to: '/workspace/team', label: t.nav.team },
-    { to: '/workspace/create', label: t.nav.createAssessment },
-    { to: '/workspace/settings', label: t.nav.settings },
-  ];
+    { to: '/workspace', label: t.nav.workspace, visible: true },
+    { to: '/workspace/company', label: t.nav.company, visible: canAccessWorkspaceSettings(role) },
+    { to: '/workspace/billing', label: t.nav.billing, visible: canAccessWorkspaceBilling(role) },
+    { to: '/workspace/results', label: t.nav.results, visible: canViewWorkspaceResults(role) },
+    { to: '/workspace/team', label: t.nav.team, visible: canAccessWorkspaceTeam(role) },
+    { to: '/workspace/create', label: t.nav.createAssessment, visible: canOperateAssessments(role) },
+    { to: '/workspace/settings', label: t.nav.settings, visible: canAccessWorkspaceSettings(role) },
+  ].filter((item) => item.visible);
 
   async function handleLogout() {
     await logoutCustomerSession();
@@ -145,14 +159,24 @@ export function CustomerShell({ children }: { children: ReactNode }) {
           <div className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5">
             <p className="text-sm font-medium text-slate-950">{t.hero.currentAccess}</p>
             <p className="mt-2 text-sm leading-7 text-slate-500">{t.hero.currentAccessDescription}</p>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+              <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs uppercase tracking-[0.16em] text-slate-500">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                {t.hero.role}: {formatRole(role)}
+              </span>
+            </div>
             <div className="mt-4 flex flex-wrap gap-3">
-              <Link to="/workspace/create" className="inline-flex items-center gap-2 text-sm font-medium text-slate-950">
-                {t.hero.createDraft} <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link to="/workspace/company" className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-950">
-                <Building2 className="h-4 w-4" />
-                {t.nav.company}
-              </Link>
+              {canOperateAssessments(role) ? (
+                <Link to="/workspace/create" className="inline-flex items-center gap-2 text-sm font-medium text-slate-950">
+                  {t.hero.createDraft} <ArrowRight className="h-4 w-4" />
+                </Link>
+              ) : null}
+              {canAccessWorkspaceSettings(role) ? (
+                <Link to="/workspace/company" className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-950">
+                  <Building2 className="h-4 w-4" />
+                  {t.nav.company}
+                </Link>
+              ) : null}
             </div>
           </div>
         </div>

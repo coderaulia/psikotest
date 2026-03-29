@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { asyncHandler } from '../../lib/async-handler.js';
 import { HttpError } from '../../lib/http-error.js';
+import { requireCustomerWorkspaceRole } from '../../middleware/require-customer-workspace-role.js';
 import {
   addCustomerWorkspaceMember,
   getCustomerWorkspaceSettings,
@@ -36,16 +37,6 @@ const memberParamsSchema = z.object({
   memberId: z.coerce.number().int().positive(),
 });
 
-function requireWorkspaceAdminRole(request: { customerSession?: { workspaceRole: 'owner' | 'admin' | 'operator' | 'reviewer' } }) {
-  if (!request.customerSession) {
-    throw new HttpError(401, 'Customer session is required');
-  }
-
-  if (!['owner', 'admin'].includes(request.customerSession.workspaceRole)) {
-    throw new HttpError(403, 'This action requires workspace admin access');
-  }
-}
-
 export const siteWorkspaceRoutes = Router();
 
 siteWorkspaceRoutes.get(
@@ -55,6 +46,7 @@ siteWorkspaceRoutes.get(
       throw new HttpError(401, 'Customer session is required');
     }
 
+    requireCustomerWorkspaceRole(request, ['owner', 'admin'], 'Workspace settings are limited to owners and workspace admins');
     const payload = await getCustomerWorkspaceSettings(request.customerSession.accountId);
     response.json(payload);
   }),
@@ -63,7 +55,7 @@ siteWorkspaceRoutes.get(
 siteWorkspaceRoutes.patch(
   '/settings',
   asyncHandler(async (request, response) => {
-    requireWorkspaceAdminRole(request);
+    requireCustomerWorkspaceRole(request, ['owner', 'admin'], 'Workspace settings are limited to owners and workspace admins');
 
     const payload = workspaceSettingsSchema.parse(request.body);
     const updated = await updateCustomerWorkspaceSettings(request.customerSession!.accountId, payload);
@@ -78,6 +70,7 @@ siteWorkspaceRoutes.get(
       throw new HttpError(401, 'Customer session is required');
     }
 
+    requireCustomerWorkspaceRole(request, ['owner', 'admin'], 'Workspace team access is limited to owners and workspace admins');
     const payload = await listCustomerWorkspaceMembers(request.customerSession.accountId);
     response.json(payload);
   }),
@@ -86,7 +79,7 @@ siteWorkspaceRoutes.get(
 siteWorkspaceRoutes.post(
   '/team',
   asyncHandler(async (request, response) => {
-    requireWorkspaceAdminRole(request);
+    requireCustomerWorkspaceRole(request, ['owner', 'admin'], 'Workspace team management is limited to owners and workspace admins');
 
     const payload = workspaceMemberSchema.parse(request.body);
     const member = await addCustomerWorkspaceMember({
@@ -103,7 +96,7 @@ siteWorkspaceRoutes.post(
 siteWorkspaceRoutes.post(
   '/team/:memberId/send',
   asyncHandler(async (request, response) => {
-    requireWorkspaceAdminRole(request);
+    requireCustomerWorkspaceRole(request, ['owner', 'admin'], 'Workspace team management is limited to owners and workspace admins');
 
     const { memberId } = memberParamsSchema.parse(request.params);
     const payload = await sendCustomerWorkspaceMemberInvite({

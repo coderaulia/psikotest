@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { asyncHandler } from '../../lib/async-handler.js';
 import { HttpError } from '../../lib/http-error.js';
+import { requireCustomerWorkspaceRole } from '../../middleware/require-customer-workspace-role.js';
 import {
   activateCustomerAssessment,
   addCustomerAssessmentParticipant,
@@ -66,6 +67,10 @@ const participantParamsSchema = z.object({
   participantId: z.coerce.number().int().positive(),
 });
 
+function requireAssessmentOperator(request: { customerSession?: { workspaceRole: 'owner' | 'admin' | 'operator' | 'reviewer' } }) {
+  requireCustomerWorkspaceRole(request as never, ['owner', 'admin', 'operator'], 'Assessment operations are limited to owners, workspace admins, and operators');
+}
+
 export const siteOnboardingRoutes = Router();
 
 siteOnboardingRoutes.get(
@@ -101,13 +106,11 @@ siteOnboardingRoutes.get(
 siteOnboardingRoutes.post(
   '/assessments',
   asyncHandler(async (request, response) => {
-    if (!request.customerSession) {
-      throw new HttpError(401, 'Customer session is required');
-    }
+    requireAssessmentOperator(request);
 
     const payload = assessmentSchema.parse(request.body);
     const assessment = await createCustomerAssessment({
-      customerAccountId: request.customerSession.accountId,
+      customerAccountId: request.customerSession!.accountId,
       testType: payload.testType,
       title: payload.title,
       organizationName: payload.organizationName,
@@ -126,14 +129,12 @@ siteOnboardingRoutes.post(
 siteOnboardingRoutes.patch(
   '/assessments/:id',
   asyncHandler(async (request, response) => {
-    if (!request.customerSession) {
-      throw new HttpError(401, 'Customer session is required');
-    }
+    requireAssessmentOperator(request);
 
     const { id } = assessmentParamsSchema.parse(request.params);
     const payload = assessmentSchema.parse(request.body);
     const assessment = await updateCustomerAssessment({
-      customerAccountId: request.customerSession.accountId,
+      customerAccountId: request.customerSession!.accountId,
       assessmentId: id,
       testType: payload.testType,
       title: payload.title,
@@ -153,12 +154,10 @@ siteOnboardingRoutes.patch(
 siteOnboardingRoutes.post(
   '/assessments/:id/activate',
   asyncHandler(async (request, response) => {
-    if (!request.customerSession) {
-      throw new HttpError(401, 'Customer session is required');
-    }
+    requireAssessmentOperator(request);
 
     const { id } = assessmentParamsSchema.parse(request.params);
-    const assessment = await activateCustomerAssessment(request.customerSession.accountId, id);
+    const assessment = await activateCustomerAssessment(request.customerSession!.accountId, id);
     response.json(assessment);
   }),
 );
@@ -166,14 +165,12 @@ siteOnboardingRoutes.post(
 siteOnboardingRoutes.post(
   '/assessments/:id/checkout',
   asyncHandler(async (request, response) => {
-    if (!request.customerSession) {
-      throw new HttpError(401, 'Customer session is required');
-    }
+    requireAssessmentOperator(request);
 
     const { id } = assessmentParamsSchema.parse(request.params);
     const payload = checkoutSchema.parse(request.body ?? {});
     const assessment = await completeCustomerAssessmentCheckout({
-      customerAccountId: request.customerSession.accountId,
+      customerAccountId: request.customerSession!.accountId,
       assessmentId: id,
       plan: payload.selectedPlan,
       billingCycle: payload.billingCycle,
@@ -186,12 +183,10 @@ siteOnboardingRoutes.post(
 siteOnboardingRoutes.get(
   '/assessments/:id/participants',
   asyncHandler(async (request, response) => {
-    if (!request.customerSession) {
-      throw new HttpError(401, 'Customer session is required');
-    }
+    requireAssessmentOperator(request);
 
     const { id } = assessmentParamsSchema.parse(request.params);
-    const participants = await listCustomerAssessmentParticipants(request.customerSession.accountId, id);
+    const participants = await listCustomerAssessmentParticipants(request.customerSession!.accountId, id);
     response.json(participants);
   }),
 );
@@ -199,14 +194,12 @@ siteOnboardingRoutes.get(
 siteOnboardingRoutes.post(
   '/assessments/:id/participants',
   asyncHandler(async (request, response) => {
-    if (!request.customerSession) {
-      throw new HttpError(401, 'Customer session is required');
-    }
+    requireAssessmentOperator(request);
 
     const { id } = assessmentParamsSchema.parse(request.params);
     const payload = participantCreateSchema.parse(request.body);
     const participant = await addCustomerAssessmentParticipant({
-      customerAccountId: request.customerSession.accountId,
+      customerAccountId: request.customerSession!.accountId,
       assessmentId: id,
       fullName: payload.fullName,
       email: payload.email,
@@ -223,14 +216,12 @@ siteOnboardingRoutes.post(
 siteOnboardingRoutes.post(
   '/assessments/:id/participants/import',
   asyncHandler(async (request, response) => {
-    if (!request.customerSession) {
-      throw new HttpError(401, 'Customer session is required');
-    }
+    requireAssessmentOperator(request);
 
     const { id } = assessmentParamsSchema.parse(request.params);
     const payload = participantImportSchema.parse(request.body ?? {});
     const summary = await importCustomerAssessmentParticipants({
-      customerAccountId: request.customerSession.accountId,
+      customerAccountId: request.customerSession!.accountId,
       assessmentId: id,
       rows: payload.rows.map((row) => ({
         fullName: row.fullName,
@@ -249,14 +240,12 @@ siteOnboardingRoutes.post(
 siteOnboardingRoutes.post(
   '/assessments/:id/participants/send-bulk',
   asyncHandler(async (request, response) => {
-    if (!request.customerSession) {
-      throw new HttpError(401, 'Customer session is required');
-    }
+    requireAssessmentOperator(request);
 
     const { id } = assessmentParamsSchema.parse(request.params);
     const payload = participantBulkSendSchema.parse(request.body ?? {});
     const delivery = await sendCustomerAssessmentBulkInvites({
-      customerAccountId: request.customerSession.accountId,
+      customerAccountId: request.customerSession!.accountId,
       assessmentId: id,
       channel: payload.channel,
     });
@@ -268,14 +257,12 @@ siteOnboardingRoutes.post(
 siteOnboardingRoutes.post(
   '/assessments/:id/participants/remind-bulk',
   asyncHandler(async (request, response) => {
-    if (!request.customerSession) {
-      throw new HttpError(401, 'Customer session is required');
-    }
+    requireAssessmentOperator(request);
 
     const { id } = assessmentParamsSchema.parse(request.params);
     const payload = participantBulkSendSchema.parse(request.body ?? {});
     const delivery = await sendCustomerAssessmentBulkReminders({
-      customerAccountId: request.customerSession.accountId,
+      customerAccountId: request.customerSession!.accountId,
       assessmentId: id,
       channel: payload.channel,
     });
@@ -287,14 +274,12 @@ siteOnboardingRoutes.post(
 siteOnboardingRoutes.post(
   '/assessments/:id/participants/:participantId/remind',
   asyncHandler(async (request, response) => {
-    if (!request.customerSession) {
-      throw new HttpError(401, 'Customer session is required');
-    }
+    requireAssessmentOperator(request);
 
     const { id, participantId } = participantParamsSchema.parse(request.params);
     const payload = participantSendSchema.parse(request.body ?? {});
     const delivery = await sendCustomerAssessmentParticipantReminder({
-      customerAccountId: request.customerSession.accountId,
+      customerAccountId: request.customerSession!.accountId,
       assessmentId: id,
       participantRecordId: participantId,
       channel: payload.channel,
@@ -307,14 +292,12 @@ siteOnboardingRoutes.post(
 siteOnboardingRoutes.post(
   '/assessments/:id/participants/:participantId/send',
   asyncHandler(async (request, response) => {
-    if (!request.customerSession) {
-      throw new HttpError(401, 'Customer session is required');
-    }
+    requireAssessmentOperator(request);
 
     const { id, participantId } = participantParamsSchema.parse(request.params);
     const payload = participantSendSchema.parse(request.body ?? {});
     const delivery = await sendCustomerAssessmentParticipantInvite({
-      customerAccountId: request.customerSession.accountId,
+      customerAccountId: request.customerSession!.accountId,
       assessmentId: id,
       participantRecordId: participantId,
       channel: payload.channel,

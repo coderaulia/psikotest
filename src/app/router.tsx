@@ -3,6 +3,7 @@ import { createBrowserRouter, isRouteErrorResponse, Link, Navigate, useRouteErro
 import { Home, RotateCcw } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { CustomerRoleGuard } from '@/components/common/customer-role-guard';
 import { isChunkLoadError, tryRecoverFromChunkError } from '@/lib/chunk-load-recovery';
 
 function lazyNamed<TProps extends object = object>(
@@ -156,16 +157,16 @@ export const router = createBrowserRouter([
     errorElement: routeErrorElement,
     children: [
       { index: true, element: withSuspense(<CustomerWorkspacePage />), errorElement: routeErrorElement },
-      { path: 'company', element: withSuspense(<CustomerCompanyPage />), errorElement: routeErrorElement },
-      { path: 'billing', element: withSuspense(<CustomerBillingPage />), errorElement: routeErrorElement },
+      { path: 'company', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner', 'admin']}><CustomerCompanyPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
+      { path: 'billing', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner']}><CustomerBillingPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
       { path: 'results', element: withSuspense(<CustomerResultsPage />), errorElement: routeErrorElement },
-      { path: 'team', element: withSuspense(<CustomerTeamPage />), errorElement: routeErrorElement },
-      { path: 'create', element: withSuspense(<CustomerOnboardingPage />), errorElement: routeErrorElement },
+      { path: 'team', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner', 'admin']}><CustomerTeamPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
+      { path: 'create', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner', 'admin', 'operator']}><CustomerOnboardingPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
       { path: 'assessments/:assessmentId', element: withSuspense(<CustomerAssessmentDetailPage />), errorElement: routeErrorElement },
-      { path: 'assessments/:assessmentId/setup', element: withSuspense(<CustomerAssessmentSetupPage />), errorElement: routeErrorElement },
-      { path: 'assessments/:assessmentId/checkout', element: withSuspense(<CustomerAssessmentCheckoutPage />), errorElement: routeErrorElement },
-      { path: 'assessments/:assessmentId/participants', element: withSuspense(<CustomerAssessmentParticipantsPage />), errorElement: routeErrorElement },
-      { path: 'settings', element: withSuspense(<CustomerWorkspaceSettingsPage />), errorElement: routeErrorElement },
+      { path: 'assessments/:assessmentId/setup', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner', 'admin', 'operator']}><CustomerAssessmentSetupPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
+      { path: 'assessments/:assessmentId/checkout', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner', 'admin', 'operator']}><CustomerAssessmentCheckoutPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
+      { path: 'assessments/:assessmentId/participants', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner', 'admin', 'operator']}><CustomerAssessmentParticipantsPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
+      { path: 'settings', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner', 'admin']}><CustomerWorkspaceSettingsPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
     ],
   },
   {
@@ -205,4 +206,6 @@ export const router = createBrowserRouter([
     errorElement: routeErrorElement,
   },
 ]);
+
+
 

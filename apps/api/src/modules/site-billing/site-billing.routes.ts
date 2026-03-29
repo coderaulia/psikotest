@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { asyncHandler } from '../../lib/async-handler.js';
 import { HttpError } from '../../lib/http-error.js';
+import { requireCustomerWorkspaceRole } from '../../middleware/require-customer-workspace-role.js';
 import { getWorkspaceBillingOverview, updateWorkspaceSubscriptionSelection } from './site-billing.service.js';
 
 const subscriptionSchema = z.object({
@@ -19,6 +20,7 @@ siteBillingRoutes.get(
       throw new HttpError(401, 'Customer session is required');
     }
 
+    requireCustomerWorkspaceRole(request, ['owner', 'admin'], 'Workspace billing is limited to owners and workspace admins');
     const payload = await getWorkspaceBillingOverview(request.customerSession.accountId);
     response.json(payload);
   }),
@@ -31,6 +33,7 @@ siteBillingRoutes.patch(
       throw new HttpError(401, 'Customer session is required');
     }
 
+    requireCustomerWorkspaceRole(request, ['owner'], 'Only the workspace owner can change the subscription');
     const payload = subscriptionSchema.parse(request.body ?? {});
     const updated = await updateWorkspaceSubscriptionSelection({
       customerAccountId: request.customerSession.accountId,

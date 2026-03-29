@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { Copy, ExternalLink, FlaskConical, Link as LinkIcon, ShieldCheck, Sparkles, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+import { canAccessWorkspaceBilling, canAccessWorkspaceSettings, canAccessWorkspaceTeam, canOperateAssessments } from '@/lib/customer-access';
 import { formatDateTime, formatTokenLabel } from '@/lib/formatters';
+import { loadCustomerSession } from '@/lib/customer-session';
 import { getCustomerBillingOverview } from '@/services/customer-billing';
 import { listCustomerAssessments } from '@/services/customer-onboarding';
 import type { CustomerAssessmentItem, CustomerBillingOverviewResponse } from '@/types/assessment';
@@ -15,6 +17,8 @@ function renderAudienceSummary(item: CustomerAssessmentItem) {
 }
 
 export function CustomerWorkspacePage() {
+  const customerSession = loadCustomerSession();
+  const role = customerSession?.account.workspaceRole ?? 'owner';
   const [items, setItems] = useState<CustomerAssessmentItem[]>([]);
   const [billing, setBilling] = useState<CustomerBillingOverviewResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -86,21 +90,29 @@ export function CustomerWorkspacePage() {
           <h2 className="text-2xl font-semibold tracking-tight">Review before sharing, then activate deliberately</h2>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Button variant="secondary" asChild>
-            <Link to="/workspace/billing">Workspace billing</Link>
-          </Button>
-          <Button variant="secondary" asChild>
-            <Link to="/workspace/team">Workspace team</Link>
-          </Button>
+          {canAccessWorkspaceBilling(role) ? (
+            <Button variant="secondary" asChild>
+              <Link to="/workspace/billing">Workspace billing</Link>
+            </Button>
+          ) : null}
+          {canAccessWorkspaceTeam(role) ? (
+            <Button variant="secondary" asChild>
+              <Link to="/workspace/team">Workspace team</Link>
+            </Button>
+          ) : null}
           <Button variant="secondary" asChild>
             <Link to="/workspace/results">Workspace results</Link>
           </Button>
-          <Button variant="secondary" asChild>
-            <Link to="/workspace/settings">Workspace settings</Link>
-          </Button>
-          <Button asChild>
-            <Link to="/workspace/create">Create another assessment</Link>
-          </Button>
+          {canAccessWorkspaceSettings(role) ? (
+            <Button variant="secondary" asChild>
+              <Link to="/workspace/settings">Workspace settings</Link>
+            </Button>
+          ) : null}
+          {canOperateAssessments(role) ? (
+            <Button asChild>
+              <Link to="/workspace/create">Create another assessment</Link>
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -149,9 +161,11 @@ export function CustomerWorkspacePage() {
           <div className="flex flex-wrap gap-2">
             <Badge className="border-white/10 bg-white/10 text-white">{formatTokenLabel(billing.subscription.status)}</Badge>
             <Badge className="border-white/10 bg-white/10 text-white">{formatTokenLabel(billing.subscription.billingCycle)}</Badge>
-            <Button variant="secondary" asChild>
-              <Link to="/workspace/billing">Manage plan</Link>
-            </Button>
+            {canAccessWorkspaceBilling(role) ? (
+              <Button variant="secondary" asChild>
+                <Link to="/workspace/billing">Manage plan</Link>
+              </Button>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -163,12 +177,16 @@ export function CustomerWorkspacePage() {
             <CardDescription>Create your first guided assessment draft to generate a participant link and preview experience.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 sm:flex-row">
-            <Button asChild>
-              <Link to="/workspace/create">Create first assessment</Link>
-            </Button>
-            <Button variant="secondary" asChild>
-              <Link to="/workspace/settings">Review workspace settings</Link>
-            </Button>
+            {canOperateAssessments(role) ? (
+              <Button asChild>
+                <Link to="/workspace/create">Create first assessment</Link>
+              </Button>
+            ) : null}
+            {canAccessWorkspaceSettings(role) ? (
+              <Button variant="secondary" asChild>
+                <Link to="/workspace/settings">Review workspace settings</Link>
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -274,3 +292,5 @@ export function CustomerWorkspacePage() {
     </div>
   );
 }
+
+
