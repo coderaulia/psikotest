@@ -187,6 +187,12 @@ export function CustomerResultsPage() {
                 </div>
               )}
 
+              <div className="flex justify-end">
+                <Button variant="secondary" asChild>
+                  <Link to={`/workspace/results/${item.resultId}`}>Open detail</Link>
+                </Button>
+              </div>
+
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                   <p className="inline-flex items-center gap-2 font-medium text-slate-950"><ShieldCheck className="h-4 w-4" /> HR access</p>
@@ -208,3 +214,5 @@ export function CustomerResultsPage() {
     </div>
   );
 }
+
+

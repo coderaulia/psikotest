@@ -97,6 +97,7 @@ const CustomerWorkspacePage = lazyNamed(() => import('@/pages/customer/customer-
 const CustomerCompanyPage = lazyNamed(() => import('@/pages/customer/customer-company-page'), 'CustomerCompanyPage');
 const CustomerBillingPage = lazyNamed(() => import('@/pages/customer/customer-billing-page'), 'CustomerBillingPage');
 const CustomerResultsPage = lazyNamed(() => import('@/pages/customer/customer-results-page'), 'CustomerResultsPage');
+const CustomerResultDetailPage = lazyNamed(() => import('@/pages/customer/customer-result-detail-page'), 'CustomerResultDetailPage');
 const CustomerActivityPage = lazyNamed(() => import('@/pages/customer/customer-activity-page'), 'CustomerActivityPage');
 const CustomerTeamPage = lazyNamed(() => import('@/pages/customer/customer-team-page'), 'CustomerTeamPage');
 const CustomerOnboardingPage = lazyNamed(() => import('@/pages/customer/customer-onboarding-page'), 'CustomerOnboardingPage');
@@ -161,6 +162,7 @@ export const router = createBrowserRouter([
       { path: 'company', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner', 'admin']}><CustomerCompanyPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
       { path: 'billing', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner']}><CustomerBillingPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
       { path: 'results', element: withSuspense(<CustomerResultsPage />), errorElement: routeErrorElement },
+      { path: 'results/:resultId', element: withSuspense(<CustomerResultDetailPage />), errorElement: routeErrorElement },
       { path: 'activity', element: withSuspense(<CustomerActivityPage />), errorElement: routeErrorElement },
       { path: 'team', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner', 'admin']}><CustomerTeamPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
       { path: 'create', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner', 'admin', 'operator']}><CustomerOnboardingPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
@@ -208,6 +210,7 @@ export const router = createBrowserRouter([
     errorElement: routeErrorElement,
   },
 ]);
+
 
 
 

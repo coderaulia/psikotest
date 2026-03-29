@@ -1,6 +1,11 @@
 import { HttpError } from '../../lib/http-error.js';
 import { findCustomerById } from '../site-auth/site-auth.repository.js';
-import { fetchCustomerWorkspaceResults, type CustomerWorkspaceResultRecord } from './site-results.repository.js';
+import {
+  fetchCustomerWorkspaceResultDetail,
+  fetchCustomerWorkspaceResults,
+  type CustomerWorkspaceResultDetailRecord,
+  type CustomerWorkspaceResultRecord,
+} from './site-results.repository.js';
 
 function escapeCsvValue(value: string | number | null) {
   if (value === null || value === undefined) {
@@ -78,6 +83,17 @@ export async function listCustomerWorkspaceResults(customerAccountId: number) {
     },
     items,
   };
+}
+
+export async function getCustomerWorkspaceResultDetail(customerAccountId: number, resultId: number) {
+  await requireActiveCustomer(customerAccountId);
+  const detail = await fetchCustomerWorkspaceResultDetail(customerAccountId, resultId);
+
+  if (!detail) {
+    throw new HttpError(404, 'Workspace result not found');
+  }
+
+  return detail satisfies CustomerWorkspaceResultDetailRecord;
 }
 
 export async function exportCustomerWorkspaceResultsCsv(customerAccountId: number) {

@@ -23,7 +23,20 @@ export interface CustomerWorkspaceResultRecord {
   hrResultAccess: 'none' | 'summary' | 'full';
   protectedDeliveryMode: boolean;
   releasedSummary: string | null;
+  releasedRecommendation: string | null;
+  releasedLimitations: string | null;
   visibilityNote: string;
+}
+
+export interface CustomerWorkspaceResultMetricRecord {
+  metricKey: string;
+  metricLabel: string;
+  score: number;
+  band: string | null;
+}
+
+export interface CustomerWorkspaceResultDetailRecord extends CustomerWorkspaceResultRecord {
+  metrics: CustomerWorkspaceResultMetricRecord[];
 }
 
 interface ResultRow extends RowDataPacket {
@@ -39,6 +52,13 @@ interface ResultRow extends RowDataPacket {
   profile_code: string | null;
   result_payload_json: string | Record<string, unknown> | null;
   settings_json: string | Record<string, unknown> | null;
+}
+
+interface ResultMetricRow extends RowDataPacket {
+  metric_key: string;
+  metric_label: string;
+  score: number;
+  band: string | null;
 }
 
 function normalizePayload(payload: string | Record<string, unknown> | null) {
@@ -112,6 +132,12 @@ function mapRow(row: ResultRow): CustomerWorkspaceResultRecord {
   const releasedSummary = reviewStatus === 'released' && typeof payload.professionalSummary === 'string'
     ? String(payload.professionalSummary)
     : null;
+  const releasedRecommendation = reviewStatus === 'released' && typeof payload.recommendation === 'string'
+    ? String(payload.recommendation)
+    : null;
+  const releasedLimitations = reviewStatus === 'released' && typeof payload.limitations === 'string'
+    ? String(payload.limitations)
+    : null;
 
   return {
     resultId: row.result_id,
@@ -130,6 +156,8 @@ function mapRow(row: ResultRow): CustomerWorkspaceResultRecord {
     hrResultAccess: sessionSettings.hrResultAccess,
     protectedDeliveryMode: sessionSettings.protectedDeliveryMode,
     releasedSummary,
+    releasedRecommendation,
+    releasedLimitations,
     visibilityNote: buildVisibilityNote({
       reviewStatus,
       distributionPolicy: sessionSettings.distributionPolicy,
@@ -138,10 +166,8 @@ function mapRow(row: ResultRow): CustomerWorkspaceResultRecord {
   };
 }
 
-export async function fetchCustomerWorkspaceResults(customerAccountId: number) {
-  const pool = getDbPool();
-  const [rows] = await pool.query<ResultRow[]>(
-    `
+function buildBaseResultsQuery(whereClause: string) {
+  return `
       SELECT
         r.id AS result_id,
         ca.id AS assessment_id,
@@ -161,7 +187,38 @@ export async function fetchCustomerWorkspaceResults(customerAccountId: number) {
       INNER JOIN participants p ON p.id = s.participant_id
       INNER JOIN results r ON r.submission_id = s.id
       INNER JOIN test_types tt ON tt.id = r.test_type_id
-      WHERE ca.customer_account_id = ?
+      ${whereClause}
+    `;
+}
+
+async function fetchResultMetrics(resultId: number) {
+  const pool = getDbPool();
+  const [rows] = await pool.query<ResultMetricRow[]>(
+    `
+      SELECT
+        metric_key,
+        metric_label,
+        score,
+        band
+      FROM result_summaries
+      WHERE result_id = ?
+      ORDER BY sort_order ASC, id ASC
+    `,
+    [resultId],
+  );
+
+  return rows.map((row) => ({
+    metricKey: row.metric_key,
+    metricLabel: row.metric_label,
+    score: row.score,
+    band: row.band,
+  }));
+}
+
+export async function fetchCustomerWorkspaceResults(customerAccountId: number) {
+  const pool = getDbPool();
+  const [rows] = await pool.query<ResultRow[]>(
+    `${buildBaseResultsQuery('WHERE ca.customer_account_id = ?')}
       ORDER BY COALESCE(s.submitted_at, r.created_at) DESC, r.id DESC
       LIMIT 300
     `,
@@ -169,4 +226,25 @@ export async function fetchCustomerWorkspaceResults(customerAccountId: number) {
   );
 
   return rows.map(mapRow);
+}
+
+export async function fetchCustomerWorkspaceResultDetail(customerAccountId: number, resultId: number) {
+  const pool = getDbPool();
+  const [rows] = await pool.query<ResultRow[]>(
+    `${buildBaseResultsQuery('WHERE ca.customer_account_id = ? AND r.id = ?')}
+      LIMIT 1
+    `,
+    [customerAccountId, resultId],
+  );
+
+  const row = rows[0];
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    ...mapRow(row),
+    metrics: await fetchResultMetrics(row.result_id),
+  };
 }

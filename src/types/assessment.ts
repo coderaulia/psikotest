@@ -497,7 +497,20 @@ export interface CustomerWorkspaceResultItem {
   hrResultAccess: HrResultAccess;
   protectedDeliveryMode: boolean;
   releasedSummary: string | null;
+  releasedRecommendation: string | null;
+  releasedLimitations: string | null;
   visibilityNote: string;
+}
+
+export interface CustomerWorkspaceResultMetric {
+  metricKey: string;
+  metricLabel: string;
+  score: number;
+  band: string | null;
+}
+
+export interface CustomerWorkspaceResultDetail extends CustomerWorkspaceResultItem {
+  metrics: CustomerWorkspaceResultMetric[];
 }
 
 export interface CustomerWorkspaceResultsResponse {
@@ -816,6 +829,9 @@ export interface SettingsOverviewResponse {
   sessionDefaults: SessionDefaultsSettings;
   auditFeed: AuditFeedItem[];
 }
+
+
+
 
 
 

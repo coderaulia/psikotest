@@ -1238,6 +1238,84 @@ export class FakeDbPool implements DbPoolLike {
       return [rows, []] as unknown as [any, any];
     }
 
+    if (normalized.includes('from customer_assessments ca inner join test_sessions ts on ts.id = ca.test_session_id inner join submissions s on s.test_session_id = ts.id inner join participants p on p.id = s.participant_id inner join results r on r.submission_id = s.id inner join test_types tt on tt.id = r.test_type_id where ca.customer_account_id = ? and r.id = ?')) {
+      const customerAccountId = Number(params[0]);
+      const resultId = Number(params[1]);
+      const assessment = this.state.customerAssessments.find((item) => item.customer_account_id === customerAccountId && this.state.results.some((result) => result.id === resultId && this.state.submissions.some((submission) => submission.id === result.submission_id && submission.test_session_id === item.test_session_id)));
+      if (!assessment) {
+        return [[], []] as unknown as [any, any];
+      }
+      const result = this.state.results.find((item) => item.id === resultId)!;
+      const submission = this.state.submissions.find((item) => item.id === result.submission_id)!;
+      const participant = this.state.participants.find((item) => item.id === submission.participant_id)!;
+      const session = this.state.sessions.find((item) => item.id === submission.test_session_id)!;
+      const testType = this.state.testTypes.find((item) => item.id === result.test_type_id)!;
+      return [[{
+        result_id: result.id,
+        assessment_id: assessment.id,
+        assessment_title: session.title,
+        participant_name: participant.full_name,
+        participant_email: participant.email,
+        test_type: testType.code,
+        submitted_at: submission.submitted_at ?? result.created_at,
+        score_total: result.score_total,
+        score_band: result.score_band,
+        profile_code: result.profile_code,
+        result_payload_json: result.result_payload_json,
+        settings_json: session.settings_json,
+      }], []] as unknown as [any, any];
+    }
+
+    if (normalized.includes('from customer_assessments ca inner join test_sessions ts on ts.id = ca.test_session_id inner join submissions s on s.test_session_id = ts.id inner join participants p on p.id = s.participant_id inner join results r on r.submission_id = s.id inner join test_types tt on tt.id = r.test_type_id where ca.customer_account_id = ? order by')) {
+      const customerAccountId = Number(params[0]);
+      const rows = this.state.customerAssessments
+        .filter((assessment) => assessment.customer_account_id === customerAccountId)
+        .flatMap((assessment) => {
+          const session = this.state.sessions.find((item) => item.id === assessment.test_session_id);
+          if (!session) {
+            return [];
+          }
+          const submissions = this.state.submissions.filter((item) => item.test_session_id === session.id);
+          return submissions.flatMap((submission) => {
+            const result = this.state.results.find((item) => item.submission_id === submission.id);
+            const participant = this.state.participants.find((item) => item.id === submission.participant_id);
+            const testType = this.state.testTypes.find((item) => item.id === session.test_type_id);
+            if (!result || !participant || !testType) {
+              return [];
+            }
+            return [{
+              result_id: result.id,
+              assessment_id: assessment.id,
+              assessment_title: session.title,
+              participant_name: participant.full_name,
+              participant_email: participant.email,
+              test_type: testType.code,
+              submitted_at: submission.submitted_at ?? result.created_at,
+              score_total: result.score_total,
+              score_band: result.score_band,
+              profile_code: result.profile_code,
+              result_payload_json: result.result_payload_json,
+              settings_json: session.settings_json,
+            }];
+          });
+        })
+        .sort((left, right) => new Date(String(right.submitted_at)).getTime() - new Date(String(left.submitted_at)).getTime() || Number(right.result_id) - Number(left.result_id));
+      return [rows, []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('select metric_key, metric_label, score, band from result_summaries where result_id = ?')) {
+      const resultId = Number(params[0]);
+      const rows = this.state.resultSummaries
+        .filter((item) => item.result_id === resultId)
+        .sort((left, right) => left.sort_order - right.sort_order || left.id - right.id)
+        .map((item) => ({
+          metric_key: item.metric_key,
+          metric_label: item.metric_label,
+          score: item.score,
+          band: item.band,
+        }));
+      return [rows, []] as unknown as [any, any];
+    }
     if (normalized.startsWith("update submissions set status = 'scored', submitted_at = ?, raw_score = ? where id = ?")) {
       const submittedAt = String(params[0] ?? new Date().toISOString());
       const rawScore = Number(params[1] ?? 0);
@@ -1294,6 +1372,8 @@ export class FakeDbPool implements DbPoolLike {
     throw new Error(`Unsupported fake DB query: ${sql}`);
   }
 }
+
+
 
 
 

@@ -1,9 +1,13 @@
-import type { CustomerWorkspaceResultsResponse } from '@/types/assessment';
+import type { CustomerWorkspaceResultDetail, CustomerWorkspaceResultsResponse } from '@/types/assessment';
 
 import { customerFetch, customerFetchJson } from './customer-api';
 
 export async function getCustomerWorkspaceResults() {
   return customerFetchJson<CustomerWorkspaceResultsResponse>('/site-results');
+}
+
+export async function getCustomerWorkspaceResultDetail(resultId: number) {
+  return customerFetchJson<CustomerWorkspaceResultDetail>(`/site-results/${resultId}`);
 }
 
 export async function downloadCustomerWorkspaceResultsCsv() {
