@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { cn } from '@/lib/cn';
 import { formatDateTime } from '@/lib/formatters';
 import { getWorkspaceUsageSeverityClasses, getWorkspaceUsageSeverityLabel } from '@/lib/workspace-billing';
-import { getCustomerBillingOverview } from '@/services/customer-billing';
+import { createCustomerCheckoutSession, getCustomerBillingOverview } from '@/services/customer-billing';
 import { completeCustomerAssessmentCheckout, getCustomerAssessment } from '@/services/customer-onboarding';
 import type {
   CustomerAssessmentCheckoutPayload,
@@ -209,7 +209,7 @@ export function CustomerAssessmentCheckoutPage() {
                       </div>
                     </div>
                     <p className={`mt-2 text-3xl font-semibold ${isSelected ? 'text-white' : 'text-slate-950'}`}>
-                      {dummyPrices[plan.planCode][billingCycle]}
+                      {plan[billingCycle === 'annual' ? 'annualPrice' : 'monthlyPrice'] != null ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(plan[billingCycle === 'annual' ? 'annualPrice' : 'monthlyPrice'] ?? 0) : dummyPrices[plan.planCode][billingCycle]}
                     </p>
                     <p className={`mt-2 text-sm leading-7 ${isSelected ? 'text-white/70' : 'text-slate-500'}`}>{plan.description}</p>
                     <div className="mt-4 space-y-2 text-sm">
@@ -318,3 +318,4 @@ export function CustomerAssessmentCheckoutPage() {
     </div>
   );
 }
+

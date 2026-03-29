@@ -57,7 +57,7 @@ A checkout session may be:
 - `expired`
 - `failed`
 
-Dummy checkout uses the same internal contract as future provider-based checkout.
+Dummy checkout uses the same internal contract as future provider-based checkout.`r`n`r`nThe assessment checkout page now creates a checkout session before the workspace subscription is activated, so assessment activation and billing history stay aligned.
 
 ## Invoice Lifecycle
 
@@ -96,4 +96,5 @@ Only the internal implementation changes:
 - webhook events update invoice/subscription state
 - payment failures update `past_due` or `suspended` status
 - invoice history becomes provider-synced
+
 
