@@ -1,16 +1,38 @@
 ALTER TABLE workspace_subscriptions
-  ADD COLUMN billing_provider ENUM('dummy', 'manual', 'stripe') NOT NULL DEFAULT 'dummy' AFTER billing_cycle,
-  ADD COLUMN provider_customer_id VARCHAR(120) NULL AFTER billing_provider,
-  ADD COLUMN provider_subscription_id VARCHAR(120) NULL AFTER provider_customer_id,
-  ADD COLUMN provider_price_id VARCHAR(120) NULL AFTER provider_subscription_id,
-  ADD COLUMN current_period_start DATETIME NULL AFTER renews_at,
-  ADD COLUMN current_period_end DATETIME NULL AFTER current_period_start,
-  ADD COLUMN cancel_at_period_end TINYINT(1) NOT NULL DEFAULT 0 AFTER current_period_end,
-  ADD COLUMN canceled_at DATETIME NULL AFTER cancel_at_period_end,
-  ADD COLUMN past_due_at DATETIME NULL AFTER canceled_at,
-  ADD COLUMN suspended_at DATETIME NULL AFTER past_due_at,
-  ADD COLUMN plan_version INT UNSIGNED NOT NULL DEFAULT 1 AFTER suspended_at,
-  ADD COLUMN billing_contact_email VARCHAR(190) NULL AFTER plan_version;
+  ADD COLUMN IF NOT EXISTS billing_provider ENUM('dummy', 'manual', 'stripe') NOT NULL DEFAULT 'dummy' AFTER billing_cycle;
+
+ALTER TABLE workspace_subscriptions
+  ADD COLUMN IF NOT EXISTS provider_customer_id VARCHAR(120) NULL AFTER billing_provider;
+
+ALTER TABLE workspace_subscriptions
+  ADD COLUMN IF NOT EXISTS provider_subscription_id VARCHAR(120) NULL AFTER provider_customer_id;
+
+ALTER TABLE workspace_subscriptions
+  ADD COLUMN IF NOT EXISTS provider_price_id VARCHAR(120) NULL AFTER provider_subscription_id;
+
+ALTER TABLE workspace_subscriptions
+  ADD COLUMN IF NOT EXISTS current_period_start DATETIME NULL AFTER renews_at;
+
+ALTER TABLE workspace_subscriptions
+  ADD COLUMN IF NOT EXISTS current_period_end DATETIME NULL AFTER current_period_start;
+
+ALTER TABLE workspace_subscriptions
+  ADD COLUMN IF NOT EXISTS cancel_at_period_end TINYINT(1) NOT NULL DEFAULT 0 AFTER current_period_end;
+
+ALTER TABLE workspace_subscriptions
+  ADD COLUMN IF NOT EXISTS canceled_at DATETIME NULL AFTER cancel_at_period_end;
+
+ALTER TABLE workspace_subscriptions
+  ADD COLUMN IF NOT EXISTS past_due_at DATETIME NULL AFTER canceled_at;
+
+ALTER TABLE workspace_subscriptions
+  ADD COLUMN IF NOT EXISTS suspended_at DATETIME NULL AFTER past_due_at;
+
+ALTER TABLE workspace_subscriptions
+  ADD COLUMN IF NOT EXISTS plan_version INT UNSIGNED NOT NULL DEFAULT 1 AFTER suspended_at;
+
+ALTER TABLE workspace_subscriptions
+  ADD COLUMN IF NOT EXISTS billing_contact_email VARCHAR(190) NULL AFTER plan_version;
 
 CREATE TABLE IF NOT EXISTS billing_checkout_sessions (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

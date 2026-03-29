@@ -33,6 +33,7 @@ The current upgrade path includes:
 - customer accounts and customer assessments
 - reviewer workflow support
 - customer workspace settings JSON storage
+- rerunnable billing foundation changes for partially upgraded databases
 
 ## Maintenance rule
 
