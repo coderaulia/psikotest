@@ -26,8 +26,11 @@ export interface SubmissionAccessClaims extends SignedTokenPayloadBase {
 export interface CustomerSessionClaims extends SignedTokenPayloadBase {
   type: 'customer';
   accountId: number;
+  actorId: number;
+  actorType: 'owner' | 'workspace_member';
   email: string;
   accountType: 'business' | 'researcher';
+  workspaceRole: 'owner' | 'admin' | 'operator' | 'reviewer';
   sessionVersion: number;
 }
 
@@ -109,15 +112,21 @@ export function verifyAdminSessionToken(token: string) {
 
 export function createCustomerSessionToken(input: {
   accountId: number;
+  actorId: number;
+  actorType: 'owner' | 'workspace_member';
   email: string;
   accountType: 'business' | 'researcher';
+  workspaceRole: 'owner' | 'admin' | 'operator' | 'reviewer';
   sessionVersion: number;
 }) {
   return signToken<CustomerSessionClaims>({
     type: 'customer',
     accountId: input.accountId,
+    actorId: input.actorId,
+    actorType: input.actorType,
     email: input.email,
     accountType: input.accountType,
+    workspaceRole: input.workspaceRole,
     sessionVersion: input.sessionVersion,
     exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7,
   });

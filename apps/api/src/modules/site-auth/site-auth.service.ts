@@ -1,15 +1,24 @@
 import { env } from '../../config/env.js';
+import { createAuditEvent } from '../../lib/audit-log.js';
 import { HttpError } from '../../lib/http-error.js';
 import { hashPassword, verifyPassword } from '../../lib/password.js';
+import type { CustomerSessionClaims } from '../../lib/signed-token.js';
 import { createCustomerSessionToken } from '../../lib/signed-token.js';
 import {
+  activateWorkspaceMemberInvite,
   createCustomerAccount,
   findActiveCustomerById,
+  findActiveWorkspaceMemberByEmail,
+  findActiveWorkspaceMemberById,
   findCustomerByEmail,
   findCustomerById,
+  findWorkspaceMemberInviteByToken,
   markCustomerLogin,
+  markWorkspaceMemberLogin,
   revokeCustomerSessions,
+  revokeWorkspaceMemberSessions,
   type CustomerAccountRecord,
+  type WorkspaceMemberAuthRecord,
 } from './site-auth.repository.js';
 
 export interface CustomerSessionResponse {
@@ -20,29 +29,82 @@ export interface CustomerSessionResponse {
     email: string;
     accountType: 'business' | 'researcher';
     organizationName: string;
+    workspaceRole: 'owner' | 'admin' | 'operator' | 'reviewer';
+    sessionSource: 'owner' | 'workspace_member';
+    workspaceMemberId: number | null;
   };
 }
 
-function mapAccount(record: CustomerAccountRecord) {
+export interface WorkspaceInvitePreviewResponse {
+  invite: {
+    organizationName: string;
+    accountType: 'business' | 'researcher';
+    fullName: string;
+    email: string;
+    role: 'admin' | 'operator' | 'reviewer';
+    expiresAt: string | null;
+    isExpired: boolean;
+  };
+}
+
+function mapOwnerAccount(record: CustomerAccountRecord) {
   return {
     id: record.id,
     fullName: record.full_name,
     email: record.email,
     accountType: record.account_type,
     organizationName: record.organization_name,
+    workspaceRole: 'owner' as const,
+    sessionSource: 'owner' as const,
+    workspaceMemberId: null,
   };
 }
 
-function createSessionResponse(record: CustomerAccountRecord): CustomerSessionResponse {
+function mapWorkspaceMemberAccount(record: WorkspaceMemberAuthRecord) {
+  return {
+    id: record.customer_account_id,
+    fullName: record.full_name,
+    email: record.email,
+    accountType: record.account_type,
+    organizationName: record.organization_name,
+    workspaceRole: record.role,
+    sessionSource: 'workspace_member' as const,
+    workspaceMemberId: record.id,
+  };
+}
+
+function createOwnerSessionResponse(record: CustomerAccountRecord): CustomerSessionResponse {
   return {
     token: createCustomerSessionToken({
       accountId: record.id,
+      actorId: record.id,
+      actorType: 'owner',
       email: record.email,
       accountType: record.account_type,
+      workspaceRole: 'owner',
       sessionVersion: record.session_version,
     }),
-    account: mapAccount(record),
+    account: mapOwnerAccount(record),
   };
+}
+
+function createWorkspaceMemberSessionResponse(record: WorkspaceMemberAuthRecord): CustomerSessionResponse {
+  return {
+    token: createCustomerSessionToken({
+      accountId: record.customer_account_id,
+      actorId: record.id,
+      actorType: 'workspace_member',
+      email: record.email,
+      accountType: record.account_type,
+      workspaceRole: record.role,
+      sessionVersion: record.session_version,
+    }),
+    account: mapWorkspaceMemberAccount(record),
+  };
+}
+
+function isExpired(value: string | null) {
+  return value ? new Date(value).getTime() <= Date.now() : false;
 }
 
 export async function signupCustomer(input: {
@@ -52,9 +114,10 @@ export async function signupCustomer(input: {
   accountType: 'business' | 'researcher';
   organizationName: string;
 }) {
-  const existing = await findCustomerByEmail(input.email);
+  const existingOwner = await findCustomerByEmail(input.email);
+  const existingWorkspaceMember = await findActiveWorkspaceMemberByEmail(input.email);
 
-  if (existing) {
+  if (existingOwner || existingWorkspaceMember) {
     throw new HttpError(409, 'An account with this email already exists');
   }
 
@@ -71,49 +134,155 @@ export async function signupCustomer(input: {
     throw new HttpError(500, 'Unable to create account');
   }
 
-  return createSessionResponse(record);
+  return createOwnerSessionResponse(record);
 }
 
 export async function loginCustomer(email: string, password: string) {
-  const record = await findCustomerByEmail(email);
+  const ownerRecord = await findCustomerByEmail(email);
 
-  if (!record || record.status !== 'active') {
+  if (ownerRecord && ownerRecord.status === 'active') {
+    const ownerPasswordIsValid = await verifyPassword(password, ownerRecord.password_hash);
+
+    if (ownerPasswordIsValid) {
+      try {
+        await markCustomerLogin(ownerRecord.id);
+      } catch {
+        if (env.NODE_ENV !== 'test') {
+          console.warn('[site-auth] Failed to update customer login audit metadata');
+        }
+      }
+
+      return createOwnerSessionResponse(ownerRecord);
+    }
+  }
+
+  const memberRecord = await findActiveWorkspaceMemberByEmail(email);
+
+  if (!memberRecord || !memberRecord.password_hash) {
     return null;
   }
 
-  const passwordIsValid = await verifyPassword(password, record.password_hash);
+  const memberPasswordIsValid = await verifyPassword(password, memberRecord.password_hash);
 
-  if (!passwordIsValid) {
+  if (!memberPasswordIsValid) {
     return null;
   }
 
   try {
-    await markCustomerLogin(record.id);
+    await markWorkspaceMemberLogin(memberRecord.customer_account_id, memberRecord.id);
   } catch {
     if (env.NODE_ENV !== 'test') {
-      console.warn('[site-auth] Failed to update customer login audit metadata');
+      console.warn('[site-auth] Failed to update workspace member login audit metadata');
     }
   }
 
-  return createSessionResponse(record);
+  return createWorkspaceMemberSessionResponse(memberRecord);
 }
 
-export async function getCustomerSessionProfile(accountId: number) {
-  const record = await findActiveCustomerById(accountId);
+export async function getCustomerSessionProfile(session: CustomerSessionClaims) {
+  if (session.actorType === 'workspace_member') {
+    const memberRecord = await findActiveWorkspaceMemberById(session.accountId, session.actorId);
 
-  if (!record) {
+    if (
+      !memberRecord
+      || memberRecord.session_version !== session.sessionVersion
+      || memberRecord.role !== session.workspaceRole
+      || memberRecord.email !== session.email
+      || memberRecord.account_type !== session.accountType
+    ) {
+      return null;
+    }
+
+    return mapWorkspaceMemberAccount(memberRecord);
+  }
+
+  const ownerRecord = await findActiveCustomerById(session.accountId);
+
+  if (
+    !ownerRecord
+    || ownerRecord.session_version !== session.sessionVersion
+    || ownerRecord.email !== session.email
+    || ownerRecord.account_type !== session.accountType
+  ) {
     return null;
   }
 
-  return mapAccount(record);
+  return mapOwnerAccount(ownerRecord);
 }
 
-export async function logoutCustomer(accountId: number) {
-  const record = await findCustomerById(accountId);
-
-  if (!record) {
+export async function logoutCustomer(session: CustomerSessionClaims) {
+  if (session.actorType === 'workspace_member') {
+    await revokeWorkspaceMemberSessions(session.accountId, session.actorId);
     return;
   }
 
-  await revokeCustomerSessions(accountId);
+  const ownerRecord = await findCustomerById(session.accountId);
+
+  if (!ownerRecord) {
+    return;
+  }
+
+  await revokeCustomerSessions(session.accountId);
+}
+
+export async function getWorkspaceInvitePreview(token: string): Promise<WorkspaceInvitePreviewResponse | null> {
+  const invite = await findWorkspaceMemberInviteByToken(token);
+
+  if (!invite) {
+    return null;
+  }
+
+  return {
+    invite: {
+      organizationName: invite.organization_name,
+      accountType: invite.account_type,
+      fullName: invite.full_name,
+      email: invite.email,
+      role: invite.role,
+      expiresAt: invite.activation_expires_at,
+      isExpired: isExpired(invite.activation_expires_at),
+    },
+  };
+}
+
+export async function acceptWorkspaceInvite(input: {
+  token: string;
+  fullName: string;
+  password: string;
+}) {
+  const invite = await findWorkspaceMemberInviteByToken(input.token);
+
+  if (!invite) {
+    throw new HttpError(404, 'Workspace invitation not found');
+  }
+
+  if (isExpired(invite.activation_expires_at)) {
+    throw new HttpError(410, 'Workspace invitation has expired');
+  }
+
+  const passwordHash = await hashPassword(input.password);
+  const activatedMember = await activateWorkspaceMemberInvite({
+    customerAccountId: invite.customer_account_id,
+    memberId: invite.id,
+    fullName: input.fullName,
+    passwordHash,
+  });
+
+  if (!activatedMember) {
+    throw new HttpError(500, 'Unable to activate workspace invitation');
+  }
+
+  await createAuditEvent({
+    actorType: 'system',
+    entityType: 'customer_workspace_member',
+    entityId: activatedMember.id,
+    action: 'customer_workspace.member_activated',
+    metadata: {
+      customerAccountId: activatedMember.customer_account_id,
+      email: activatedMember.email,
+      role: activatedMember.role,
+    },
+  });
+
+  return createWorkspaceMemberSessionResponse(activatedMember);
 }

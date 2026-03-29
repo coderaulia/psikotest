@@ -224,8 +224,11 @@ async function testSecurityUtilities() {
 
   const customerToken = createCustomerSessionToken({
     accountId: 5,
+    actorId: 5,
+    actorType: 'owner',
     email: 'owner@example.com',
     accountType: 'researcher',
+    workspaceRole: 'owner',
     sessionVersion: 1,
   });
   const customerClaims = verifyCustomerSessionToken(customerToken);
@@ -259,6 +262,7 @@ main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
+
 
 
 

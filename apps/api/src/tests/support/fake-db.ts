@@ -85,10 +85,16 @@ interface FakeWorkspaceMember {
   customer_account_id: number;
   full_name: string;
   email: string;
+  password_hash: string | null;
   role: 'admin' | 'operator' | 'reviewer';
   invitation_status: 'active' | 'invited';
+  activation_token: string | null;
+  activation_expires_at: string | null;
   invited_at: string | null;
+  activated_at: string | null;
+  last_login_at: string | null;
   last_notified_at: string | null;
+  session_version: number;
   created_at: string;
 }
 
@@ -648,7 +654,7 @@ export class FakeDbPool implements DbPoolLike {
       return [rows, []] as unknown as [any, any];
     }
 
-    if (normalized.startsWith('select id, full_name, email, role, invitation_status, invited_at, last_notified_at from customer_workspace_members where customer_account_id = ? order by created_at asc, id asc')) {
+    if (normalized.startsWith('select id, full_name, email, role, invitation_status, invited_at, last_notified_at, activation_expires_at, activated_at, last_login_at from customer_workspace_members where customer_account_id = ? order by created_at asc, id asc')) {
       const customerAccountId = Number(params[0]);
       const rows = this.state.workspaceMembers
         .filter((item) => item.customer_account_id === customerAccountId)
@@ -661,8 +667,117 @@ export class FakeDbPool implements DbPoolLike {
           invitation_status: item.invitation_status,
           invited_at: item.invited_at,
           last_notified_at: item.last_notified_at,
+          activation_expires_at: item.activation_expires_at,
+          activated_at: item.activated_at,
+          last_login_at: item.last_login_at,
         }));
       return [rows, []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('select id, full_name, email, role, invitation_status, invited_at, last_notified_at, activation_expires_at, activated_at, last_login_at from customer_workspace_members where customer_account_id = ? and id = ? limit 1')) {
+      const customerAccountId = Number(params[0]);
+      const memberId = Number(params[1]);
+      const member = this.state.workspaceMembers.find((item) => item.customer_account_id === customerAccountId && item.id === memberId);
+      return [[member ? {
+        id: member.id,
+        full_name: member.full_name,
+        email: member.email,
+        role: member.role,
+        invitation_status: member.invitation_status,
+        invited_at: member.invited_at,
+        last_notified_at: member.last_notified_at,
+        activation_expires_at: member.activation_expires_at,
+        activated_at: member.activated_at,
+        last_login_at: member.last_login_at,
+      } : undefined].filter(Boolean), []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('select m.id, m.customer_account_id, m.full_name, m.email, m.password_hash, m.role, m.invitation_status, m.activation_token, m.activation_expires_at, m.activated_at, m.last_login_at, m.session_version, ca.account_type, ca.organization_name, ca.status as customer_status from customer_workspace_members m inner join customer_accounts ca on ca.id = m.customer_account_id where m.email = ?')) {
+      const email = String(params[0] ?? '').trim().toLowerCase();
+      const member = this.state.workspaceMembers.find((item) => item.email === email && item.invitation_status === 'active' && item.password_hash);
+      if (!member) {
+        return [[], []] as unknown as [any, any];
+      }
+      const account = this.state.customerAccounts.find((item) => item.id === member.customer_account_id)!;
+      if (account.status !== 'active') {
+        return [[], []] as unknown as [any, any];
+      }
+      return [[{
+        id: member.id,
+        customer_account_id: member.customer_account_id,
+        full_name: member.full_name,
+        email: member.email,
+        password_hash: member.password_hash,
+        role: member.role,
+        invitation_status: member.invitation_status,
+        activation_token: member.activation_token,
+        activation_expires_at: member.activation_expires_at,
+        activated_at: member.activated_at,
+        last_login_at: member.last_login_at,
+        session_version: member.session_version,
+        account_type: account.account_type,
+        organization_name: account.organization_name,
+        customer_status: account.status,
+      }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('select m.id, m.customer_account_id, m.full_name, m.email, m.password_hash, m.role, m.invitation_status, m.activation_token, m.activation_expires_at, m.activated_at, m.last_login_at, m.session_version, ca.account_type, ca.organization_name, ca.status as customer_status from customer_workspace_members m inner join customer_accounts ca on ca.id = m.customer_account_id where m.customer_account_id = ? and m.id = ?')) {
+      const customerAccountId = Number(params[0]);
+      const memberId = Number(params[1]);
+      const member = this.state.workspaceMembers.find((item) => item.customer_account_id === customerAccountId && item.id === memberId && item.invitation_status === 'active' && item.password_hash);
+      if (!member) {
+        return [[], []] as unknown as [any, any];
+      }
+      const account = this.state.customerAccounts.find((item) => item.id === member.customer_account_id)!;
+      if (account.status !== 'active') {
+        return [[], []] as unknown as [any, any];
+      }
+      return [[{
+        id: member.id,
+        customer_account_id: member.customer_account_id,
+        full_name: member.full_name,
+        email: member.email,
+        password_hash: member.password_hash,
+        role: member.role,
+        invitation_status: member.invitation_status,
+        activation_token: member.activation_token,
+        activation_expires_at: member.activation_expires_at,
+        activated_at: member.activated_at,
+        last_login_at: member.last_login_at,
+        session_version: member.session_version,
+        account_type: account.account_type,
+        organization_name: account.organization_name,
+        customer_status: account.status,
+      }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('select m.id, m.customer_account_id, m.full_name, m.email, m.password_hash, m.role, m.invitation_status, m.activation_token, m.activation_expires_at, m.activated_at, m.last_login_at, m.session_version, ca.account_type, ca.organization_name, ca.status as customer_status from customer_workspace_members m inner join customer_accounts ca on ca.id = m.customer_account_id where m.activation_token = ?')) {
+      const activationToken = String(params[0] ?? '');
+      const member = this.state.workspaceMembers.find((item) => item.activation_token === activationToken && item.invitation_status === 'invited');
+      if (!member) {
+        return [[], []] as unknown as [any, any];
+      }
+      const account = this.state.customerAccounts.find((item) => item.id === member.customer_account_id)!;
+      if (account.status !== 'active') {
+        return [[], []] as unknown as [any, any];
+      }
+      return [[{
+        id: member.id,
+        customer_account_id: member.customer_account_id,
+        full_name: member.full_name,
+        email: member.email,
+        password_hash: member.password_hash,
+        role: member.role,
+        invitation_status: member.invitation_status,
+        activation_token: member.activation_token,
+        activation_expires_at: member.activation_expires_at,
+        activated_at: member.activated_at,
+        last_login_at: member.last_login_at,
+        session_version: member.session_version,
+        account_type: account.account_type,
+        organization_name: account.organization_name,
+        customer_status: account.status,
+      }], []] as unknown as [any, any];
     }
 
     if (normalized.startsWith('insert into customer_workspace_members')) {
@@ -682,25 +797,84 @@ export class FakeDbPool implements DbPoolLike {
         customer_account_id: customerAccountId,
         full_name: String(params[1] ?? ''),
         email,
+        password_hash: null,
         role: params[3] as FakeWorkspaceMember['role'],
         invitation_status: 'invited',
+        activation_token: null,
+        activation_expires_at: null,
         invited_at: null,
+        activated_at: null,
+        last_login_at: null,
         last_notified_at: null,
+        session_version: 1,
         created_at: now,
       };
       this.state.workspaceMembers.push(member);
       return [{ insertId: member.id }, []] as unknown as [any, any];
     }
 
-    if (normalized.startsWith("update customer_workspace_members set invitation_status = 'invited', invited_at = coalesce(invited_at, current_timestamp), last_notified_at = current_timestamp, updated_at = current_timestamp where id = ? and customer_account_id = ?")) {
-      const memberId = Number(params[0]);
-      const customerAccountId = Number(params[1]);
-      const member = this.state.workspaceMembers.find((item) => item.id === memberId && item.customer_account_id === customerAccountId);
+    if (normalized.startsWith("update customer_workspace_members set invitation_status = 'invited', activation_token = ?, activation_expires_at = ?, invited_at = coalesce(invited_at, current_timestamp), last_notified_at = current_timestamp, updated_at = current_timestamp where id = ? and customer_account_id = ? and invitation_status = 'invited'")) {
+      const activationToken = String(params[0] ?? '');
+      const activationExpiresAt = String(params[1] ?? '');
+      const memberId = Number(params[2]);
+      const customerAccountId = Number(params[3]);
+      const member = this.state.workspaceMembers.find((item) => item.id === memberId && item.customer_account_id === customerAccountId && item.invitation_status === 'invited');
       if (member) {
         const now = new Date().toISOString();
-        member.invitation_status = 'invited';
+        member.activation_token = activationToken;
+        member.activation_expires_at = activationExpiresAt;
         member.invited_at = member.invited_at ?? now;
         member.last_notified_at = now;
+      }
+      return [[{ affectedRows: member ? 1 : 0 }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('update customer_workspace_members set last_notified_at = current_timestamp, updated_at = current_timestamp where id = ? and customer_account_id = ? and invitation_status = \'active\'')) {
+      const memberId = Number(params[0]);
+      const customerAccountId = Number(params[1]);
+      const member = this.state.workspaceMembers.find((item) => item.id === memberId && item.customer_account_id === customerAccountId && item.invitation_status === 'active');
+      if (member) {
+        member.last_notified_at = new Date().toISOString();
+      }
+      return [[{ affectedRows: member ? 1 : 0 }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('update customer_workspace_members set last_login_at = now() where customer_account_id = ? and id = ?')) {
+      const customerAccountId = Number(params[0]);
+      const memberId = Number(params[1]);
+      const member = this.state.workspaceMembers.find((item) => item.customer_account_id === customerAccountId && item.id === memberId);
+      if (member) {
+        member.last_login_at = new Date().toISOString();
+      }
+      return [[{ affectedRows: member ? 1 : 0 }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('update customer_workspace_members set session_version = session_version + 1,')) {
+      const customerAccountId = Number(params[0]);
+      const memberId = Number(params[1]);
+      const member = this.state.workspaceMembers.find((item) => item.customer_account_id === customerAccountId && item.id === memberId);
+      if (member) {
+        member.session_version += 1;
+      }
+      return [[{ affectedRows: member ? 1 : 0 }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith("update customer_workspace_members set full_name = ?, password_hash = ?, invitation_status = 'active', activation_token = null, activation_expires_at = null, activated_at = current_timestamp, last_login_at = current_timestamp, session_version = session_version + 1, updated_at = current_timestamp where customer_account_id = ? and id = ? and invitation_status = 'invited'")) {
+      const fullName = String(params[0] ?? '');
+      const passwordHash = String(params[1] ?? '');
+      const customerAccountId = Number(params[2]);
+      const memberId = Number(params[3]);
+      const member = this.state.workspaceMembers.find((item) => item.customer_account_id === customerAccountId && item.id === memberId && item.invitation_status === 'invited');
+      if (member) {
+        const now = new Date().toISOString();
+        member.full_name = fullName;
+        member.password_hash = passwordHash;
+        member.invitation_status = 'active';
+        member.activation_token = null;
+        member.activation_expires_at = null;
+        member.activated_at = now;
+        member.last_login_at = now;
+        member.session_version += 1;
       }
       return [[{ affectedRows: member ? 1 : 0 }], []] as unknown as [any, any];
     }
@@ -1093,6 +1267,8 @@ export class FakeDbPool implements DbPoolLike {
     throw new Error(`Unsupported fake DB query: ${sql}`);
   }
 }
+
+
 
 
 

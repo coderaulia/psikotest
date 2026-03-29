@@ -26,6 +26,9 @@ describe('CustomerOnboardingPage', () => {
         email: 'owner@example.com',
         accountType: 'researcher',
         organizationName: 'Psych Lab',
+        workspaceRole: 'owner',
+        sessionSource: 'owner',
+        workspaceMemberId: null,
       },
     });
   });
@@ -90,3 +93,4 @@ describe('CustomerOnboardingPage', () => {
     expect(screen.getByRole('link', { name: /dummy payment/i })).toHaveAttribute('href', '/workspace/assessments/51/checkout');
   }, 10000);
 });
+

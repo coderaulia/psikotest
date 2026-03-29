@@ -140,10 +140,16 @@ CREATE TABLE IF NOT EXISTS customer_workspace_members (
   customer_account_id BIGINT UNSIGNED NOT NULL,
   full_name VARCHAR(150) NOT NULL,
   email VARCHAR(190) NOT NULL,
+  password_hash VARCHAR(255) NULL,
   role ENUM('admin', 'operator', 'reviewer') NOT NULL DEFAULT 'operator',
   invitation_status ENUM('active', 'invited') NOT NULL DEFAULT 'invited',
+  activation_token VARCHAR(120) NULL,
+  activation_expires_at DATETIME NULL,
   invited_at DATETIME NULL,
+  activated_at DATETIME NULL,
+  last_login_at DATETIME NULL,
   last_notified_at DATETIME NULL,
+  session_version INT UNSIGNED NOT NULL DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -360,6 +366,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;
+
 
 
 

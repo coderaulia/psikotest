@@ -34,6 +34,9 @@ const baseTeam = {
       source: 'owner' as const,
       invitedAt: null,
       lastNotifiedAt: null,
+      activatedAt: null,
+      activationExpiresAt: null,
+      lastLoginAt: null,
     },
     {
       id: 22,
@@ -44,6 +47,9 @@ const baseTeam = {
       source: 'workspace_member' as const,
       invitedAt: null,
       lastNotifiedAt: null,
+      activatedAt: null,
+      activationExpiresAt: '2026-03-31T14:30:00.000Z',
+      lastLoginAt: null,
     },
   ],
 };
@@ -64,11 +70,14 @@ describe('CustomerTeamPage', () => {
         email: 'owner@example.com',
         accountType: 'researcher',
         organizationName: 'Vanaila Research Lab',
+        workspaceRole: 'owner',
+        sessionSource: 'owner',
+        workspaceMemberId: null,
       },
     });
   });
 
-  it('adds teammates and sends dummy invites for workspace members', async () => {
+  it('adds teammates and surfaces activation links for invited workspace members', async () => {
     const expandedTeam = {
       ...baseTeam,
       items: [
@@ -82,6 +91,9 @@ describe('CustomerTeamPage', () => {
           source: 'workspace_member' as const,
           invitedAt: null,
           lastNotifiedAt: null,
+          activatedAt: null,
+          activationExpiresAt: null,
+          lastLoginAt: null,
         },
       ],
     };
@@ -94,6 +106,7 @@ describe('CustomerTeamPage', () => {
               ...item,
               invitedAt: '2026-03-28T14:30:00.000Z',
               lastNotifiedAt: '2026-03-28T14:30:00.000Z',
+              activationExpiresAt: '2026-03-31T14:30:00.000Z',
             }
           : item,
       ),
@@ -107,7 +120,10 @@ describe('CustomerTeamPage', () => {
     createCustomerWorkspaceMemberMock.mockResolvedValue(expandedTeam.items[2]);
     sendCustomerWorkspaceMemberInviteMock.mockResolvedValue({
       member: invitedTeam.items[1],
-      deliveryPreview: 'Dummy team invitation queued for reviewer@example.com.',
+      deliveryPreview: 'Activation link prepared for reviewer@example.com. It expires in 72 hours.',
+      activationLink: 'https://psikotest.vanaila.com/accept-workspace-invite/example-token',
+      loginLink: null,
+      expiresAt: '2026-03-31T14:30:00.000Z',
     });
 
     renderWithRoute(<CustomerTeamPage />, {
@@ -131,10 +147,13 @@ describe('CustomerTeamPage', () => {
     });
     expect(await screen.findByText('Ops Partner')).toBeInTheDocument();
 
-    await user.click(screen.getAllByRole('button', { name: /send dummy invite/i })[0]);
+    await user.click(screen.getAllByRole('button', { name: /send activation link/i })[0]);
 
-    await screen.findByText(/dummy team invitation queued/i);
+    expect(await screen.findAllByText(/activation link prepared/i)).toHaveLength(2);
     expect(sendCustomerWorkspaceMemberInviteMock).toHaveBeenCalledWith(22);
-    expect(await screen.findByText(/last notified/i)).toBeInTheDocument();
+    expect(await screen.findByText(/accept-workspace-invite\/example-token/i)).toBeInTheDocument();
+    expect(await screen.findByText(/activation expires/i)).toBeInTheDocument();
   }, 10000);
 });
+
+

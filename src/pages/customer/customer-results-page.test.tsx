@@ -30,6 +30,9 @@ describe('CustomerResultsPage', () => {
         email: 'owner@example.com',
         accountType: 'business',
         organizationName: 'Vanaila Labs',
+        workspaceRole: 'owner',
+        sessionSource: 'owner',
+        workspaceMemberId: null,
       },
     });
   });
@@ -139,3 +142,4 @@ describe('CustomerResultsPage', () => {
     expect(screen.getByText(/reviewer draft content is hidden until the report is released/i)).toBeInTheDocument();
   });
 });
+

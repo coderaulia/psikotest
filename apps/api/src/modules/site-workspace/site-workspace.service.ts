@@ -1,14 +1,21 @@
+import { randomBytes } from 'node:crypto';
+
+import { env } from '../../config/env.js';
 import { createAuditEvent } from '../../lib/audit-log.js';
 import { HttpError } from '../../lib/http-error.js';
 import { assertTeamMemberCapacity } from '../site-billing/site-billing.service.js';
 import { findActiveCustomerById } from '../site-auth/site-auth.repository.js';
 import {
   fetchCustomerWorkspaceMembers,
-  markCustomerWorkspaceMemberInvited,
+  findCustomerWorkspaceMemberById,
+  issueCustomerWorkspaceMemberInvite,
+  markCustomerWorkspaceMemberNotified,
   updateCustomerWorkspaceRecord,
   upsertCustomerWorkspaceMember,
 } from './site-workspace.repository.js';
 import { parseCustomerWorkspaceSettings } from './workspace-settings.js';
+
+const INVITE_TTL_IN_HOURS = 72;
 
 function mapAccount(record: {
   id: number;
@@ -23,6 +30,9 @@ function mapAccount(record: {
     email: record.email,
     accountType: record.account_type,
     organizationName: record.organization_name,
+    workspaceRole: 'owner' as const,
+    sessionSource: 'owner' as const,
+    workspaceMemberId: null,
   };
 }
 
@@ -64,7 +74,18 @@ function buildOwnerMember(account: {
     source: 'owner' as const,
     invitedAt: null,
     lastNotifiedAt: null,
+    activatedAt: null,
+    activationExpiresAt: null,
+    lastLoginAt: null,
   };
+}
+
+function buildActivationLink(token: string) {
+  return `${env.APP_ORIGIN.replace(/\/$/, '')}/accept-workspace-invite/${token}`;
+}
+
+function buildLoginLink() {
+  return `${env.APP_ORIGIN.replace(/\/$/, '')}/login`;
 }
 
 export async function getCustomerWorkspaceSettings(accountId: number) {
@@ -206,15 +227,61 @@ export async function sendCustomerWorkspaceMemberInvite(input: {
   accountId: number;
   memberId: number;
 }) {
-  await requireActiveCustomer(input.accountId);
-  const member = await markCustomerWorkspaceMemberInvited({
+  const account = await requireActiveCustomer(input.accountId);
+  const existingMember = await findCustomerWorkspaceMemberById({
     customerAccountId: input.accountId,
     memberId: input.memberId,
+  });
+
+  if (!existingMember) {
+    throw new HttpError(404, 'Workspace member not found');
+  }
+
+  if (existingMember.status === 'active') {
+    const member = await markCustomerWorkspaceMemberNotified({
+      customerAccountId: input.accountId,
+      memberId: input.memberId,
+    });
+
+    if (!member) {
+      throw new HttpError(404, 'Workspace member not found');
+    }
+
+    await createAuditEvent({
+      actorType: 'system',
+      entityType: 'customer_workspace_member',
+      entityId: member.id,
+      action: 'customer_workspace.member_login_reminder_sent',
+      metadata: {
+        customerAccountId: input.accountId,
+        email: member.email,
+        role: member.role,
+      },
+    });
+
+    return {
+      member,
+      activationLink: null,
+      loginLink: buildLoginLink(),
+      expiresAt: null,
+      deliveryPreview: `Login reminder prepared for ${member.email}. They can sign in at ${buildLoginLink()}.`,
+    };
+  }
+
+  const activationToken = randomBytes(24).toString('hex');
+  const activationExpiresAt = new Date(Date.now() + INVITE_TTL_IN_HOURS * 60 * 60 * 1000).toISOString();
+  const member = await issueCustomerWorkspaceMemberInvite({
+    customerAccountId: input.accountId,
+    memberId: input.memberId,
+    activationToken,
+    activationExpiresAt,
   });
 
   if (!member) {
     throw new HttpError(404, 'Workspace member not found');
   }
+
+  const activationLink = buildActivationLink(activationToken);
 
   await createAuditEvent({
     actorType: 'system',
@@ -225,12 +292,16 @@ export async function sendCustomerWorkspaceMemberInvite(input: {
       customerAccountId: input.accountId,
       email: member.email,
       role: member.role,
-      dummyMode: true,
+      workspace: account.organization_name,
+      activationExpiresAt,
     },
   });
 
   return {
     member,
-    deliveryPreview: `Dummy team invitation queued for ${member.email}.`,
+    activationLink,
+    loginLink: null,
+    expiresAt: activationExpiresAt,
+    deliveryPreview: `Activation link prepared for ${member.email}. It expires in ${INVITE_TTL_IN_HOURS} hours.`,
   };
 }

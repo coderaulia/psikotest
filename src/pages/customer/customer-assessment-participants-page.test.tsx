@@ -125,6 +125,9 @@ describe('CustomerAssessmentParticipantsPage', () => {
         email: 'owner@example.com',
         accountType: 'business',
         organizationName: 'Vanaila Labs',
+        workspaceRole: 'owner',
+        sessionSource: 'owner',
+        workspaceMemberId: null,
       },
     });
   });
@@ -224,3 +227,4 @@ describe('CustomerAssessmentParticipantsPage', () => {
     expect(await screen.findByText(/imported 2 participant\(s\) and updated 0 existing row/i)).toBeInTheDocument();
   });
 });
+

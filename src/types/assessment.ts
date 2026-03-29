@@ -173,6 +173,7 @@ export type WorkspaceBillingCycle = DummyCheckoutBillingCycle;
 export type WorkspaceSubscriptionStatus = 'trial' | 'active' | 'past_due' | 'suspended';
 export type CustomerWorkspaceMemberRole = 'owner' | 'admin' | 'operator' | 'reviewer';
 export type CustomerWorkspaceMemberStatus = 'active' | 'invited';
+export type CustomerSessionSource = 'owner' | 'workspace_member';
 
 export interface CustomerUser {
   id: number;
@@ -180,6 +181,9 @@ export interface CustomerUser {
   email: string;
   accountType: CustomerAccountType;
   organizationName: string;
+  workspaceRole: CustomerWorkspaceMemberRole;
+  sessionSource: CustomerSessionSource;
+  workspaceMemberId: number | null;
 }
 
 export interface CustomerAuthResponse {
@@ -215,6 +219,9 @@ export interface CustomerWorkspaceMemberItem {
   source: 'owner' | 'workspace_member';
   invitedAt: string | null;
   lastNotifiedAt: string | null;
+  activatedAt: string | null;
+  activationExpiresAt: string | null;
+  lastLoginAt: string | null;
 }
 
 export interface CustomerWorkspaceTeamResponse {
@@ -297,6 +304,26 @@ export interface CreateCustomerWorkspaceMemberPayload {
 export interface SendCustomerWorkspaceMemberInviteResponse {
   member: CustomerWorkspaceMemberItem;
   deliveryPreview: string;
+  activationLink: string | null;
+  loginLink: string | null;
+  expiresAt: string | null;
+}
+
+export interface WorkspaceInvitePreviewResponse {
+  invite: {
+    organizationName: string;
+    accountType: CustomerAccountType;
+    fullName: string;
+    email: string;
+    role: Exclude<CustomerWorkspaceMemberRole, 'owner'>;
+    expiresAt: string | null;
+    isExpired: boolean;
+  };
+}
+
+export interface AcceptWorkspaceInvitePayload {
+  fullName: string;
+  password: string;
 }
 
 export interface CustomerAssessmentItem {
@@ -760,6 +787,9 @@ export interface SettingsOverviewResponse {
   sessionDefaults: SessionDefaultsSettings;
   auditFeed: AuditFeedItem[];
 }
+
+
+
 
 
 

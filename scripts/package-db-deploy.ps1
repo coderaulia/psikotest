@@ -147,6 +147,7 @@ This bundled upgrade adds:
 - submission answer sequence tracking for replay protection in protected sessions
 - customer assessment participant invite records for SaaS onboarding and sharing workflows
 - workspace team member records for multi-user customer operations
+- teammate activation credentials and invite links for shared customer workspace access
 - workspace subscription and plan limit records for SaaS billing workflows
 "@
 Set-Content (Join-Path $upgradeDir 'README.md') $upgradeReadme
@@ -162,3 +163,4 @@ $zipPaths = @(
 Compress-Archive -Path $zipPaths -DestinationPath $zipPath -Force
 
 Write-Host "Generated $zipPath"
+

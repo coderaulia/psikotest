@@ -44,13 +44,13 @@ export function CustomerLoginPage() {
             <p className="text-xs uppercase tracking-[0.22em] text-white/50">Customer access</p>
             <h1 className="mt-6 text-4xl font-semibold tracking-tight">Build a compliant assessment draft before you share.</h1>
             <p className="mt-4 max-w-md text-sm leading-7 text-white/70">
-              Sign in as a company or researcher to configure a first assessment, preview the participant flow, and prepare your link before rollout.
+              Sign in as a workspace owner or teammate to configure assessments, preview participant flows, and operate the same shared workspace.
             </p>
           </div>
           <div className="p-8 sm:p-10">
             <CardHeader className="p-0">
               <CardTitle>Workspace login</CardTitle>
-              <CardDescription>For companies, researchers, and institutions using the self-serve onboarding flow.</CardDescription>
+              <CardDescription>For workspace owners, operators, reviewers, and research teams using the self-serve SaaS flow.</CardDescription>
             </CardHeader>
             <CardContent className="mt-8 p-0">
               <form className="space-y-4" onSubmit={handleSubmit}>
@@ -78,3 +78,4 @@ export function CustomerLoginPage() {
     </div>
   );
 }
+

@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 
 import { verifyCustomerSessionToken } from '../lib/signed-token.js';
-import { findActiveCustomerById } from '../modules/site-auth/site-auth.repository.js';
+import { findActiveCustomerById, findActiveWorkspaceMemberById } from '../modules/site-auth/site-auth.repository.js';
 
 function readBearerToken(request: Request) {
   const authorization = request.header('Authorization');
@@ -32,6 +32,31 @@ export async function requireCustomerAuth(request: Request, response: Response, 
       });
     }
 
+    if (customerSession.actorType === 'workspace_member') {
+      const activeMember = await findActiveWorkspaceMemberById(customerSession.accountId, customerSession.actorId);
+
+      if (
+        !activeMember
+        || activeMember.session_version !== customerSession.sessionVersion
+        || activeMember.role !== customerSession.workspaceRole
+        || activeMember.email !== customerSession.email
+        || activeMember.account_type !== customerSession.accountType
+      ) {
+        return response.status(401).json({
+          error: 'Customer session is no longer active',
+        });
+      }
+
+      request.customerSession = {
+        ...customerSession,
+        email: activeMember.email,
+        accountType: activeMember.account_type,
+        workspaceRole: activeMember.role,
+        sessionVersion: activeMember.session_version,
+      };
+      return next();
+    }
+
     const activeAccount = await findActiveCustomerById(customerSession.accountId);
 
     if (
@@ -47,8 +72,11 @@ export async function requireCustomerAuth(request: Request, response: Response, 
 
     request.customerSession = {
       ...customerSession,
+      actorId: activeAccount.id,
+      actorType: 'owner',
       email: activeAccount.email,
       accountType: activeAccount.account_type,
+      workspaceRole: 'owner',
       sessionVersion: activeAccount.session_version,
     };
     return next();

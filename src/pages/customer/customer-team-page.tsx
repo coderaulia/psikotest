@@ -1,8 +1,15 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
-import { Mail, ShieldCheck, Users } from 'lucide-react';
+import { Copy, Mail, ShieldCheck, Users } from 'lucide-react';
 
+import { loadCustomerSession } from '@/lib/customer-session';
 import { createCustomerWorkspaceMember, getCustomerWorkspaceTeam, sendCustomerWorkspaceMemberInvite } from '@/services/customer-workspace';
-import type { CreateCustomerWorkspaceMemberPayload, CustomerWorkspaceMemberItem, CustomerWorkspaceMemberRole, CustomerWorkspaceTeamResponse } from '@/types/assessment';
+import type {
+  CreateCustomerWorkspaceMemberPayload,
+  CustomerWorkspaceMemberItem,
+  CustomerWorkspaceMemberRole,
+  CustomerWorkspaceTeamResponse,
+  SendCustomerWorkspaceMemberInviteResponse,
+} from '@/types/assessment';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,6 +30,9 @@ const initialForm: CreateCustomerWorkspaceMemberPayload = {
 };
 
 export function CustomerTeamPage() {
+  const customerSession = loadCustomerSession();
+  const canManageTeam = customerSession?.account.workspaceRole === 'owner' || customerSession?.account.workspaceRole === 'admin';
+
   const [team, setTeam] = useState<CustomerWorkspaceTeamResponse | null>(null);
   const [form, setForm] = useState<CreateCustomerWorkspaceMemberPayload>(initialForm);
   const [isLoading, setIsLoading] = useState(true);
@@ -30,6 +40,7 @@ export function CustomerTeamPage() {
   const [sendingId, setSendingId] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [invitePreview, setInvitePreview] = useState<SendCustomerWorkspaceMemberInviteResponse | null>(null);
 
   async function loadTeam() {
     const payload = await getCustomerWorkspaceTeam();
@@ -76,12 +87,13 @@ export function CustomerTeamPage() {
     setIsSubmitting(true);
     setErrorMessage(null);
     setSuccessMessage(null);
+    setInvitePreview(null);
 
     try {
       await createCustomerWorkspaceMember(form);
       await loadTeam();
       setForm(initialForm);
-      setSuccessMessage('Workspace team member added. Send the dummy invite when you are ready.');
+      setSuccessMessage('Workspace team member added. Send the activation link when you are ready.');
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to add workspace member');
     } finally {
@@ -93,16 +105,23 @@ export function CustomerTeamPage() {
     setSendingId(member.id);
     setErrorMessage(null);
     setSuccessMessage(null);
+    setInvitePreview(null);
 
     try {
       const payload = await sendCustomerWorkspaceMemberInvite(member.id);
       await loadTeam();
+      setInvitePreview(payload);
       setSuccessMessage(payload.deliveryPreview);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to send team invite');
     } finally {
       setSendingId(null);
     }
+  }
+
+  async function handleCopyLink(value: string) {
+    await navigator.clipboard.writeText(value);
+    setSuccessMessage('Link copied to clipboard.');
   }
 
   if (isLoading) {
@@ -137,42 +156,48 @@ export function CustomerTeamPage() {
             {errorMessage ? <p className="text-sm text-rose-600">{errorMessage}</p> : null}
             {successMessage ? <p className="text-sm text-emerald-700">{successMessage}</p> : null}
 
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label htmlFor="workspace-member-full-name" className="text-sm font-medium text-slate-600">Full name</label>
-                  <Input id="workspace-member-full-name" value={form.fullName} onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))} />
+            {canManageTeam ? (
+              <form className="space-y-4" onSubmit={handleSubmit}>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label htmlFor="workspace-member-full-name" className="text-sm font-medium text-slate-600">Full name</label>
+                    <Input id="workspace-member-full-name" value={form.fullName} onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="workspace-member-email" className="text-sm font-medium text-slate-600">Email</label>
+                    <Input id="workspace-member-email" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} />
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <label htmlFor="workspace-member-email" className="text-sm font-medium text-slate-600">Email</label>
-                  <Input id="workspace-member-email" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} />
+                  <label htmlFor="workspace-member-role" className="text-sm font-medium text-slate-600">Role</label>
+                  <Select id="workspace-member-role" value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as Exclude<CustomerWorkspaceMemberRole, 'owner'> }))}>
+                    {roleOptions.map((role) => (
+                      <option key={role.value} value={role.value}>{role.label}</option>
+                    ))}
+                  </Select>
+                  <p className="text-xs leading-6 text-slate-400">{roleOptions.find((role) => role.value === form.role)?.description}</p>
                 </div>
+                <Button type="submit" size="lg" disabled={isSubmitting || !form.fullName.trim() || !form.email.trim()}>
+                  {isSubmitting ? 'Adding teammate...' : 'Add teammate'}
+                </Button>
+              </form>
+            ) : (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-500">
+                You can view the workspace roster, but only owners and workspace admins can add or invite teammates.
               </div>
-              <div className="space-y-2">
-                <label htmlFor="workspace-member-role" className="text-sm font-medium text-slate-600">Role</label>
-                <Select id="workspace-member-role" value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as Exclude<CustomerWorkspaceMemberRole, 'owner'> }))}>
-                  {roleOptions.map((role) => (
-                    <option key={role.value} value={role.value}>{role.label}</option>
-                  ))}
-                </Select>
-                <p className="text-xs leading-6 text-slate-400">{roleOptions.find((role) => role.value === form.role)?.description}</p>
-              </div>
-              <Button type="submit" size="lg" disabled={isSubmitting || !form.fullName.trim() || !form.email.trim()}>
-                {isSubmitting ? 'Adding teammate...' : 'Add teammate'}
-              </Button>
-            </form>
+            )}
           </CardContent>
         </Card>
 
         <Card className="bg-slate-950 text-white">
           <CardHeader>
             <CardTitle>How this helps the SaaS flow</CardTitle>
-            <CardDescription className="text-white/70">The workspace is no longer modeled as a single user only.</CardDescription>
+            <CardDescription className="text-white/70">The workspace now supports real teammate activation, not just placeholder roster entries.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-white/75">
-            <p>Owners can now prepare a broader operational team before scaling assessments.</p>
-            <p>Invites are still dummy-mode for MVP, but the model is ready for future access handoff.</p>
-            <p>Roles start separating workspace administration, operations, and reviewer participation.</p>
+            <p>Owners and workspace admins can issue activation links to invited teammates.</p>
+            <p>Activated members sign in through the same customer login flow and share the same workspace context.</p>
+            <p>Roles now begin separating workspace administration, operations, and reviewer participation.</p>
           </CardContent>
         </Card>
       </div>
@@ -194,6 +219,41 @@ export function CustomerTeamPage() {
           ))}
         </div>
 
+        {invitePreview ? (
+          <Card className="border-slate-900 bg-slate-950 text-white">
+            <CardHeader>
+              <CardTitle>Invite delivery preview</CardTitle>
+              <CardDescription className="text-white/70">Use this link directly while email delivery is still in dummy mode.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm text-white/80">
+              <p>{invitePreview.deliveryPreview}</p>
+              {invitePreview.activationLink ? (
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-white/45">Activation link</p>
+                  <p className="mt-2 break-all text-white">{invitePreview.activationLink}</p>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <Button type="button" size="sm" variant="secondary" onClick={() => void handleCopyLink(invitePreview.activationLink!)}>
+                      Copy link <Copy className="ml-2 h-4 w-4" />
+                    </Button>
+                    {invitePreview.expiresAt ? <span className="text-xs text-white/55">Expires {formatDateTime(invitePreview.expiresAt)}</span> : null}
+                  </div>
+                </div>
+              ) : null}
+              {invitePreview.loginLink ? (
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-white/45">Workspace login</p>
+                  <p className="mt-2 break-all text-white">{invitePreview.loginLink}</p>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <Button type="button" size="sm" variant="secondary" onClick={() => void handleCopyLink(invitePreview.loginLink!)}>
+                      Copy link <Copy className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
+
         <Card className="bg-white/84">
           <CardHeader>
             <CardTitle>{team.workspace.organizationName}</CardTitle>
@@ -213,18 +273,25 @@ export function CustomerTeamPage() {
                     </div>
                     <p className="mt-2 text-sm text-slate-500">{member.email}</p>
                     <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-400">
-                      <span>{member.source === 'owner' ? 'Workspace owner' : 'Invited teammate'}</span>
+                      <span>{member.source === 'owner' ? 'Workspace owner' : 'Workspace teammate'}</span>
                       {member.invitedAt ? <span>Invited {formatDateTime(member.invitedAt)}</span> : null}
+                      {member.activationExpiresAt && member.status === 'invited' ? <span>Activation expires {formatDateTime(member.activationExpiresAt)}</span> : null}
+                      {member.activatedAt ? <span>Activated {formatDateTime(member.activatedAt)}</span> : null}
+                      {member.lastLoginAt ? <span>Last login {formatDateTime(member.lastLoginAt)}</span> : null}
                       {member.lastNotifiedAt ? <span>Last notified {formatDateTime(member.lastNotifiedAt)}</span> : null}
                     </div>
                   </div>
-                  {member.source === 'workspace_member' ? (
+                  {member.source === 'workspace_member' && canManageTeam ? (
                     <Button type="button" size="sm" variant="secondary" disabled={sendingId === member.id} onClick={() => void handleSendInvite(member)}>
-                      {sendingId === member.id ? 'Sending...' : 'Send dummy invite'} <Mail className="ml-2 h-4 w-4" />
+                      {sendingId === member.id ? 'Sending...' : member.status === 'active' ? 'Send login reminder' : 'Send activation link'} <Mail className="ml-2 h-4 w-4" />
                     </Button>
-                  ) : (
+                  ) : member.source === 'owner' ? (
                     <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">
                       <ShieldCheck className="h-3.5 w-3.5" /> Owner access
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">
+                      <Users className="h-3.5 w-3.5" /> Team member
                     </div>
                   )}
                 </div>

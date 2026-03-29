@@ -36,6 +36,16 @@ const memberParamsSchema = z.object({
   memberId: z.coerce.number().int().positive(),
 });
 
+function requireWorkspaceAdminRole(request: { customerSession?: { workspaceRole: 'owner' | 'admin' | 'operator' | 'reviewer' } }) {
+  if (!request.customerSession) {
+    throw new HttpError(401, 'Customer session is required');
+  }
+
+  if (!['owner', 'admin'].includes(request.customerSession.workspaceRole)) {
+    throw new HttpError(403, 'This action requires workspace admin access');
+  }
+}
+
 export const siteWorkspaceRoutes = Router();
 
 siteWorkspaceRoutes.get(
@@ -53,12 +63,10 @@ siteWorkspaceRoutes.get(
 siteWorkspaceRoutes.patch(
   '/settings',
   asyncHandler(async (request, response) => {
-    if (!request.customerSession) {
-      throw new HttpError(401, 'Customer session is required');
-    }
+    requireWorkspaceAdminRole(request);
 
     const payload = workspaceSettingsSchema.parse(request.body);
-    const updated = await updateCustomerWorkspaceSettings(request.customerSession.accountId, payload);
+    const updated = await updateCustomerWorkspaceSettings(request.customerSession!.accountId, payload);
     response.json(updated);
   }),
 );
@@ -78,13 +86,11 @@ siteWorkspaceRoutes.get(
 siteWorkspaceRoutes.post(
   '/team',
   asyncHandler(async (request, response) => {
-    if (!request.customerSession) {
-      throw new HttpError(401, 'Customer session is required');
-    }
+    requireWorkspaceAdminRole(request);
 
     const payload = workspaceMemberSchema.parse(request.body);
     const member = await addCustomerWorkspaceMember({
-      accountId: request.customerSession.accountId,
+      accountId: request.customerSession!.accountId,
       fullName: payload.fullName,
       email: payload.email,
       role: payload.role,
@@ -97,13 +103,11 @@ siteWorkspaceRoutes.post(
 siteWorkspaceRoutes.post(
   '/team/:memberId/send',
   asyncHandler(async (request, response) => {
-    if (!request.customerSession) {
-      throw new HttpError(401, 'Customer session is required');
-    }
+    requireWorkspaceAdminRole(request);
 
     const { memberId } = memberParamsSchema.parse(request.params);
     const payload = await sendCustomerWorkspaceMemberInvite({
-      accountId: request.customerSession.accountId,
+      accountId: request.customerSession!.accountId,
       memberId,
     });
 

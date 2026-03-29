@@ -1,4 +1,4 @@
-import type { CustomerAuthResponse } from '@/types/assessment';
+import type { AcceptWorkspaceInvitePayload, CustomerAuthResponse, WorkspaceInvitePreviewResponse } from '@/types/assessment';
 
 import { apiBaseUrl } from './api-client';
 
@@ -36,6 +36,23 @@ export async function loginCustomer(email: string, password: string) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ email, password }),
+  });
+
+  return readJson<CustomerAuthResponse>(response);
+}
+
+export async function getWorkspaceInvitePreview(token: string) {
+  const response = await fetch(`${apiBaseUrl}/site-auth/team-invites/${token}`);
+  return readJson<WorkspaceInvitePreviewResponse>(response);
+}
+
+export async function acceptWorkspaceInvite(token: string, payload: AcceptWorkspaceInvitePayload) {
+  const response = await fetch(`${apiBaseUrl}/site-auth/team-invites/${token}/accept`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
   });
 
   return readJson<CustomerAuthResponse>(response);
