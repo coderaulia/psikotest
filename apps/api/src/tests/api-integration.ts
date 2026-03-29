@@ -251,6 +251,8 @@ export async function runApiIntegrationTests() {
     const billingOverviewPayload = await readJson(billingOverviewResponse);
     assert.equal(billingOverviewPayload?.subscription && typeof billingOverviewPayload.subscription === 'object' ? (billingOverviewPayload.subscription as Record<string, unknown>).planCode : null, 'research');
     assert.equal(billingOverviewPayload?.usage && typeof billingOverviewPayload.usage === 'object' ? (billingOverviewPayload.usage as Record<string, unknown>).teamSeatCount : null, 1);
+    assert.equal(Array.isArray(billingOverviewPayload?.diagnostics), true);
+    assert.equal(billingOverviewPayload?.upgradeGuidance && typeof billingOverviewPayload.upgradeGuidance === 'object' ? (billingOverviewPayload.upgradeGuidance as Record<string, unknown>).isUpgradeRecommended : null, false);
 
     const billingUpdateResponse = await fetch(`${baseUrl}/api/site-billing/subscription`, {
       method: 'PATCH',
@@ -580,6 +582,7 @@ export async function runApiIntegrationTests() {
     setDbPoolForTests(null);
   }
 }
+
 
 
 

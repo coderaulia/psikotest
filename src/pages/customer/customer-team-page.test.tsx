@@ -7,9 +7,14 @@ import { renderWithRoute } from '@/test/render';
 
 import { CustomerTeamPage } from './customer-team-page';
 
+const getCustomerBillingOverviewMock = vi.fn();
 const getCustomerWorkspaceTeamMock = vi.fn();
 const createCustomerWorkspaceMemberMock = vi.fn();
 const sendCustomerWorkspaceMemberInviteMock = vi.fn();
+
+vi.mock('@/services/customer-billing', () => ({
+  getCustomerBillingOverview: (...args: unknown[]) => getCustomerBillingOverviewMock(...args),
+}));
 
 vi.mock('@/services/customer-workspace', () => ({
   getCustomerWorkspaceTeam: (...args: unknown[]) => getCustomerWorkspaceTeamMock(...args),
@@ -54,10 +59,95 @@ const baseTeam = {
   ],
 };
 
+const saturatedBillingOverview = {
+  account: {
+    id: 31,
+    fullName: 'Workspace Owner',
+    email: 'owner@example.com',
+    accountType: 'researcher' as const,
+    organizationName: 'Vanaila Research Lab',
+    workspaceRole: 'owner' as const,
+    sessionSource: 'owner' as const,
+    workspaceMemberId: null,
+  },
+  subscription: {
+    id: 101,
+    customerAccountId: 31,
+    planCode: 'starter' as const,
+    status: 'trial' as const,
+    billingCycle: 'monthly' as const,
+    assessmentLimit: 3,
+    participantLimit: 5,
+    teamMemberLimit: 3,
+    startedAt: '2026-03-28T08:00:00.000Z',
+    trialEndsAt: '2026-04-11T08:00:00.000Z',
+    renewsAt: null,
+    planLabel: 'Starter',
+    planDescription: 'For teams validating the first assessment workflow.',
+  },
+  usage: {
+    activeAssessmentCount: 1,
+    participantRecordCount: 2,
+    teamSeatCount: 3,
+    remainingAssessmentSlots: 2,
+    remainingParticipantSlots: 3,
+    remainingTeamSeats: 0,
+  },
+  diagnostics: [
+    {
+      resource: 'assessments' as const,
+      label: 'Assessment capacity',
+      current: 1,
+      limit: 3,
+      remaining: 2,
+      utilizationPercent: 33,
+      severity: 'healthy' as const,
+      suggestedPlanCode: null,
+      suggestedPlanLabel: null,
+      message: 'Assessment capacity is within the current workspace plan.',
+    },
+    {
+      resource: 'participants' as const,
+      label: 'Participant records',
+      current: 2,
+      limit: 5,
+      remaining: 3,
+      utilizationPercent: 40,
+      severity: 'healthy' as const,
+      suggestedPlanCode: null,
+      suggestedPlanLabel: null,
+      message: 'Participant records is within the current workspace plan.',
+    },
+    {
+      resource: 'team_members' as const,
+      label: 'Team seats',
+      current: 3,
+      limit: 3,
+      remaining: 0,
+      utilizationPercent: 100,
+      severity: 'limit_reached' as const,
+      suggestedPlanCode: 'growth' as const,
+      suggestedPlanLabel: 'Growth',
+      message: 'Team seats has reached the current plan limit. Upgrade to Growth to continue.',
+    },
+  ],
+  upgradeGuidance: {
+    isUpgradeRecommended: true,
+    highestSeverity: 'limit_reached' as const,
+    suggestedPlanCode: 'growth' as const,
+    suggestedPlanLabel: 'Growth',
+    reasons: ['Team seats has reached the current plan limit. Upgrade to Growth to continue.'],
+    isCurrentPlanSaturated: true,
+    currentPlanCode: 'starter' as const,
+  },
+  plans: [],
+};
+
 describe('CustomerTeamPage', () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    getCustomerBillingOverviewMock.mockReset();
     getCustomerWorkspaceTeamMock.mockReset();
     createCustomerWorkspaceMemberMock.mockReset();
     sendCustomerWorkspaceMemberInviteMock.mockReset();
@@ -77,7 +167,46 @@ describe('CustomerTeamPage', () => {
     });
   });
 
+  it('blocks new teammates when seat capacity is full', async () => {
+    getCustomerWorkspaceTeamMock.mockResolvedValue(baseTeam);
+    getCustomerBillingOverviewMock.mockResolvedValue(saturatedBillingOverview);
+
+    renderWithRoute(<CustomerTeamPage />, {
+      route: '/workspace/team',
+      path: '/workspace/team',
+    });
+
+    await screen.findByText('Workspace Owner');
+    expect(screen.getByText(/team seats has reached the current plan limit/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add teammate/i })).toBeDisabled();
+  });
+
   it('adds teammates and surfaces activation links for invited workspace members', async () => {
+    const availableBillingOverview = {
+      ...saturatedBillingOverview,
+      usage: {
+        ...saturatedBillingOverview.usage,
+        teamSeatCount: 2,
+        remainingTeamSeats: 1,
+      },
+      diagnostics: saturatedBillingOverview.diagnostics.map((item) =>
+        item.resource === 'team_members'
+          ? {
+              ...item,
+              current: 2,
+              remaining: 1,
+              utilizationPercent: 67,
+              severity: 'warning' as const,
+              message: 'Team seats is approaching the current plan limit.',
+            }
+          : item,
+      ),
+      upgradeGuidance: {
+        ...saturatedBillingOverview.upgradeGuidance,
+        highestSeverity: 'warning' as const,
+      },
+    };
+
     const expandedTeam = {
       ...baseTeam,
       items: [
@@ -116,6 +245,10 @@ describe('CustomerTeamPage', () => {
       .mockResolvedValueOnce(baseTeam)
       .mockResolvedValueOnce(expandedTeam)
       .mockResolvedValueOnce(invitedTeam);
+    getCustomerBillingOverviewMock
+      .mockResolvedValueOnce(availableBillingOverview)
+      .mockResolvedValueOnce(availableBillingOverview)
+      .mockResolvedValueOnce(availableBillingOverview);
 
     createCustomerWorkspaceMemberMock.mockResolvedValue(expandedTeam.items[2]);
     sendCustomerWorkspaceMemberInviteMock.mockResolvedValue({
@@ -155,5 +288,3 @@ describe('CustomerTeamPage', () => {
     expect(await screen.findByText(/activation expires/i)).toBeInTheDocument();
   }, 10000);
 });
-
-

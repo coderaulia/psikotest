@@ -22,6 +22,7 @@ This project is a multi-surface psychological assessment platform with two opera
 - shared operational schema for:
   - admins and reviewers
   - customer workspaces
+  - workspace subscriptions and usage
   - sessions and participants
   - submissions and results
   - question bank and scoring outputs
@@ -39,7 +40,11 @@ flowchart LR
   G --> H["Released report"]
 
   C --> I["Workspace settings"]
+  C --> J["Billing + usage diagnostics"]
+  C --> K["Team + activity"]
   I --> D
+  J --> D
+  K --> D
 ```
 
 ## Main surfaces
@@ -52,8 +57,13 @@ flowchart LR
 
 ### Customer workspace
 - workspace overview
+- workspace billing
+- workspace team
+- workspace activity
+- customer results
 - create assessment flow
 - assessment review / activation
+- participant delivery operations
 - workspace settings
 
 ### Participant flow
@@ -78,6 +88,8 @@ The API follows a modular Express structure:
 - `auth`
 - `site-auth`
 - `site-onboarding`
+- `site-billing`
+- `site-results`
 - `site-workspace`
 - `participants`
 - `test-sessions`
@@ -100,10 +112,28 @@ Each module is expected to own its routes, service logic, and repository access.
 - owns a workspace account
 - creates and manages customer assessments
 - controls participant-facing defaults and workspace settings
+- manages dummy subscription state, capacity, teammates, and customer-safe result access
 
 ### Participant side
 - never uses admin or customer auth
 - only uses signed session and submission access tokens
+
+## Current SaaS boundary
+
+The current SaaS model is already separated by customer workspace through:
+
+- `customer_accounts`
+- `workspace_subscriptions`
+- `customer_assessments`
+- `customer_workspace_members`
+- customer-scoped onboarding, billing, workspace, and result APIs
+
+Operationally, the customer workspace now has these enforced controls:
+
+- assessment creation counts against plan capacity
+- participant imports and manual additions count against participant capacity
+- owner and member seats count against team-seat capacity
+- customer pages receive usage diagnostics and upgrade guidance from the API
 
 ## Current multi-tenant boundary
 
@@ -112,12 +142,12 @@ The system is not yet a full enterprise tenant architecture, but it already has 
 - `customer_assessments`
 - customer-scoped onboarding APIs
 - customer-scoped workspace settings
+- workspace-level billing and team membership
 
 The next tenant evolution should formalize:
 - role separation inside customer workspaces
-- team members and invites
 - branding and white-label boundaries
-- plan and usage enforcement
+- subscription and billing lifecycle states
 - domain-based tenant resolution for shared white-label delivery
 
 ## Hosting topology
@@ -141,7 +171,6 @@ Use together with:
 - `docs/development-phases.md`
 - `docs/auth-and-access.md`
 - `docs/assessment-engine.md`
-
 
 ## White-label principle
 

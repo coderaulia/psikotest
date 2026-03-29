@@ -14,6 +14,9 @@ import {
 export type DummyCheckoutPlan = WorkspacePlanCode;
 export type DummyCheckoutBillingCycle = WorkspaceBillingCycle;
 
+type WorkspaceUsageSeverity = 'healthy' | 'warning' | 'critical' | 'limit_reached';
+type WorkspaceUsageResource = 'assessments' | 'participants' | 'team_members';
+
 const workspacePlanCatalog = {
   starter: {
     label: 'Starter',
@@ -37,6 +40,8 @@ const workspacePlanCatalog = {
     teamMemberLimit: 20,
   },
 } as const;
+
+const planOrder: WorkspacePlanCode[] = ['starter', 'growth', 'research'];
 
 function addDays(days: number) {
   const date = new Date();
@@ -151,10 +156,172 @@ function buildUsageSummary(input: {
   };
 }
 
+function getUsageSeverity(current: number, limit: number): WorkspaceUsageSeverity {
+  if (current >= limit) {
+    return 'limit_reached';
+  }
+
+  const utilizationRatio = current / Math.max(limit, 1);
+  const remaining = limit - current;
+
+  if (remaining <= 1 || utilizationRatio >= 0.9) {
+    return 'critical';
+  }
+
+  if (utilizationRatio >= 0.7) {
+    return 'warning';
+  }
+
+  return 'healthy';
+}
+
+function getNextPlanCode(currentPlanCode: WorkspacePlanCode) {
+  const currentIndex = planOrder.indexOf(currentPlanCode);
+  return currentIndex >= 0 && currentIndex < planOrder.length - 1 ? planOrder[currentIndex + 1] : null;
+}
+
+function getPlanLimit(planCode: WorkspacePlanCode, resource: WorkspaceUsageResource) {
+  const plan = workspacePlanCatalog[planCode];
+
+  switch (resource) {
+    case 'assessments':
+      return plan.assessmentLimit;
+    case 'participants':
+      return plan.participantLimit;
+    case 'team_members':
+      return plan.teamMemberLimit;
+  }
+}
+
+function findSuggestedPlanCode(resource: WorkspaceUsageResource, currentValue: number, currentPlanCode: WorkspacePlanCode) {
+  for (const planCode of planOrder) {
+    if (getPlanLimit(planCode, resource) > currentValue) {
+      if (planOrder.indexOf(planCode) > planOrder.indexOf(currentPlanCode)) {
+        return planCode;
+      }
+      break;
+    }
+  }
+
+  return getNextPlanCode(currentPlanCode);
+}
+
+function buildUsageDiagnostic(input: {
+  resource: WorkspaceUsageResource;
+  label: string;
+  current: number;
+  limit: number;
+  currentPlanCode: WorkspacePlanCode;
+}) {
+  const remaining = Math.max(input.limit - input.current, 0);
+  const utilizationPercent = Math.min(100, Math.round((input.current / Math.max(input.limit, 1)) * 100));
+  const severity = getUsageSeverity(input.current, input.limit);
+  const suggestedPlanCode = severity === 'healthy' ? null : findSuggestedPlanCode(input.resource, input.current, input.currentPlanCode);
+  const suggestedPlanLabel = suggestedPlanCode ? workspacePlanCatalog[suggestedPlanCode].label : null;
+
+  let message = `${input.label} is within the current workspace plan.`;
+  if (severity === 'warning') {
+    message = `${input.label} is approaching the current plan limit.`;
+  } else if (severity === 'critical') {
+    message = `${input.label} is nearly full. Upgrade before the next operational step.`;
+  } else if (severity === 'limit_reached') {
+    message = suggestedPlanLabel
+      ? `${input.label} has reached the current plan limit. Upgrade to ${suggestedPlanLabel} to continue.`
+      : `${input.label} has reached the highest bundled plan limit.`;
+  }
+
+  return {
+    resource: input.resource,
+    label: input.label,
+    current: input.current,
+    limit: input.limit,
+    remaining,
+    utilizationPercent,
+    severity,
+    suggestedPlanCode,
+    suggestedPlanLabel,
+    message,
+  };
+}
+
+function getSeverityWeight(severity: WorkspaceUsageSeverity) {
+  switch (severity) {
+    case 'limit_reached':
+      return 3;
+    case 'critical':
+      return 2;
+    case 'warning':
+      return 1;
+    case 'healthy':
+    default:
+      return 0;
+  }
+}
+
+function buildUpgradeGuidance(input: {
+  currentPlanCode: WorkspacePlanCode;
+  diagnostics: Array<ReturnType<typeof buildUsageDiagnostic>>;
+}) {
+  const flaggedDiagnostics = input.diagnostics.filter((item) => item.severity !== 'healthy');
+  const sortedDiagnostics = [...flaggedDiagnostics].sort((left, right) => getSeverityWeight(right.severity) - getSeverityWeight(left.severity));
+  const suggestedPlanCode = sortedDiagnostics.reduce<WorkspacePlanCode | null>((selected, item) => {
+    if (!item.suggestedPlanCode) {
+      return selected;
+    }
+
+    if (!selected) {
+      return item.suggestedPlanCode;
+    }
+
+    return planOrder.indexOf(item.suggestedPlanCode) > planOrder.indexOf(selected) ? item.suggestedPlanCode : selected;
+  }, null);
+
+  return {
+    isUpgradeRecommended: sortedDiagnostics.length > 0,
+    highestSeverity: sortedDiagnostics[0]?.severity ?? 'healthy',
+    suggestedPlanCode,
+    suggestedPlanLabel: suggestedPlanCode ? workspacePlanCatalog[suggestedPlanCode].label : null,
+    reasons: sortedDiagnostics.map((item) => item.message),
+    isCurrentPlanSaturated: sortedDiagnostics.some((item) => item.severity === 'limit_reached'),
+    currentPlanCode: input.currentPlanCode,
+  };
+}
+
 export async function getWorkspaceBillingOverview(customerAccountId: number) {
   const account = await requireActiveCustomer(customerAccountId);
   const subscription = await ensureWorkspaceSubscription(account);
   const usage = await fetchWorkspaceUsage(customerAccountId);
+
+  const usageSummary = buildUsageSummary({
+    ...usage,
+    assessmentLimit: subscription.assessmentLimit,
+    participantLimit: subscription.participantLimit,
+    teamMemberLimit: subscription.teamMemberLimit,
+  });
+
+  const diagnostics = [
+    buildUsageDiagnostic({
+      resource: 'assessments',
+      label: 'Assessment capacity',
+      current: usage.activeAssessmentCount,
+      limit: subscription.assessmentLimit,
+      currentPlanCode: subscription.planCode,
+    }),
+    buildUsageDiagnostic({
+      resource: 'participants',
+      label: 'Participant records',
+      current: usage.participantRecordCount,
+      limit: subscription.participantLimit,
+      currentPlanCode: subscription.planCode,
+    }),
+    buildUsageDiagnostic({
+      resource: 'team_members',
+      label: 'Team seats',
+      current: usage.teamSeatCount,
+      limit: subscription.teamMemberLimit,
+      currentPlanCode: subscription.planCode,
+    }),
+  ];
 
   return {
     account: mapAccount(account),
@@ -163,11 +330,11 @@ export async function getWorkspaceBillingOverview(customerAccountId: number) {
       planLabel: workspacePlanCatalog[subscription.planCode].label,
       planDescription: workspacePlanCatalog[subscription.planCode].description,
     },
-    usage: buildUsageSummary({
-      ...usage,
-      assessmentLimit: subscription.assessmentLimit,
-      participantLimit: subscription.participantLimit,
-      teamMemberLimit: subscription.teamMemberLimit,
+    usage: usageSummary,
+    diagnostics,
+    upgradeGuidance: buildUpgradeGuidance({
+      currentPlanCode: subscription.planCode,
+      diagnostics,
     }),
     plans: (Object.entries(workspacePlanCatalog) as Array<[WorkspacePlanCode, typeof workspacePlanCatalog[WorkspacePlanCode]]>).map(([planCode, plan]) => ({
       planCode,

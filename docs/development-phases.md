@@ -7,18 +7,28 @@ It should be used together with:
 - `docs/new-flow.md`
 - `docs/compliance.md`
 
-## Current MVP Status
+## Current SaaS Build Status
 
-The MVP already covers:
+The current product already covers:
 
-- public landing page and customer onboarding
-- admin dashboard, sessions, results, reports, question bank, and settings pages
-- participant consent-first assessment flow
+- public landing page, manual, white-label positioning, signup, and login
+- customer onboarding and first-assessment creation
+- customer workspace overview with draft activation and participant links
+- workspace billing with dummy plan updates and enforced usage limits
+- participant invite, reminder, and list management
+- teammate roster, invite activation, and workspace roles
+- workspace activity feed and customer-safe result views
+- admin dashboard, reviewer queue, reports, question bank, and settings
+- participant consent-first assessment flow with protected progressive delivery
 - automated scoring for IQ, DISC, workload, and custom research tests
-- draft activation flow for customer-created assessments
-- API and frontend smoke tests
+- API and frontend smoke/integration coverage
 
-The remaining work is centered on professional review workflow, stronger test security, result distribution policy, and final report handoff.
+The main remaining work is centered on:
+
+- replacing dummy billing with a real provider
+- deeper white-label and tenant controls
+- export and delivery handoff
+- enterprise compliance and security depth
 
 ## Phase 1: Professional Report Workflow
 
@@ -237,6 +247,16 @@ Turn reviewed reports into operational deliverables for organizations, researche
 
 - customers can generate and hand off final outputs without manual offline report assembly
 
+## SaaS Foundation Next Steps
+
+The next SaaS-specific work after the current slice should be:
+
+1. real billing provider integration
+2. subscription status changes beyond trial and active
+3. invoice and renewal history
+4. stronger white-label tenant controls
+5. export, delivery, and handoff workflows
+
 ## Recommended Build Sequence
 
 1. Phase 1 schema and permissions
@@ -245,6 +265,7 @@ Turn reviewed reports into operational deliverables for organizations, researche
 4. Phase 2 protected delivery and security hardening
 5. Phase 3 PDF and dataset export
 6. Phase 3 email handoff and delivery logs
+7. replace dummy billing with a real commercial flow once the operational SaaS behavior is stable
 
 ## Test Strategy Across Phases
 
@@ -261,12 +282,14 @@ Turn reviewed reports into operational deliverables for organizations, researche
 - protected session question delivery
 - result access under each distribution policy
 - export endpoint authorization and audit logging
+- workspace billing/usage enforcement and customer role access
 
 ### Frontend tests
 
 - reviewer result editor behavior
 - participant completion page under each result mode
 - customer visibility controls in settings and session detail
+- customer billing/participant/team limits and upgrade prompts
 
 ### End-to-end flow tests
 

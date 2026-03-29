@@ -288,6 +288,31 @@ export interface WorkspaceUsageSummary {
   remainingTeamSeats: number;
 }
 
+export type WorkspaceUsageSeverity = 'healthy' | 'warning' | 'critical' | 'limit_reached';
+
+export interface WorkspaceUsageDiagnostic {
+  resource: 'assessments' | 'participants' | 'team_members';
+  label: string;
+  current: number;
+  limit: number;
+  remaining: number;
+  utilizationPercent: number;
+  severity: WorkspaceUsageSeverity;
+  suggestedPlanCode: WorkspacePlanCode | null;
+  suggestedPlanLabel: string | null;
+  message: string;
+}
+
+export interface WorkspaceUpgradeGuidance {
+  isUpgradeRecommended: boolean;
+  highestSeverity: WorkspaceUsageSeverity;
+  suggestedPlanCode: WorkspacePlanCode | null;
+  suggestedPlanLabel: string | null;
+  reasons: string[];
+  isCurrentPlanSaturated: boolean;
+  currentPlanCode: WorkspacePlanCode;
+}
+
 export interface WorkspacePlanDefinition {
   planCode: WorkspacePlanCode;
   label: string;
@@ -301,6 +326,8 @@ export interface CustomerBillingOverviewResponse {
   account: CustomerUser;
   subscription: WorkspaceSubscriptionRecord;
   usage: WorkspaceUsageSummary;
+  diagnostics: WorkspaceUsageDiagnostic[];
+  upgradeGuidance: WorkspaceUpgradeGuidance;
   plans: WorkspacePlanDefinition[];
 }
 
@@ -829,6 +856,9 @@ export interface SettingsOverviewResponse {
   sessionDefaults: SessionDefaultsSettings;
   auditFeed: AuditFeedItem[];
 }
+
+
+
 
 
 

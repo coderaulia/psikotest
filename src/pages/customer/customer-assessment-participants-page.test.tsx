@@ -7,6 +7,7 @@ import { renderWithRoute } from '@/test/render';
 
 import { CustomerAssessmentParticipantsPage } from './customer-assessment-participants-page';
 
+const getCustomerBillingOverviewMock = vi.fn();
 const getCustomerAssessmentMock = vi.fn();
 const listCustomerAssessmentParticipantsMock = vi.fn();
 const createCustomerAssessmentParticipantMock = vi.fn();
@@ -15,6 +16,10 @@ const sendCustomerAssessmentParticipantInviteMock = vi.fn();
 const sendCustomerAssessmentParticipantReminderMock = vi.fn();
 const sendCustomerAssessmentBulkInvitesMock = vi.fn();
 const sendCustomerAssessmentBulkRemindersMock = vi.fn();
+
+vi.mock('@/services/customer-billing', () => ({
+  getCustomerBillingOverview: (...args: unknown[]) => getCustomerBillingOverviewMock(...args),
+}));
 
 vi.mock('@/services/customer-onboarding', () => ({
   getCustomerAssessment: (...args: unknown[]) => getCustomerAssessmentMock(...args),
@@ -104,10 +109,95 @@ const participantList = {
   ],
 };
 
+const billingOverview = {
+  account: {
+    id: 31,
+    fullName: 'Workspace Owner',
+    email: 'owner@example.com',
+    accountType: 'business' as const,
+    organizationName: 'Vanaila Labs',
+    workspaceRole: 'owner' as const,
+    sessionSource: 'owner' as const,
+    workspaceMemberId: null,
+  },
+  subscription: {
+    id: 101,
+    customerAccountId: 31,
+    planCode: 'starter' as const,
+    status: 'trial' as const,
+    billingCycle: 'monthly' as const,
+    assessmentLimit: 3,
+    participantLimit: 5,
+    teamMemberLimit: 3,
+    startedAt: '2026-03-28T08:00:00.000Z',
+    trialEndsAt: '2026-04-11T08:00:00.000Z',
+    renewsAt: null,
+    planLabel: 'Starter',
+    planDescription: 'For teams validating the first assessment workflow.',
+  },
+  usage: {
+    activeAssessmentCount: 1,
+    participantRecordCount: 5,
+    teamSeatCount: 1,
+    remainingAssessmentSlots: 2,
+    remainingParticipantSlots: 0,
+    remainingTeamSeats: 2,
+  },
+  diagnostics: [
+    {
+      resource: 'assessments' as const,
+      label: 'Assessment capacity',
+      current: 1,
+      limit: 3,
+      remaining: 2,
+      utilizationPercent: 33,
+      severity: 'healthy' as const,
+      suggestedPlanCode: null,
+      suggestedPlanLabel: null,
+      message: 'Assessment capacity is within the current workspace plan.',
+    },
+    {
+      resource: 'participants' as const,
+      label: 'Participant records',
+      current: 5,
+      limit: 5,
+      remaining: 0,
+      utilizationPercent: 100,
+      severity: 'limit_reached' as const,
+      suggestedPlanCode: 'growth' as const,
+      suggestedPlanLabel: 'Growth',
+      message: 'Participant records has reached the current plan limit. Upgrade to Growth to continue.',
+    },
+    {
+      resource: 'team_members' as const,
+      label: 'Team seats',
+      current: 1,
+      limit: 3,
+      remaining: 2,
+      utilizationPercent: 33,
+      severity: 'healthy' as const,
+      suggestedPlanCode: null,
+      suggestedPlanLabel: null,
+      message: 'Team seats is within the current workspace plan.',
+    },
+  ],
+  upgradeGuidance: {
+    isUpgradeRecommended: true,
+    highestSeverity: 'limit_reached' as const,
+    suggestedPlanCode: 'growth' as const,
+    suggestedPlanLabel: 'Growth',
+    reasons: ['Participant records has reached the current plan limit. Upgrade to Growth to continue.'],
+    isCurrentPlanSaturated: true,
+    currentPlanCode: 'starter' as const,
+  },
+  plans: [],
+};
+
 describe('CustomerAssessmentParticipantsPage', () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    getCustomerBillingOverviewMock.mockReset();
     getCustomerAssessmentMock.mockReset();
     listCustomerAssessmentParticipantsMock.mockReset();
     createCustomerAssessmentParticipantMock.mockReset();
@@ -132,9 +222,59 @@ describe('CustomerAssessmentParticipantsPage', () => {
     });
   });
 
-  it('sends pending invites in bulk from the assessment participant list', async () => {
+  it('shows billing pressure and blocks new participant additions when capacity is full', async () => {
     getCustomerAssessmentMock.mockResolvedValue(detail);
     listCustomerAssessmentParticipantsMock.mockResolvedValue(participantList);
+    getCustomerBillingOverviewMock.mockResolvedValue(billingOverview);
+
+    renderWithRoute(<CustomerAssessmentParticipantsPage />, {
+      route: '/workspace/assessments/52/participants',
+      path: '/workspace/assessments/:assessmentId/participants',
+    });
+
+    await screen.findByText('Nadia Pratama');
+    expect(screen.getByText(/participant records has reached the current plan limit/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add participant/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /import participant list/i })).toBeDisabled();
+  });
+
+  it('sends pending invites in bulk from the assessment participant list', async () => {
+    getCustomerAssessmentMock.mockResolvedValue(detail);
+    listCustomerAssessmentParticipantsMock.mockResolvedValue({
+      ...participantList,
+      summary: { ...participantList.summary, draft: 1 },
+    });
+    getCustomerBillingOverviewMock.mockResolvedValue({
+      ...billingOverview,
+      usage: {
+        ...billingOverview.usage,
+        participantRecordCount: 2,
+        remainingParticipantSlots: 3,
+      },
+      diagnostics: billingOverview.diagnostics.map((item) =>
+        item.resource === 'participants'
+          ? {
+              ...item,
+              current: 2,
+              remaining: 3,
+              utilizationPercent: 40,
+              severity: 'healthy' as const,
+              suggestedPlanCode: null,
+              suggestedPlanLabel: null,
+              message: 'Participant records is within the current workspace plan.',
+            }
+          : item,
+      ),
+      upgradeGuidance: {
+        ...billingOverview.upgradeGuidance,
+        isUpgradeRecommended: false,
+        highestSeverity: 'healthy' as const,
+        suggestedPlanCode: null,
+        suggestedPlanLabel: null,
+        reasons: [],
+        isCurrentPlanSaturated: false,
+      },
+    });
     sendCustomerAssessmentBulkInvitesMock.mockResolvedValue({
       invitedCount: 1,
       skippedCount: 1,
@@ -159,6 +299,37 @@ describe('CustomerAssessmentParticipantsPage', () => {
   it('sends a reminder for invited participants', async () => {
     getCustomerAssessmentMock.mockResolvedValue(detail);
     listCustomerAssessmentParticipantsMock.mockResolvedValue(participantList);
+    getCustomerBillingOverviewMock.mockResolvedValue({
+      ...billingOverview,
+      usage: {
+        ...billingOverview.usage,
+        participantRecordCount: 2,
+        remainingParticipantSlots: 3,
+      },
+      diagnostics: billingOverview.diagnostics.map((item) =>
+        item.resource === 'participants'
+          ? {
+              ...item,
+              current: 2,
+              remaining: 3,
+              utilizationPercent: 40,
+              severity: 'healthy' as const,
+              suggestedPlanCode: null,
+              suggestedPlanLabel: null,
+              message: 'Participant records is within the current workspace plan.',
+            }
+          : item,
+      ),
+      upgradeGuidance: {
+        ...billingOverview.upgradeGuidance,
+        isUpgradeRecommended: false,
+        highestSeverity: 'healthy' as const,
+        suggestedPlanCode: null,
+        suggestedPlanLabel: null,
+        reasons: [],
+        isCurrentPlanSaturated: false,
+      },
+    });
     sendCustomerAssessmentParticipantReminderMock.mockResolvedValue({
       participant: participantList.items[1],
       shareLink: participantList.shareLink,
@@ -183,6 +354,37 @@ describe('CustomerAssessmentParticipantsPage', () => {
   it('imports pasted participant rows before invite delivery', async () => {
     getCustomerAssessmentMock.mockResolvedValue(detail);
     listCustomerAssessmentParticipantsMock.mockResolvedValue(participantList);
+    getCustomerBillingOverviewMock.mockResolvedValue({
+      ...billingOverview,
+      usage: {
+        ...billingOverview.usage,
+        participantRecordCount: 2,
+        remainingParticipantSlots: 3,
+      },
+      diagnostics: billingOverview.diagnostics.map((item) =>
+        item.resource === 'participants'
+          ? {
+              ...item,
+              current: 2,
+              remaining: 3,
+              utilizationPercent: 40,
+              severity: 'healthy' as const,
+              suggestedPlanCode: null,
+              suggestedPlanLabel: null,
+              message: 'Participant records is within the current workspace plan.',
+            }
+          : item,
+      ),
+      upgradeGuidance: {
+        ...billingOverview.upgradeGuidance,
+        isUpgradeRecommended: false,
+        highestSeverity: 'healthy' as const,
+        suggestedPlanCode: null,
+        suggestedPlanLabel: null,
+        reasons: [],
+        isCurrentPlanSaturated: false,
+      },
+    });
     importCustomerAssessmentParticipantsMock.mockResolvedValue({
       importedCount: 2,
       updatedCount: 0,
@@ -227,4 +429,3 @@ describe('CustomerAssessmentParticipantsPage', () => {
     expect(await screen.findByText(/imported 2 participant\(s\) and updated 0 existing row/i)).toBeInTheDocument();
   });
 });
-

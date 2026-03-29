@@ -1,10 +1,14 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Copy, Mail, ShieldCheck, Users } from 'lucide-react';
 
 import { loadCustomerSession } from '@/lib/customer-session';
+import { getWorkspaceUsageSeverityClasses, getWorkspaceUsageSeverityLabel } from '@/lib/workspace-billing';
+import { getCustomerBillingOverview } from '@/services/customer-billing';
 import { createCustomerWorkspaceMember, getCustomerWorkspaceTeam, sendCustomerWorkspaceMemberInvite } from '@/services/customer-workspace';
 import type {
   CreateCustomerWorkspaceMemberPayload,
+  CustomerBillingOverviewResponse,
   CustomerWorkspaceMemberItem,
   CustomerWorkspaceMemberRole,
   CustomerWorkspaceTeamResponse,
@@ -34,6 +38,7 @@ export function CustomerTeamPage() {
   const canManageTeam = customerSession?.account.workspaceRole === 'owner' || customerSession?.account.workspaceRole === 'admin';
 
   const [team, setTeam] = useState<CustomerWorkspaceTeamResponse | null>(null);
+  const [billing, setBilling] = useState<CustomerBillingOverviewResponse | null>(null);
   const [form, setForm] = useState<CreateCustomerWorkspaceMemberPayload>(initialForm);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,17 +48,19 @@ export function CustomerTeamPage() {
   const [invitePreview, setInvitePreview] = useState<SendCustomerWorkspaceMemberInviteResponse | null>(null);
 
   async function loadTeam() {
-    const payload = await getCustomerWorkspaceTeam();
-    setTeam(payload);
+    const [teamPayload, billingPayload] = await Promise.all([getCustomerWorkspaceTeam(), getCustomerBillingOverview()]);
+    setTeam(teamPayload);
+    setBilling(billingPayload);
   }
 
   useEffect(() => {
     let mounted = true;
 
-    void getCustomerWorkspaceTeam()
-      .then((payload) => {
+    void Promise.all([getCustomerWorkspaceTeam(), getCustomerBillingOverview()])
+      .then(([teamPayload, billingPayload]) => {
         if (mounted) {
-          setTeam(payload);
+          setTeam(teamPayload);
+          setBilling(billingPayload);
         }
       })
       .catch((error) => {
@@ -82,8 +89,16 @@ export function CustomerTeamPage() {
     };
   }, [team]);
 
+  const teamDiagnostic = billing?.diagnostics.find((item) => item.resource === 'team_members') ?? null;
+  const teamLimitReached = billing ? billing.usage.remainingTeamSeats <= 0 : false;
+  const teamTone = teamDiagnostic ? getWorkspaceUsageSeverityClasses(teamDiagnostic.severity) : null;
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (teamLimitReached) {
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -147,6 +162,26 @@ export function CustomerTeamPage() {
   return (
     <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
       <div className="space-y-6">
+        {teamDiagnostic && teamTone ? (
+          <Card className={`border bg-white/88 ${teamTone.panel}`}>
+            <CardContent className="flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm font-medium">{teamDiagnostic.label}</p>
+                <p className="mt-2 text-sm leading-6">{teamDiagnostic.message}</p>
+                <p className="mt-2 text-xs uppercase tracking-[0.16em]">
+                  {teamDiagnostic.current} / {teamDiagnostic.limit} used • {getWorkspaceUsageSeverityLabel(teamDiagnostic.severity)}
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                {teamDiagnostic.suggestedPlanLabel ? <Badge className={teamTone.badge}>{teamDiagnostic.suggestedPlanLabel}</Badge> : null}
+                <Button variant="secondary" asChild>
+                  <Link to="/workspace/billing">Open billing</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
         <Card className="bg-white/84">
           <CardHeader>
             <CardTitle>Workspace team</CardTitle>
@@ -177,7 +212,12 @@ export function CustomerTeamPage() {
                   </Select>
                   <p className="text-xs leading-6 text-slate-400">{roleOptions.find((role) => role.value === form.role)?.description}</p>
                 </div>
-                <Button type="submit" size="lg" disabled={isSubmitting || !form.fullName.trim() || !form.email.trim()}>
+                {teamLimitReached ? (
+                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    Team seat capacity is full for the current plan. Upgrade the workspace before adding another teammate.
+                  </div>
+                ) : null}
+                <Button type="submit" size="lg" disabled={isSubmitting || teamLimitReached || !form.fullName.trim() || !form.email.trim()}>
                   {isSubmitting ? 'Adding teammate...' : 'Add teammate'}
                 </Button>
               </form>
@@ -303,3 +343,4 @@ export function CustomerTeamPage() {
     </div>
   );
 }
+

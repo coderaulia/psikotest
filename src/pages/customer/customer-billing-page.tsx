@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CreditCard, ShieldCheck, Users } from 'lucide-react';
+import { ArrowUpRight, BarChart3, CreditCard, ShieldCheck, Users } from 'lucide-react';
 
+import { cn } from '@/lib/cn';
 import { formatDateTime, formatTokenLabel } from '@/lib/formatters';
+import { getWorkspaceUsageSeverityClasses, getWorkspaceUsageSeverityLabel } from '@/lib/workspace-billing';
 import { getCustomerBillingOverview, updateCustomerSubscription } from '@/services/customer-billing';
-import type { CustomerBillingOverviewResponse, WorkspaceBillingCycle, WorkspacePlanCode } from '@/types/assessment';
+import type {
+  CustomerBillingOverviewResponse,
+  WorkspaceBillingCycle,
+  WorkspacePlanCode,
+  WorkspaceUsageDiagnostic,
+} from '@/types/assessment';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +25,35 @@ const dummyPrices: Record<WorkspacePlanCode, Record<WorkspaceBillingCycle, strin
   growth: { monthly: '$29', annual: '$290' },
   research: { monthly: '$39', annual: '$390' },
 };
+
+function renderDiagnosticCard(diagnostic: WorkspaceUsageDiagnostic) {
+  const tone = getWorkspaceUsageSeverityClasses(diagnostic.severity);
+
+  return (
+    <div key={diagnostic.resource} className="rounded-[26px] border border-slate-200 bg-slate-50/80 p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-slate-950">{diagnostic.label}</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-950">
+            {diagnostic.current} / {diagnostic.limit}
+          </p>
+        </div>
+        <Badge className={tone.badge}>{getWorkspaceUsageSeverityLabel(diagnostic.severity)}</Badge>
+      </div>
+      <div className="mt-4 h-2 rounded-full bg-slate-200">
+        <div className={cn('h-2 rounded-full transition-all', tone.progress)} style={{ width: `${Math.max(diagnostic.utilizationPercent, 6)}%` }} />
+      </div>
+      <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+        <span>{diagnostic.utilizationPercent}% used</span>
+        <span>{diagnostic.remaining} remaining</span>
+      </div>
+      <p className="mt-4 text-sm leading-6 text-slate-500">{diagnostic.message}</p>
+      {diagnostic.suggestedPlanLabel ? (
+        <p className="mt-2 text-xs font-medium text-slate-700">Suggested plan: {diagnostic.suggestedPlanLabel}</p>
+      ) : null}
+    </div>
+  );
+}
 
 export function CustomerBillingPage() {
   const [overview, setOverview] = useState<CustomerBillingOverviewResponse | null>(null);
@@ -107,6 +143,8 @@ export function CustomerBillingPage() {
 
   const subscription = overview.subscription;
   const usage = overview.usage;
+  const guidance = overview.upgradeGuidance;
+  const guidanceTone = getWorkspaceUsageSeverityClasses(guidance.highestSeverity);
 
   return (
     <div className="space-y-6">
@@ -121,6 +159,31 @@ export function CustomerBillingPage() {
           <Badge className="border-amber-200 bg-amber-50 text-amber-700">Dummy billing</Badge>
         </div>
       </div>
+
+      {guidance.isUpgradeRecommended ? (
+        <Card className={cn('border bg-white/88', guidanceTone.panel)}>
+          <CardContent className="flex flex-col gap-4 p-6 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-3">
+              <p className="text-sm font-medium">
+                {guidance.suggestedPlanLabel
+                  ? `Upgrade recommended: ${guidance.suggestedPlanLabel}`
+                  : 'Current workspace plan needs attention'}
+              </p>
+              <div className="space-y-2 text-sm leading-6">
+                {guidance.reasons.map((reason) => (
+                  <p key={reason}>{reason}</p>
+                ))}
+              </div>
+            </div>
+            {guidance.suggestedPlanLabel ? (
+              <div className="inline-flex items-center gap-2 rounded-full border border-current/15 bg-white/70 px-4 py-2 text-xs font-medium uppercase tracking-[0.16em]">
+                {guidance.suggestedPlanLabel}
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-4">
         <Card className="bg-white/84">
@@ -153,6 +216,10 @@ export function CustomerBillingPage() {
         </Card>
       </div>
 
+      <div className="grid gap-4 lg:grid-cols-3">
+        {overview.diagnostics.map(renderDiagnosticCard)}
+      </div>
+
       <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
         <Card className="bg-white/84">
           <CardHeader>
@@ -177,28 +244,37 @@ export function CustomerBillingPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-3">
-              {overview.plans.map((plan) => (
-                <button
-                  key={plan.planCode}
-                  type="button"
-                  onClick={() => setSelectedPlan(plan.planCode)}
-                  className={`rounded-[26px] border p-5 text-left transition ${selectedPlan === plan.planCode ? 'border-slate-950 bg-slate-950 text-white shadow-lg' : 'border-slate-200 bg-slate-50/80 hover:border-slate-300 hover:bg-white'}`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium">{plan.label}</p>
-                    {subscription.planCode === plan.planCode ? <Badge className="border-white/10 bg-white/10 text-white">Current</Badge> : null}
-                  </div>
-                  <p className={`mt-3 text-3xl font-semibold ${selectedPlan === plan.planCode ? 'text-white' : 'text-slate-950'}`}>
-                    {dummyPrices[plan.planCode][billingCycle]}
-                  </p>
-                  <p className={`mt-3 text-sm leading-7 ${selectedPlan === plan.planCode ? 'text-white/70' : 'text-slate-500'}`}>{plan.description}</p>
-                  <div className={`mt-4 grid gap-2 text-sm ${selectedPlan === plan.planCode ? 'text-white/85' : 'text-slate-600'}`}>
-                    <span>{plan.assessmentLimit} active or draft assessments</span>
-                    <span>{plan.participantLimit} participant records</span>
-                    <span>{plan.teamMemberLimit} team seats</span>
-                  </div>
-                </button>
-              ))}
+              {overview.plans.map((plan) => {
+                const isSelected = selectedPlan === plan.planCode;
+                const isRecommended = overview.upgradeGuidance.suggestedPlanCode === plan.planCode;
+                const isCurrent = subscription.planCode === plan.planCode;
+
+                return (
+                  <button
+                    key={plan.planCode}
+                    type="button"
+                    onClick={() => setSelectedPlan(plan.planCode)}
+                    className={`rounded-[26px] border p-5 text-left transition ${isSelected ? 'border-slate-950 bg-slate-950 text-white shadow-lg' : 'border-slate-200 bg-slate-50/80 hover:border-slate-300 hover:bg-white'}`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium">{plan.label}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {isCurrent ? <Badge className="border-white/10 bg-white/10 text-white">Current</Badge> : null}
+                        {isRecommended ? <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">Recommended</Badge> : null}
+                      </div>
+                    </div>
+                    <p className={`mt-3 text-3xl font-semibold ${isSelected ? 'text-white' : 'text-slate-950'}`}>
+                      {dummyPrices[plan.planCode][billingCycle]}
+                    </p>
+                    <p className={`mt-3 text-sm leading-7 ${isSelected ? 'text-white/70' : 'text-slate-500'}`}>{plan.description}</p>
+                    <div className={`mt-4 grid gap-2 text-sm ${isSelected ? 'text-white/85' : 'text-slate-600'}`}>
+                      <span>{plan.assessmentLimit} active or draft assessments</span>
+                      <span>{plan.participantLimit} participant records</span>
+                      <span>{plan.teamMemberLimit} team seats</span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
 
             {errorMessage ? <p className="text-sm text-rose-600">{errorMessage}</p> : null}
@@ -230,7 +306,7 @@ export function CustomerBillingPage() {
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <p className="inline-flex items-center gap-2 font-medium text-white"><Users className="h-4 w-4" /> Participant records</p>
-                <p className="mt-2">Workspace participant volume is tracked before bulk distribution starts.</p>
+                <p className="mt-2">Imports, manual adds, and participant operations all consume workspace volume.</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <p className="inline-flex items-center gap-2 font-medium text-white"><ShieldCheck className="h-4 w-4" /> Team seats</p>

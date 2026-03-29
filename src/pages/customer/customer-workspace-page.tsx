@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { canAccessWorkspaceBilling, canAccessWorkspaceSettings, canAccessWorkspaceTeam, canOperateAssessments } from '@/lib/customer-access';
 import { formatDateTime, formatTokenLabel } from '@/lib/formatters';
 import { loadCustomerSession } from '@/lib/customer-session';
+import { getWorkspaceUsageSeverityClasses, getWorkspaceUsageSeverityLabel } from '@/lib/workspace-billing';
 import { getCustomerBillingOverview } from '@/services/customer-billing';
 import { listCustomerAssessments } from '@/services/customer-onboarding';
 import type { CustomerAssessmentItem, CustomerBillingOverviewResponse } from '@/types/assessment';
@@ -82,6 +83,9 @@ export function CustomerWorkspacePage() {
     return null;
   }
 
+  const guidance = billing.upgradeGuidance;
+  const guidanceTone = getWorkspaceUsageSeverityClasses(guidance.highestSeverity);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -119,6 +123,30 @@ export function CustomerWorkspacePage() {
         </div>
       </div>
 
+      {guidance.isUpgradeRecommended ? (
+        <Card className={`border bg-white/88 ${guidanceTone.panel}`}>
+          <CardContent className="flex flex-col gap-4 p-6 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-sm font-medium">
+                {guidance.suggestedPlanLabel
+                  ? `Recommended workspace upgrade: ${guidance.suggestedPlanLabel}`
+                  : 'Workspace capacity needs attention'}
+              </p>
+              <div className="mt-3 space-y-2 text-sm leading-6">
+                {guidance.reasons.map((reason) => (
+                  <p key={reason}>{reason}</p>
+                ))}
+              </div>
+            </div>
+            {canAccessWorkspaceBilling(role) ? (
+              <Button variant="secondary" asChild>
+                <Link to="/workspace/billing">Open billing</Link>
+              </Button>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-4">
         <Card className="bg-white/84">
           <CardHeader className="space-y-1">
@@ -148,6 +176,30 @@ export function CustomerWorkspacePage() {
           </CardHeader>
           <CardContent className="text-sm text-slate-500">{billing.usage.remainingTeamSeats} seats remaining</CardContent>
         </Card>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        {billing.diagnostics.map((diagnostic) => {
+          const tone = getWorkspaceUsageSeverityClasses(diagnostic.severity);
+          return (
+            <Card key={diagnostic.resource} className="bg-white/84">
+              <CardContent className="space-y-4 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-medium text-slate-950">{diagnostic.label}</p>
+                  <Badge className={tone.badge}>{getWorkspaceUsageSeverityLabel(diagnostic.severity)}</Badge>
+                </div>
+                <div className="h-2 rounded-full bg-slate-200">
+                  <div className={tone.progress} style={{ width: `${Math.max(diagnostic.utilizationPercent, 6)}%`, height: '0.5rem', borderRadius: '9999px' }} />
+                </div>
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span>{diagnostic.current} of {diagnostic.limit} used</span>
+                  <span>{diagnostic.remaining} remaining</span>
+                </div>
+                <p className="text-sm leading-6 text-slate-500">{diagnostic.message}</p>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       <Card className="bg-slate-950 text-white">
@@ -295,6 +347,3 @@ export function CustomerWorkspacePage() {
     </div>
   );
 }
-
-
-

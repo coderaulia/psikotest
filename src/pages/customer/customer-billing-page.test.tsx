@@ -38,12 +38,62 @@ const baseOverview = {
     planDescription: 'For teams validating the first assessment workflow.',
   },
   usage: {
-    activeAssessmentCount: 1,
-    participantRecordCount: 2,
-    teamSeatCount: 1,
-    remainingAssessmentSlots: 2,
-    remainingParticipantSlots: 3,
-    remainingTeamSeats: 2,
+    activeAssessmentCount: 3,
+    participantRecordCount: 4,
+    teamSeatCount: 2,
+    remainingAssessmentSlots: 0,
+    remainingParticipantSlots: 1,
+    remainingTeamSeats: 1,
+  },
+  diagnostics: [
+    {
+      resource: 'assessments' as const,
+      label: 'Assessment capacity',
+      current: 3,
+      limit: 3,
+      remaining: 0,
+      utilizationPercent: 100,
+      severity: 'limit_reached' as const,
+      suggestedPlanCode: 'growth' as const,
+      suggestedPlanLabel: 'Growth',
+      message: 'Assessment capacity has reached the current plan limit. Upgrade to Growth to continue.',
+    },
+    {
+      resource: 'participants' as const,
+      label: 'Participant records',
+      current: 4,
+      limit: 5,
+      remaining: 1,
+      utilizationPercent: 80,
+      severity: 'warning' as const,
+      suggestedPlanCode: 'growth' as const,
+      suggestedPlanLabel: 'Growth',
+      message: 'Participant records is approaching the current plan limit.',
+    },
+    {
+      resource: 'team_members' as const,
+      label: 'Team seats',
+      current: 2,
+      limit: 3,
+      remaining: 1,
+      utilizationPercent: 67,
+      severity: 'critical' as const,
+      suggestedPlanCode: 'growth' as const,
+      suggestedPlanLabel: 'Growth',
+      message: 'Team seats is nearly full. Upgrade before the next operational step.',
+    },
+  ],
+  upgradeGuidance: {
+    isUpgradeRecommended: true,
+    highestSeverity: 'limit_reached' as const,
+    suggestedPlanCode: 'growth' as const,
+    suggestedPlanLabel: 'Growth',
+    reasons: [
+      'Assessment capacity has reached the current plan limit. Upgrade to Growth to continue.',
+      'Participant records is approaching the current plan limit.',
+    ],
+    isCurrentPlanSaturated: true,
+    currentPlanCode: 'starter' as const,
   },
   plans: [
     {
@@ -79,7 +129,7 @@ describe('CustomerBillingPage', () => {
     updateCustomerSubscriptionMock.mockReset();
   });
 
-  it('loads billing overview and updates the dummy plan selection', async () => {
+  it('loads billing overview, shows upgrade guidance, and updates the dummy plan selection', async () => {
     const updatedOverview = {
       ...baseOverview,
       subscription: {
@@ -93,9 +143,25 @@ describe('CustomerBillingPage', () => {
       },
       usage: {
         ...baseOverview.usage,
-        remainingAssessmentSlots: 19,
-        remainingParticipantSlots: 498,
-        remainingTeamSeats: 14,
+        remainingAssessmentSlots: 17,
+        remainingParticipantSlots: 496,
+        remainingTeamSeats: 13,
+      },
+      diagnostics: baseOverview.diagnostics.map((item) => ({
+        ...item,
+        severity: 'healthy' as const,
+        suggestedPlanCode: null,
+        suggestedPlanLabel: null,
+        message: `${item.label} is within the current workspace plan.`,
+      })),
+      upgradeGuidance: {
+        isUpgradeRecommended: false,
+        highestSeverity: 'healthy' as const,
+        suggestedPlanCode: null,
+        suggestedPlanLabel: null,
+        reasons: [],
+        isCurrentPlanSaturated: false,
+        currentPlanCode: 'growth' as const,
       },
     };
 
@@ -110,8 +176,8 @@ describe('CustomerBillingPage', () => {
     const user = userEvent.setup();
 
     await screen.findByText('Control plan limits before you scale participant sharing');
-    expect(screen.getAllByText('Starter').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('1 / 3').length).toBeGreaterThan(0);
+    expect(screen.getByText(/upgrade recommended: growth/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/assessment capacity has reached the current plan limit/i).length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole('button', { name: /Growth.*500 participant records/i }));
     await user.click(screen.getByRole('button', { name: /save workspace plan/i }));
@@ -123,3 +189,4 @@ describe('CustomerBillingPage', () => {
     expect(await screen.findByText(/dummy subscription updated/i)).toBeInTheDocument();
   });
 });
+

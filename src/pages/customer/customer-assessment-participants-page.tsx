@@ -2,7 +2,10 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { Copy, Mail, Plus, Send, Users } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 
+import { cn } from '@/lib/cn';
 import { formatDateTime, formatTokenLabel } from '@/lib/formatters';
+import { getWorkspaceUsageSeverityClasses, getWorkspaceUsageSeverityLabel } from '@/lib/workspace-billing';
+import { getCustomerBillingOverview } from '@/services/customer-billing';
 import {
   createCustomerAssessmentParticipant,
   getCustomerAssessment,
@@ -18,6 +21,7 @@ import type {
   CustomerAssessmentDetail,
   CustomerAssessmentParticipantItem,
   CustomerAssessmentParticipantListResponse,
+  CustomerBillingOverviewResponse,
 } from '@/types/assessment';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -72,6 +76,7 @@ export function CustomerAssessmentParticipantsPage() {
   const parsedAssessmentId = Number(assessmentId);
   const [detail, setDetail] = useState<CustomerAssessmentDetail | null>(null);
   const [participantData, setParticipantData] = useState<CustomerAssessmentParticipantListResponse | null>(null);
+  const [billing, setBilling] = useState<CustomerBillingOverviewResponse | null>(null);
   const [form, setForm] = useState<CreateCustomerAssessmentParticipantPayload>(initialForm);
   const [importText, setImportText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -85,13 +90,15 @@ export function CustomerAssessmentParticipantsPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   async function loadData() {
-    const [detailPayload, participantsPayload] = await Promise.all([
+    const [detailPayload, participantsPayload, billingPayload] = await Promise.all([
       getCustomerAssessment(parsedAssessmentId),
       listCustomerAssessmentParticipants(parsedAssessmentId),
+      getCustomerBillingOverview(),
     ]);
 
     setDetail(detailPayload);
     setParticipantData(participantsPayload);
+    setBilling(billingPayload);
   }
 
   useEffect(() => {
@@ -103,14 +110,15 @@ export function CustomerAssessmentParticipantsPage() {
 
     let mounted = true;
 
-    void Promise.all([getCustomerAssessment(parsedAssessmentId), listCustomerAssessmentParticipants(parsedAssessmentId)])
-      .then(([detailPayload, participantsPayload]) => {
+    void Promise.all([getCustomerAssessment(parsedAssessmentId), listCustomerAssessmentParticipants(parsedAssessmentId), getCustomerBillingOverview()])
+      .then(([detailPayload, participantsPayload, billingPayload]) => {
         if (!mounted) {
           return;
         }
 
         setDetail(detailPayload);
         setParticipantData(participantsPayload);
+        setBilling(billingPayload);
       })
       .catch((error) => {
         if (mounted) {
@@ -142,6 +150,10 @@ export function CustomerAssessmentParticipantsPage() {
     ];
   }, [participantData]);
 
+  const participantDiagnostic = billing?.diagnostics.find((item) => item.resource === 'participants') ?? null;
+  const participantTone = participantDiagnostic ? getWorkspaceUsageSeverityClasses(participantDiagnostic.severity) : null;
+  const participantLimitReached = billing ? billing.usage.remainingParticipantSlots <= 0 : false;
+
   function updateField<Key extends keyof CreateCustomerAssessmentParticipantPayload>(
     key: Key,
     value: CreateCustomerAssessmentParticipantPayload[Key],
@@ -152,7 +164,7 @@ export function CustomerAssessmentParticipantsPage() {
   async function handleAddParticipant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!detail) {
+    if (!detail || participantLimitReached) {
       return;
     }
 
@@ -173,7 +185,7 @@ export function CustomerAssessmentParticipantsPage() {
   }
 
   async function handleImportParticipants() {
-    if (!detail) {
+    if (!detail || participantLimitReached) {
       return;
     }
 
@@ -312,6 +324,28 @@ export function CustomerAssessmentParticipantsPage() {
   return (
     <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
       <div className="space-y-6">
+        {participantDiagnostic && participantTone ? (
+          <Card className={cn('border bg-white/88', participantTone.panel)}>
+            <CardContent className="flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm font-medium">{participantDiagnostic.label}</p>
+                <p className="mt-2 text-sm leading-6">{participantDiagnostic.message}</p>
+                <p className="mt-2 text-xs uppercase tracking-[0.16em]">
+                  {participantDiagnostic.current} / {participantDiagnostic.limit} used • {getWorkspaceUsageSeverityLabel(participantDiagnostic.severity)}
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                {participantDiagnostic.suggestedPlanLabel ? (
+                  <Badge className={participantTone.badge}>{participantDiagnostic.suggestedPlanLabel}</Badge>
+                ) : null}
+                <Button variant="secondary" asChild>
+                  <Link to="/workspace/billing">Open billing</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
         <Card className="bg-white/84">
           <CardHeader>
             <CardTitle>Participant invitations</CardTitle>
@@ -349,6 +383,12 @@ export function CustomerAssessmentParticipantsPage() {
               </div>
             ) : null}
 
+            {participantLimitReached ? (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                Participant capacity is full for the current workspace plan. Upgrade the workspace before adding more people to this assessment.
+              </div>
+            ) : null}
+
             {errorMessage ? <p className="text-sm text-rose-600">{errorMessage}</p> : null}
             {successMessage ? <p className="text-sm text-emerald-700">{successMessage}</p> : null}
 
@@ -365,7 +405,7 @@ export function CustomerAssessmentParticipantsPage() {
               />
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs text-slate-400">Header row is optional. Duplicate emails will update the existing participant entry.</p>
-                <Button type="button" size="lg" disabled={isImporting || !importText.trim()} onClick={() => void handleImportParticipants()}>
+                <Button type="button" size="lg" disabled={isImporting || !importText.trim() || participantLimitReached} onClick={() => void handleImportParticipants()}>
                   {isImporting ? 'Importing...' : 'Import participant list'} <Plus className="ml-2 h-4 w-4" />
                 </Button>
               </div>
@@ -398,7 +438,7 @@ export function CustomerAssessmentParticipantsPage() {
                   <Input value={form.note ?? ''} onChange={(event) => updateField('note', event.target.value || null)} />
                 </div>
               </div>
-              <Button type="submit" size="lg" disabled={isSubmitting || !form.fullName.trim() || !form.email.trim()}>
+              <Button type="submit" size="lg" disabled={isSubmitting || participantLimitReached || !form.fullName.trim() || !form.email.trim()}>
                 {isSubmitting ? 'Adding participant...' : 'Add participant'} <Plus className="ml-2 h-4 w-4" />
               </Button>
             </form>

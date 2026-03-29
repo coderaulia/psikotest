@@ -85,6 +85,34 @@ Configure Settings
 
 Generate participant link
 
+## Customer Workspace Operational Flow
+
+After signup and initial assessment creation, the current SaaS workspace flow is:
+
+Workspace overview
+↓
+Review plan usage and upgrade pressure
+↓
+Open or edit an assessment draft
+↓
+Complete dummy checkout to activate sharing
+↓
+Add or import participants
+↓
+Send invite links or reminders
+↓
+Track activity and customer-safe results
+↓
+Manage teammates and workspace defaults
+
+### Current operational rules
+
+- workspace billing now surfaces assessment, participant, and team-seat pressure directly inside the product
+- participant imports and manual additions are blocked when participant capacity is full
+- teammate creation is blocked when team-seat capacity is full
+- billing is still dummy-mode, but plan selection already affects operational behavior
+- customer result pages remain audience-safe and do not reveal internal reviewer drafts
+
 ## Participant Flow
 
 ### Current baseline
@@ -136,6 +164,10 @@ Submit and score
 - participants should not automatically receive final professional interpretation
 - result visibility depends on session policy and review status
 
+### Current note
+
+This SaaS billing/usage slice does not change the participant step order. The participant-facing changes remain centered on protected delivery, visibility policy, and release status.
+
 ## Professional Review Flow
 
 This flow applies when the session requires professional interpretation.
@@ -164,6 +196,24 @@ Report is released to allowed audiences
 - preliminary score is operational data, not the final report
 - reviewed output is professional interpretation still restricted to internal roles
 - released output is the only version that should be treated as deliverable
+
+## Admin and Reviewer Flow
+
+The current internal flow is:
+
+Admin dashboard
+↓
+Session or result monitoring
+↓
+Reviewer queue and assignment
+↓
+Review draft updates
+↓
+Release to allowed audiences
+
+### Current note
+
+This SaaS workspace slice does not change the internal admin or reviewer steps. It adds stronger customer-side plan management and operational readiness around those existing flows.
 
 ## Result Distribution Flow
 
@@ -229,6 +279,7 @@ No professional interpretation is required unless the study defines it
 Whenever the implementation changes any of the following, this document should be updated:
 
 - onboarding steps
+- customer workspace operational flow
 - participant flow
 - protected delivery behavior
 - reviewer flow
