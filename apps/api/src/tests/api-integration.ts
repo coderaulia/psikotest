@@ -34,6 +34,10 @@ function createFakeState(passwordHash: string): FakeDbState {
     customerAccounts: [],
     customerAssessments: [],
     workspaceSubscriptions: [],
+billingCheckoutSessions: [],
+billingInvoices: [],
+workspaceUsageEvents: [],
+workspaceUsageSnapshots: [],
     customerAssessmentParticipants: [],
     workspaceMembers: [],
     testTypes: [
@@ -254,6 +258,21 @@ export async function runApiIntegrationTests() {
     assert.equal(Array.isArray(billingOverviewPayload?.diagnostics), true);
     assert.equal(billingOverviewPayload?.upgradeGuidance && typeof billingOverviewPayload.upgradeGuidance === 'object' ? (billingOverviewPayload.upgradeGuidance as Record<string, unknown>).isUpgradeRecommended : null, false);
 
+    const billingCheckoutResponse = await fetch(`${baseUrl}/api/site-billing/checkout-session`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${customerToken}`,
+      },
+      body: JSON.stringify({
+        selectedPlan: 'starter',
+        billingCycle: 'monthly',
+      }),
+    });
+    assert.equal(billingCheckoutResponse.status, 201);
+    const billingCheckoutPayload = await readJson(billingCheckoutResponse);
+    assert.equal(billingCheckoutPayload?.checkoutSession && typeof billingCheckoutPayload.checkoutSession === 'object' ? (billingCheckoutPayload.checkoutSession as Record<string, unknown>).status : null, 'open');
+
     const billingUpdateResponse = await fetch(`${baseUrl}/api/site-billing/subscription`, {
       method: 'PATCH',
       headers: {
@@ -268,6 +287,9 @@ export async function runApiIntegrationTests() {
     assert.equal(billingUpdateResponse.status, 200);
     const billingUpdatePayload = await readJson(billingUpdateResponse);
     assert.equal(billingUpdatePayload?.subscription && typeof billingUpdatePayload.subscription === 'object' ? (billingUpdatePayload.subscription as Record<string, unknown>).planCode : null, 'starter');
+    assert.equal(Array.isArray(billingUpdatePayload?.recentInvoices), true);
+    assert.equal(Array.isArray(billingUpdatePayload?.recentCheckoutSessions), true);
+    assert.equal(((billingUpdatePayload?.recentInvoices as unknown[] | undefined)?.length ?? 0) > 0, true);
 
     const workspaceUpdateResponse = await fetch(`${baseUrl}/api/site-workspace/settings`, {
       method: 'PATCH',
@@ -582,6 +604,11 @@ export async function runApiIntegrationTests() {
     setDbPoolForTests(null);
   }
 }
+
+
+
+
+
 
 
 

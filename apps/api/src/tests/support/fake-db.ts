@@ -64,12 +64,85 @@ interface FakeWorkspaceSubscription {
   plan_code: 'starter' | 'growth' | 'research';
   status: 'trial' | 'active' | 'past_due' | 'suspended';
   billing_cycle: 'monthly' | 'annual';
+  billing_provider: 'dummy' | 'manual' | 'stripe';
+  provider_customer_id: string | null;
+  provider_subscription_id: string | null;
+  provider_price_id: string | null;
   assessment_limit: number;
   participant_limit: number;
   team_member_limit: number;
   started_at: string;
   trial_ends_at: string | null;
   renews_at: string | null;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: number;
+  canceled_at: string | null;
+  past_due_at: string | null;
+  suspended_at: string | null;
+  plan_version: number;
+  billing_contact_email: string | null;
+  updated_at: string;
+}
+
+interface FakeBillingCheckoutSession {
+  id: number;
+  customer_account_id: number;
+  workspace_subscription_id: number;
+  session_key: string;
+  billing_provider: 'dummy' | 'manual' | 'stripe';
+  plan_code: 'starter' | 'growth' | 'research';
+  billing_cycle: 'monthly' | 'annual';
+  status: 'open' | 'completed' | 'expired' | 'failed';
+  checkout_url: string | null;
+  expires_at: string | null;
+  completed_at: string | null;
+  metadata_json: string | null;
+  created_at: string;
+}
+
+interface FakeBillingInvoice {
+  id: number;
+  customer_account_id: number;
+  workspace_subscription_id: number;
+  checkout_session_id: number | null;
+  external_invoice_id: string | null;
+  invoice_number: string | null;
+  status: 'draft' | 'open' | 'paid' | 'void' | 'uncollectible';
+  currency_code: string;
+  amount_subtotal: number;
+  amount_total: number;
+  hosted_invoice_url: string | null;
+  invoice_pdf_url: string | null;
+  issued_at: string | null;
+  due_at: string | null;
+  paid_at: string | null;
+  metadata_json: string | null;
+  created_at: string;
+}
+
+interface FakeWorkspaceUsageEvent {
+  id: number;
+  customer_account_id: number;
+  workspace_subscription_id: number | null;
+  metric_key: 'assessment_created' | 'participant_added' | 'team_member_added' | 'result_exported';
+  quantity: number;
+  reference_type: string | null;
+  reference_id: number | null;
+  metadata_json: string | null;
+  occurred_at: string;
+}
+
+interface FakeWorkspaceUsageSnapshot {
+  id: number;
+  customer_account_id: number;
+  workspace_subscription_id: number | null;
+  period_start: string | null;
+  period_end: string | null;
+  assessment_count: number;
+  participant_count: number;
+  team_member_count: number;
+  export_count: number;
   updated_at: string;
 }
 
@@ -199,6 +272,10 @@ export interface FakeDbState {
   customerAccounts: FakeCustomerAccount[];
   customerAssessments: FakeCustomerAssessment[];
   workspaceSubscriptions: FakeWorkspaceSubscription[];
+  billingCheckoutSessions: FakeBillingCheckoutSession[];
+  billingInvoices: FakeBillingInvoice[];
+  workspaceUsageEvents: FakeWorkspaceUsageEvent[];
+  workspaceUsageSnapshots: FakeWorkspaceUsageSnapshot[];
   customerAssessmentParticipants: FakeCustomerAssessmentParticipant[];
   workspaceMembers: FakeWorkspaceMember[];
   testTypes: FakeTestType[];
@@ -235,8 +312,12 @@ export class FakeDbPool implements DbPoolLike {
   private nextSessionId = 30;
   private nextCustomerAssessmentId = 40;
   private nextWorkspaceSubscriptionId = 60;
-  private nextCustomerAssessmentParticipantId = 70;
-  private nextWorkspaceMemberId = 80;
+  private nextBillingCheckoutSessionId = 65;
+  private nextBillingInvoiceId = 68;
+  private nextWorkspaceUsageEventId = 69;
+  private nextWorkspaceUsageSnapshotId = 70;
+  private nextCustomerAssessmentParticipantId = 80;
+  private nextWorkspaceMemberId = 90;
   private nextParticipantId = 100;
   private nextSubmissionId = 500;
   private nextAnswerId = 800;
@@ -259,6 +340,22 @@ export class FakeDbPool implements DbPoolLike {
 
     if (state.workspaceSubscriptions.length > 0) {
       this.nextWorkspaceSubscriptionId = Math.max(...state.workspaceSubscriptions.map((item) => item.id)) + 1;
+    }
+
+    if (state.billingCheckoutSessions.length > 0) {
+      this.nextBillingCheckoutSessionId = Math.max(...state.billingCheckoutSessions.map((item) => item.id)) + 1;
+    }
+
+    if (state.billingInvoices.length > 0) {
+      this.nextBillingInvoiceId = Math.max(...state.billingInvoices.map((item) => item.id)) + 1;
+    }
+
+    if (state.workspaceUsageEvents.length > 0) {
+      this.nextWorkspaceUsageEventId = Math.max(...state.workspaceUsageEvents.map((item) => item.id)) + 1;
+    }
+
+    if (state.workspaceUsageSnapshots.length > 0) {
+      this.nextWorkspaceUsageSnapshotId = Math.max(...state.workspaceUsageSnapshots.map((item) => item.id)) + 1;
     }
 
     if (state.customerAssessmentParticipants.length > 0) {
@@ -291,8 +388,7 @@ export class FakeDbPool implements DbPoolLike {
 
     if (state.auditLogs.length > 0) {
       this.nextAuditId = Math.max(...state.auditLogs.map((item) => item.id)) + 1;
-    }
-  }
+    }  }
 
   async getConnection() {
     return new FakeConnection(this) as unknown as mysql.PoolConnection;
@@ -385,7 +481,7 @@ export class FakeDbPool implements DbPoolLike {
       return [{ insertId: account.id }, []] as unknown as [any, any];
     }
 
-    if (normalized.startsWith('select id, customer_account_id, plan_code, status, billing_cycle, assessment_limit, participant_limit, team_member_limit, started_at, trial_ends_at, renews_at from workspace_subscriptions where customer_account_id = ? limit 1')) {
+    if (normalized.startsWith('select id, customer_account_id, plan_code, status, billing_cycle, billing_provider, provider_customer_id, provider_subscription_id, provider_price_id, assessment_limit, participant_limit, team_member_limit, started_at, trial_ends_at, renews_at, current_period_start, current_period_end, cancel_at_period_end, canceled_at, past_due_at, suspended_at, plan_version, billing_contact_email from workspace_subscriptions where customer_account_id = ? limit 1')) {
       const customerAccountId = Number(params[0]);
       const subscription = this.state.workspaceSubscriptions.find((item) => item.customer_account_id === customerAccountId);
       return [[subscription].filter(Boolean), []] as unknown as [any, any];
@@ -399,33 +495,171 @@ export class FakeDbPool implements DbPoolLike {
         plan_code: params[1] as FakeWorkspaceSubscription['plan_code'],
         status: params[2] as FakeWorkspaceSubscription['status'],
         billing_cycle: params[3] as FakeWorkspaceSubscription['billing_cycle'],
-        assessment_limit: Number(params[4]),
-        participant_limit: Number(params[5]),
-        team_member_limit: Number(params[6]),
+        billing_provider: params[4] as FakeWorkspaceSubscription['billing_provider'],
+        provider_customer_id: params[5] ? String(params[5]) : null,
+        provider_subscription_id: params[6] ? String(params[6]) : null,
+        provider_price_id: params[7] ? String(params[7]) : null,
+        assessment_limit: Number(params[8]),
+        participant_limit: Number(params[9]),
+        team_member_limit: Number(params[10]),
         started_at: now,
-        trial_ends_at: params[7] ? String(params[7]) : null,
-        renews_at: params[8] ? String(params[8]) : null,
+        trial_ends_at: params[11] ? String(params[11]) : null,
+        renews_at: params[12] ? String(params[12]) : null,
+        current_period_start: params[13] ? String(params[13]) : null,
+        current_period_end: params[14] ? String(params[14]) : null,
+        cancel_at_period_end: Number(params[15] ?? 0),
+        canceled_at: params[16] ? String(params[16]) : null,
+        past_due_at: params[17] ? String(params[17]) : null,
+        suspended_at: params[18] ? String(params[18]) : null,
+        plan_version: Number(params[19] ?? 1),
+        billing_contact_email: params[20] ? String(params[20]) : null,
         updated_at: now,
       };
       this.state.workspaceSubscriptions.push(subscription);
       return [{ insertId: subscription.id }, []] as unknown as [any, any];
     }
 
-    if (normalized.startsWith('update workspace_subscriptions set plan_code = ?, status = ?, billing_cycle = ?, assessment_limit = ?, participant_limit = ?, team_member_limit = ?, trial_ends_at = ?, renews_at = ?, updated_at = current_timestamp where customer_account_id = ?')) {
-      const customerAccountId = Number(params[8]);
+    if (normalized.startsWith('update workspace_subscriptions set plan_code = ?, status = ?, billing_cycle = ?, billing_provider = ?, provider_customer_id = ?, provider_subscription_id = ?, provider_price_id = ?, assessment_limit = ?, participant_limit = ?, team_member_limit = ?, trial_ends_at = ?, renews_at = ?, current_period_start = ?, current_period_end = ?, cancel_at_period_end = ?, canceled_at = ?, past_due_at = ?, suspended_at = ?, plan_version = ?, billing_contact_email = ?, updated_at = current_timestamp where customer_account_id = ?')) {
+      const customerAccountId = Number(params[20]);
       const subscription = this.state.workspaceSubscriptions.find((item) => item.customer_account_id === customerAccountId);
       if (subscription) {
         subscription.plan_code = params[0] as FakeWorkspaceSubscription['plan_code'];
         subscription.status = params[1] as FakeWorkspaceSubscription['status'];
         subscription.billing_cycle = params[2] as FakeWorkspaceSubscription['billing_cycle'];
-        subscription.assessment_limit = Number(params[3]);
-        subscription.participant_limit = Number(params[4]);
-        subscription.team_member_limit = Number(params[5]);
-        subscription.trial_ends_at = params[6] ? String(params[6]) : null;
-        subscription.renews_at = params[7] ? String(params[7]) : null;
+        subscription.billing_provider = params[3] as FakeWorkspaceSubscription['billing_provider'];
+        subscription.provider_customer_id = params[4] ? String(params[4]) : null;
+        subscription.provider_subscription_id = params[5] ? String(params[5]) : null;
+        subscription.provider_price_id = params[6] ? String(params[6]) : null;
+        subscription.assessment_limit = Number(params[7]);
+        subscription.participant_limit = Number(params[8]);
+        subscription.team_member_limit = Number(params[9]);
+        subscription.trial_ends_at = params[10] ? String(params[10]) : null;
+        subscription.renews_at = params[11] ? String(params[11]) : null;
+        subscription.current_period_start = params[12] ? String(params[12]) : null;
+        subscription.current_period_end = params[13] ? String(params[13]) : null;
+        subscription.cancel_at_period_end = Number(params[14] ?? 0);
+        subscription.canceled_at = params[15] ? String(params[15]) : null;
+        subscription.past_due_at = params[16] ? String(params[16]) : null;
+        subscription.suspended_at = params[17] ? String(params[17]) : null;
+        subscription.plan_version = Number(params[18] ?? subscription.plan_version);
+        subscription.billing_contact_email = params[19] ? String(params[19]) : null;
         subscription.updated_at = new Date().toISOString();
       }
       return [[{ affectedRows: subscription ? 1 : 0 }], []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('insert into billing_checkout_sessions')) {
+      const now = new Date().toISOString();
+      const checkoutSession: FakeBillingCheckoutSession = {
+        id: this.nextBillingCheckoutSessionId++,
+        customer_account_id: Number(params[0]),
+        workspace_subscription_id: Number(params[1]),
+        session_key: String(params[2] ?? ''),
+        billing_provider: params[3] as FakeBillingCheckoutSession['billing_provider'],
+        plan_code: params[4] as FakeBillingCheckoutSession['plan_code'],
+        billing_cycle: params[5] as FakeBillingCheckoutSession['billing_cycle'],
+        status: params[6] as FakeBillingCheckoutSession['status'],
+        checkout_url: params[7] ? String(params[7]) : null,
+        expires_at: params[8] ? String(params[8]) : null,
+        completed_at: params[9] ? String(params[9]) : null,
+        metadata_json: params[10] ? String(params[10]) : null,
+        created_at: now,
+      };
+      this.state.billingCheckoutSessions.push(checkoutSession);
+      return [{ insertId: checkoutSession.id }, []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('select id, customer_account_id, workspace_subscription_id, session_key, billing_provider, plan_code, billing_cycle, status, checkout_url, expires_at, completed_at, metadata_json, created_at from billing_checkout_sessions where id = ? limit 1')) {
+      const checkoutSessionId = Number(params[0]);
+      const checkoutSession = this.state.billingCheckoutSessions.find((item) => item.id === checkoutSessionId);
+      return [[checkoutSession].filter(Boolean), []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('select id, customer_account_id, workspace_subscription_id, session_key, billing_provider, plan_code, billing_cycle, status, checkout_url, expires_at, completed_at, metadata_json, created_at from billing_checkout_sessions where customer_account_id = ? order by id desc limit')) {
+      const customerAccountId = Number(params[0]);
+      const checkoutSessions = this.state.billingCheckoutSessions
+        .filter((item) => item.customer_account_id === customerAccountId)
+        .sort((left, right) => right.id - left.id);
+      return [checkoutSessions, []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('insert into billing_invoices')) {
+      const now = new Date().toISOString();
+      const invoice: FakeBillingInvoice = {
+        id: this.nextBillingInvoiceId++,
+        customer_account_id: Number(params[0]),
+        workspace_subscription_id: Number(params[1]),
+        checkout_session_id: params[2] ? Number(params[2]) : null,
+        external_invoice_id: params[3] ? String(params[3]) : null,
+        invoice_number: params[4] ? String(params[4]) : null,
+        status: params[5] as FakeBillingInvoice['status'],
+        currency_code: String(params[6] ?? 'USD'),
+        amount_subtotal: Number(params[7] ?? 0),
+        amount_total: Number(params[8] ?? 0),
+        hosted_invoice_url: params[9] ? String(params[9]) : null,
+        invoice_pdf_url: params[10] ? String(params[10]) : null,
+        issued_at: params[11] ? String(params[11]) : null,
+        due_at: params[12] ? String(params[12]) : null,
+        paid_at: params[13] ? String(params[13]) : null,
+        metadata_json: params[14] ? String(params[14]) : null,
+        created_at: now,
+      };
+      this.state.billingInvoices.push(invoice);
+      return [{ insertId: invoice.id }, []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('select id, customer_account_id, workspace_subscription_id, checkout_session_id, external_invoice_id, invoice_number, status, currency_code, amount_subtotal, amount_total, hosted_invoice_url, invoice_pdf_url, issued_at, due_at, paid_at, metadata_json, created_at from billing_invoices where customer_account_id = ? order by id desc limit')) {
+      const customerAccountId = Number(params[0]);
+      const invoices = this.state.billingInvoices
+        .filter((item) => item.customer_account_id === customerAccountId)
+        .sort((left, right) => right.id - left.id);
+      return [invoices, []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('insert into workspace_usage_events')) {
+      const usageEvent: FakeWorkspaceUsageEvent = {
+        id: this.nextWorkspaceUsageEventId++,
+        customer_account_id: Number(params[0]),
+        workspace_subscription_id: params[1] ? Number(params[1]) : null,
+        metric_key: params[2] as FakeWorkspaceUsageEvent['metric_key'],
+        quantity: Number(params[3] ?? 1),
+        reference_type: params[4] ? String(params[4]) : null,
+        reference_id: params[5] ? Number(params[5]) : null,
+        metadata_json: params[6] ? String(params[6]) : null,
+        occurred_at: new Date().toISOString(),
+      };
+      this.state.workspaceUsageEvents.push(usageEvent);
+      return [{ insertId: usageEvent.id }, []] as unknown as [any, any];
+    }
+
+    if (normalized.startsWith('insert into workspace_usage_snapshots')) {
+      const customerAccountId = Number(params[0]);
+      const periodStart = params[2] ? String(params[2]) : null;
+      const periodEnd = params[3] ? String(params[3]) : null;
+      let snapshot = this.state.workspaceUsageSnapshots.find((item) => item.customer_account_id === customerAccountId && item.period_start === periodStart && item.period_end === periodEnd);
+      if (!snapshot) {
+        snapshot = {
+          id: this.nextWorkspaceUsageSnapshotId++,
+          customer_account_id: customerAccountId,
+          workspace_subscription_id: params[1] ? Number(params[1]) : null,
+          period_start: periodStart,
+          period_end: periodEnd,
+          assessment_count: Number(params[4] ?? 0),
+          participant_count: Number(params[5] ?? 0),
+          team_member_count: Number(params[6] ?? 0),
+          export_count: Number(params[7] ?? 0),
+          updated_at: new Date().toISOString(),
+        };
+        this.state.workspaceUsageSnapshots.push(snapshot);
+      } else {
+        snapshot.workspace_subscription_id = params[1] ? Number(params[1]) : null;
+        snapshot.assessment_count = Number(params[4] ?? 0);
+        snapshot.participant_count = Number(params[5] ?? 0);
+        snapshot.team_member_count = Number(params[6] ?? 0);
+        snapshot.export_count = Number(params[7] ?? 0);
+        snapshot.updated_at = new Date().toISOString();
+      }
+      return [{ insertId: snapshot.id }, []] as unknown as [any, any];
     }
 
     if (normalized.startsWith('update customer_accounts set session_version = session_version + 1,')) {
@@ -1372,6 +1606,17 @@ export class FakeDbPool implements DbPoolLike {
     throw new Error(`Unsupported fake DB query: ${sql}`);
   }
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

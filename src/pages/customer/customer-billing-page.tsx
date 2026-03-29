@@ -26,6 +26,14 @@ const dummyPrices: Record<WorkspacePlanCode, Record<WorkspaceBillingCycle, strin
   research: { monthly: '$39', annual: '$390' },
 };
 
+function formatCurrency(amount: number, currencyCode = 'USD') {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currencyCode,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
 function renderDiagnosticCard(diagnostic: WorkspaceUsageDiagnostic) {
   const tone = getWorkspaceUsageSeverityClasses(diagnostic.severity);
 
@@ -97,6 +105,8 @@ export function CustomerBillingPage() {
     () => overview?.plans.find((plan) => plan.planCode === selectedPlan) ?? null,
     [overview, selectedPlan],
   );
+  const recentInvoices = overview?.recentInvoices ?? [];
+  const recentCheckoutSessions = overview?.recentCheckoutSessions ?? [];
 
   async function handleSavePlan() {
     if (!overview) {
@@ -156,7 +166,7 @@ export function CustomerBillingPage() {
         <div className="flex flex-wrap gap-2">
           <Badge className="border-slate-200 bg-slate-100 text-slate-700">{subscription.planLabel}</Badge>
           <Badge className="border-sky-200 bg-sky-50 text-sky-700">{formatTokenLabel(subscription.status)}</Badge>
-          <Badge className="border-amber-200 bg-amber-50 text-amber-700">Dummy billing</Badge>
+          <Badge className="border-amber-200 bg-amber-50 text-amber-700">{subscription.billingProvider === 'dummy' ? 'Dummy billing' : `${formatTokenLabel(subscription.billingProvider ?? 'dummy')} billing`}</Badge>
         </div>
       </div>
 
@@ -264,7 +274,7 @@ export function CustomerBillingPage() {
                       </div>
                     </div>
                     <p className={`mt-3 text-3xl font-semibold ${isSelected ? 'text-white' : 'text-slate-950'}`}>
-                      {dummyPrices[plan.planCode][billingCycle]}
+                      {plan[billingCycle === 'annual' ? 'annualPrice' : 'monthlyPrice'] != null ? formatCurrency(plan[billingCycle === 'annual' ? 'annualPrice' : 'monthlyPrice'] ?? 0) : dummyPrices[plan.planCode][billingCycle]}
                     </p>
                     <p className={`mt-3 text-sm leading-7 ${isSelected ? 'text-white/70' : 'text-slate-500'}`}>{plan.description}</p>
                     <div className={`mt-4 grid gap-2 text-sm ${isSelected ? 'text-white/85' : 'text-slate-600'}`}>
@@ -318,12 +328,20 @@ export function CustomerBillingPage() {
           <Card className="bg-white/84">
             <CardHeader>
               <CardTitle>Current subscription timeline</CardTitle>
-              <CardDescription>Dummy dates help validate the SaaS lifecycle before a real billing provider is connected.</CardDescription>
+              <CardDescription>Dummy billing now stores provider-ready period, checkout, and invoice history.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-slate-500">
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                 <p className="inline-flex items-center gap-2 font-medium text-slate-950"><CreditCard className="h-4 w-4" /> Billing cycle</p>
                 <p className="mt-2">{cycleLabels[subscription.billingCycle]}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                <p className="font-medium text-slate-950">Current period</p>
+                <p className="mt-2">
+                  {subscription.currentPeriodStart && subscription.currentPeriodEnd
+                    ? `${formatDateTime(subscription.currentPeriodStart)} to ${formatDateTime(subscription.currentPeriodEnd)}`
+                    : 'Current billing period will appear after activation'}
+                </p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                 <p className="font-medium text-slate-950">Trial ends</p>
@@ -333,6 +351,44 @@ export function CustomerBillingPage() {
                 <p className="font-medium text-slate-950">Next renewal</p>
                 <p className="mt-2">{subscription.renewsAt ? formatDateTime(subscription.renewsAt) : 'Renewal will appear after dummy activation'}</p>
               </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                <p className="font-medium text-slate-950">Billing contact</p>
+                <p className="mt-2">{subscription.billingContactEmail ?? overview.account.email}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/84">
+            <CardHeader>
+              <CardTitle>Recent billing activity</CardTitle>
+              <CardDescription>Checkout attempts and invoices are now tracked for the workspace.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm text-slate-500">
+              <div className="space-y-3">
+                <p className="font-medium text-slate-950">Recent checkout sessions</p>
+                {recentCheckoutSessions.length > 0 ? recentCheckoutSessions.slice(0, 3).map((session) => (
+                  <div key={session.id} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium text-slate-950">{formatTokenLabel(session.planCode)} · {cycleLabels[session.billingCycle]}</span>
+                      <Badge className="border-slate-200 bg-slate-100 text-slate-700">{formatTokenLabel(session.status)}</Badge>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-400">Created {formatDateTime(session.createdAt)}</p>
+                  </div>
+                )) : <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4">No checkout sessions recorded yet.</p>}
+              </div>
+              <div className="space-y-3">
+                <p className="font-medium text-slate-950">Recent invoices</p>
+                {recentInvoices.length > 0 ? recentInvoices.slice(0, 3).map((invoice) => (
+                  <div key={invoice.id} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium text-slate-950">{invoice.invoiceNumber ?? `Invoice #${invoice.id}`}</span>
+                      <Badge className="border-slate-200 bg-slate-100 text-slate-700">{formatTokenLabel(invoice.status)}</Badge>
+                    </div>
+                    <p className="mt-2">{formatCurrency(invoice.amountTotal, invoice.currencyCode)}</p>
+                    <p className="mt-1 text-xs text-slate-400">{invoice.paidAt ? `Paid ${formatDateTime(invoice.paidAt)}` : invoice.issuedAt ? `Issued ${formatDateTime(invoice.issuedAt)}` : 'Pending invoice date'}</p>
+                  </div>
+                )) : <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4">No invoices have been generated yet.</p>}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -340,3 +396,11 @@ export function CustomerBillingPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+

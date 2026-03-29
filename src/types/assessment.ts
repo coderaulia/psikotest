@@ -263,18 +263,34 @@ export interface CustomerWorkspaceActivityResponse {
   };
   items: CustomerWorkspaceActivityItem[];
 }
+export type WorkspaceBillingProvider = 'dummy' | 'manual' | 'stripe';
+export type BillingCheckoutSessionStatus = 'open' | 'completed' | 'expired' | 'failed';
+export type BillingInvoiceStatus = 'draft' | 'open' | 'paid' | 'void' | 'uncollectible';
+
 export interface WorkspaceSubscriptionRecord {
   id: number;
   customerAccountId: number;
   planCode: WorkspacePlanCode;
   status: WorkspaceSubscriptionStatus;
   billingCycle: WorkspaceBillingCycle;
+  billingProvider?: WorkspaceBillingProvider;
+  providerCustomerId?: string | null;
+  providerSubscriptionId?: string | null;
+  providerPriceId?: string | null;
   assessmentLimit: number;
   participantLimit: number;
   teamMemberLimit: number;
   startedAt: string;
   trialEndsAt: string | null;
   renewsAt: string | null;
+  currentPeriodStart?: string | null;
+  currentPeriodEnd?: string | null;
+  cancelAtPeriodEnd?: boolean;
+  canceledAt?: string | null;
+  pastDueAt?: string | null;
+  suspendedAt?: string | null;
+  planVersion?: number;
+  billingContactEmail?: string | null;
   planLabel: string;
   planDescription: string;
 }
@@ -320,6 +336,44 @@ export interface WorkspacePlanDefinition {
   assessmentLimit: number;
   participantLimit: number;
   teamMemberLimit: number;
+  monthlyPrice?: number;
+  annualPrice?: number;
+}
+
+export interface BillingCheckoutSessionRecord {
+  id: number;
+  customerAccountId: number;
+  workspaceSubscriptionId: number;
+  sessionKey: string;
+  billingProvider: WorkspaceBillingProvider;
+  planCode: WorkspacePlanCode;
+  billingCycle: WorkspaceBillingCycle;
+  status: BillingCheckoutSessionStatus;
+  checkoutUrl: string | null;
+  expiresAt: string | null;
+  completedAt: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface BillingInvoiceRecord {
+  id: number;
+  customerAccountId: number;
+  workspaceSubscriptionId: number;
+  checkoutSessionId: number | null;
+  externalInvoiceId: string | null;
+  invoiceNumber: string | null;
+  status: BillingInvoiceStatus;
+  currencyCode: string;
+  amountSubtotal: number;
+  amountTotal: number;
+  hostedInvoiceUrl: string | null;
+  invoicePdfUrl: string | null;
+  issuedAt: string | null;
+  dueAt: string | null;
+  paidAt: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
 }
 
 export interface CustomerBillingOverviewResponse {
@@ -329,6 +383,23 @@ export interface CustomerBillingOverviewResponse {
   diagnostics: WorkspaceUsageDiagnostic[];
   upgradeGuidance: WorkspaceUpgradeGuidance;
   plans: WorkspacePlanDefinition[];
+  recentCheckoutSessions?: BillingCheckoutSessionRecord[];
+  recentInvoices?: BillingInvoiceRecord[];
+}
+
+export interface CustomerBillingInvoicesResponse {
+  account: CustomerUser;
+  invoices: BillingInvoiceRecord[];
+}
+
+export interface CreateWorkspaceCheckoutSessionPayload {
+  selectedPlan: WorkspacePlanCode;
+  billingCycle: WorkspaceBillingCycle;
+}
+
+export interface CreateWorkspaceCheckoutSessionResponse {
+  checkoutSession: BillingCheckoutSessionRecord;
+  overview: CustomerBillingOverviewResponse;
 }
 
 export interface UpdateWorkspaceSubscriptionPayload {
@@ -856,6 +927,10 @@ export interface SettingsOverviewResponse {
   sessionDefaults: SessionDefaultsSettings;
   auditFeed: AuditFeedItem[];
 }
+
+
+
+
 
 
 

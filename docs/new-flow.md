@@ -113,6 +113,29 @@ Manage teammates and workspace defaults
 - billing is still dummy-mode, but plan selection already affects operational behavior
 - customer result pages remain audience-safe and do not reveal internal reviewer drafts
 
+
+## Workspace Billing Lifecycle
+
+The workspace billing flow is now modeled as a provider-ready lifecycle, even while checkout remains dummy-mode.
+
+Trial subscription initialized
+↓
+Usage diagnostics tracked inside the workspace
+↓
+Checkout session created for selected plan and billing cycle
+↓
+Subscription updated and invoice record created
+↓
+Current period and renewal windows refreshed
+↓
+Future provider webhooks or manual support actions keep the subscription in sync
+
+### Current stage
+
+- checkout sessions and invoice history are now part of the billing data model
+- the workspace billing page can evolve without changing the backend contract again
+- real payment collection is still deferred, but the operational flow now matches a production billing shape
+
 ## Participant Flow
 
 ### Current baseline
@@ -285,3 +308,4 @@ Whenever the implementation changes any of the following, this document should b
 - reviewer flow
 - result release flow
 - research export flow
+

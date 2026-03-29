@@ -2,11 +2,18 @@ import { createAuditEvent } from '../../lib/audit-log.js';
 import { HttpError } from '../../lib/http-error.js';
 import { findCustomerById } from '../site-auth/site-auth.repository.js';
 import {
+  createBillingCheckoutSession,
+  createBillingInvoice,
+  fetchBillingCheckoutSessions,
+  fetchBillingInvoices,
   fetchWorkspaceSubscription,
   fetchWorkspaceUsage,
   insertWorkspaceSubscription,
+  recordWorkspaceUsageEvent,
   updateWorkspaceSubscription,
+  upsertWorkspaceUsageSnapshot,
   type WorkspaceBillingCycle,
+  type WorkspaceBillingProvider,
   type WorkspacePlanCode,
   type WorkspaceSubscriptionStatus,
 } from './site-billing.repository.js';
@@ -24,6 +31,8 @@ const workspacePlanCatalog = {
     assessmentLimit: 3,
     participantLimit: 5,
     teamMemberLimit: 3,
+    monthlyPrice: 0,
+    annualPrice: 0,
   },
   growth: {
     label: 'Growth',
@@ -31,6 +40,8 @@ const workspacePlanCatalog = {
     assessmentLimit: 20,
     participantLimit: 500,
     teamMemberLimit: 15,
+    monthlyPrice: 29,
+    annualPrice: 290,
   },
   research: {
     label: 'Research',
@@ -38,6 +49,8 @@ const workspacePlanCatalog = {
     assessmentLimit: 30,
     participantLimit: 2500,
     teamMemberLimit: 20,
+    monthlyPrice: 39,
+    annualPrice: 390,
   },
 } as const;
 
@@ -97,25 +110,50 @@ function buildSubscriptionPayload(input: {
   planCode: WorkspacePlanCode;
   status: WorkspaceSubscriptionStatus;
   billingCycle: WorkspaceBillingCycle;
+  billingProvider?: WorkspaceBillingProvider;
+  providerCustomerId?: string | null;
+  providerSubscriptionId?: string | null;
+  providerPriceId?: string | null;
+  planVersion?: number;
+  billingContactEmail?: string | null;
+  cancelAtPeriodEnd?: boolean;
+  canceledAt?: string | null;
+  pastDueAt?: string | null;
+  suspendedAt?: string | null;
 }) {
   const limits = buildPlanLimits(input.planCode);
+  const currentPeriodStart = input.status === 'active' ? new Date().toISOString() : null;
+  const currentPeriodEnd = input.status === 'active' ? addBillingCycle(input.billingCycle) : null;
 
   return {
     customerAccountId: input.customerAccountId,
     planCode: input.planCode,
     status: input.status,
     billingCycle: input.billingCycle,
+    billingProvider: input.billingProvider ?? 'dummy',
+    providerCustomerId: input.providerCustomerId ?? null,
+    providerSubscriptionId: input.providerSubscriptionId ?? null,
+    providerPriceId: input.providerPriceId ?? null,
     assessmentLimit: limits.assessmentLimit,
     participantLimit: limits.participantLimit,
     teamMemberLimit: limits.teamMemberLimit,
     trialEndsAt: input.status === 'trial' ? addDays(14) : null,
-    renewsAt: input.status === 'active' ? addBillingCycle(input.billingCycle) : null,
+    renewsAt: input.status === 'active' ? currentPeriodEnd : null,
+    currentPeriodStart,
+    currentPeriodEnd,
+    cancelAtPeriodEnd: input.cancelAtPeriodEnd ?? false,
+    canceledAt: input.canceledAt ?? null,
+    pastDueAt: input.pastDueAt ?? null,
+    suspendedAt: input.suspendedAt ?? null,
+    planVersion: input.planVersion ?? 1,
+    billingContactEmail: input.billingContactEmail ?? null,
   };
 }
 
 async function ensureWorkspaceSubscription(account: {
   id: number;
   account_type: 'business' | 'researcher';
+  email: string;
 }) {
   const existing = await fetchWorkspaceSubscription(account.id);
   if (existing) {
@@ -128,6 +166,7 @@ async function ensureWorkspaceSubscription(account: {
       planCode: getDefaultPlanCode(account.account_type),
       status: 'trial',
       billingCycle: 'monthly',
+      billingContactEmail: account.email,
     }),
   );
 
@@ -287,10 +326,37 @@ function buildUpgradeGuidance(input: {
   };
 }
 
+function getPlanPrice(planCode: WorkspacePlanCode, billingCycle: WorkspaceBillingCycle) {
+  const plan = workspacePlanCatalog[planCode];
+  return billingCycle === 'annual' ? plan.annualPrice : plan.monthlyPrice;
+}
+
+async function syncWorkspaceUsageSnapshot(customerAccountId: number, subscription: Awaited<ReturnType<typeof fetchWorkspaceSubscription>>) {
+  if (!subscription) {
+    return null;
+  }
+
+  const usage = await fetchWorkspaceUsage(customerAccountId);
+  await upsertWorkspaceUsageSnapshot({
+    customerAccountId,
+    workspaceSubscriptionId: subscription.id,
+    periodStart: subscription.currentPeriodStart,
+    periodEnd: subscription.currentPeriodEnd,
+    assessmentCount: usage.activeAssessmentCount,
+    participantCount: usage.participantRecordCount,
+    teamMemberCount: usage.teamSeatCount,
+    exportCount: 0,
+  });
+
+  return usage;
+}
+
 export async function getWorkspaceBillingOverview(customerAccountId: number) {
   const account = await requireActiveCustomer(customerAccountId);
   const subscription = await ensureWorkspaceSubscription(account);
-  const usage = await fetchWorkspaceUsage(customerAccountId);
+  const usage = (await syncWorkspaceUsageSnapshot(customerAccountId, subscription)) ?? (await fetchWorkspaceUsage(customerAccountId));
+  const recentCheckoutSessions = await fetchBillingCheckoutSessions(customerAccountId, 5);
+  const recentInvoices = await fetchBillingInvoices(customerAccountId, 10);
 
   const usageSummary = buildUsageSummary({
     ...usage,
@@ -343,7 +409,11 @@ export async function getWorkspaceBillingOverview(customerAccountId: number) {
       assessmentLimit: plan.assessmentLimit,
       participantLimit: plan.participantLimit,
       teamMemberLimit: plan.teamMemberLimit,
+      monthlyPrice: plan.monthlyPrice,
+      annualPrice: plan.annualPrice,
     })),
+    recentCheckoutSessions,
+    recentInvoices,
   };
 }
 
@@ -360,12 +430,78 @@ export async function updateWorkspaceSubscriptionSelection(input: {
       planCode: input.planCode,
       status: 'active',
       billingCycle: input.billingCycle,
+      billingProvider: existing.billingProvider,
+      providerCustomerId: existing.providerCustomerId,
+      providerSubscriptionId: existing.providerSubscriptionId,
+      providerPriceId: existing.providerPriceId,
+      planVersion: existing.planVersion + 1,
+      billingContactEmail: existing.billingContactEmail ?? account.email,
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
+      pastDueAt: null,
+      suspendedAt: null,
     }),
   );
 
   if (!updated) {
     throw new HttpError(500, 'Workspace subscription could not be updated');
   }
+
+  const checkoutSession = await createBillingCheckoutSession({
+    customerAccountId: input.customerAccountId,
+    workspaceSubscriptionId: updated.id,
+    billingProvider: updated.billingProvider,
+    planCode: updated.planCode,
+    billingCycle: updated.billingCycle,
+    status: 'completed',
+    checkoutUrl: null,
+    expiresAt: null,
+    completedAt: new Date().toISOString(),
+    metadata: {
+      mode: 'dummy',
+      triggeredBy: 'workspace_billing_page',
+      previousPlanCode: existing.planCode,
+      nextPlanCode: updated.planCode,
+    },
+  });
+
+  await createBillingInvoice({
+    customerAccountId: input.customerAccountId,
+    workspaceSubscriptionId: updated.id,
+    checkoutSessionId: checkoutSession?.id ?? null,
+    externalInvoiceId: null,
+    invoiceNumber: `INV-${updated.id}-${Date.now()}`,
+    status: 'paid',
+    currencyCode: 'USD',
+    amountSubtotal: getPlanPrice(updated.planCode, updated.billingCycle),
+    amountTotal: getPlanPrice(updated.planCode, updated.billingCycle),
+    hostedInvoiceUrl: null,
+    invoicePdfUrl: null,
+    issuedAt: new Date().toISOString(),
+    dueAt: null,
+    paidAt: new Date().toISOString(),
+    metadata: {
+      mode: 'dummy',
+      planCode: updated.planCode,
+      billingCycle: updated.billingCycle,
+    },
+  });
+
+  await recordWorkspaceUsageEvent({
+    customerAccountId: input.customerAccountId,
+    workspaceSubscriptionId: updated.id,
+    metricKey: 'assessment_created',
+    quantity: 0,
+    referenceType: 'workspace_subscription',
+    referenceId: updated.id,
+    metadata: {
+      category: 'billing',
+      action: 'workspace_subscription.updated',
+      previousPlanCode: existing.planCode,
+      nextPlanCode: updated.planCode,
+      billingCycle: updated.billingCycle,
+    },
+  });
 
   await createAuditEvent({
     actorType: 'system',
@@ -380,10 +516,67 @@ export async function updateWorkspaceSubscriptionSelection(input: {
       nextStatus: updated.status,
       billingCycle: updated.billingCycle,
       dummyMode: true,
+      checkoutSessionId: checkoutSession?.id ?? null,
     },
   });
 
   return getWorkspaceBillingOverview(input.customerAccountId);
+}
+
+export async function getWorkspaceBillingInvoices(customerAccountId: number) {
+  const account = await requireActiveCustomer(customerAccountId);
+  await ensureWorkspaceSubscription(account);
+  return {
+    account: mapAccount(account),
+    invoices: await fetchBillingInvoices(customerAccountId, 20),
+  };
+}
+
+export async function createWorkspaceCheckoutSession(input: {
+  customerAccountId: number;
+  planCode: WorkspacePlanCode;
+  billingCycle: WorkspaceBillingCycle;
+}) {
+  const account = await requireActiveCustomer(input.customerAccountId);
+  const subscription = await ensureWorkspaceSubscription(account);
+  const session = await createBillingCheckoutSession({
+    customerAccountId: input.customerAccountId,
+    workspaceSubscriptionId: subscription.id,
+    billingProvider: subscription.billingProvider,
+    planCode: input.planCode,
+    billingCycle: input.billingCycle,
+    status: 'open',
+    checkoutUrl: `https://billing.vanaila.local/checkout/${subscription.id}`,
+    expiresAt: addDays(1),
+    completedAt: null,
+    metadata: {
+      mode: 'dummy',
+      currentPlanCode: subscription.planCode,
+      nextPlanCode: input.planCode,
+    },
+  });
+
+  if (!session) {
+    throw new HttpError(500, 'Billing checkout session could not be created');
+  }
+
+  await createAuditEvent({
+    actorType: 'system',
+    entityType: 'billing_checkout_session',
+    entityId: session.id,
+    action: 'billing_checkout_session.created',
+    metadata: {
+      customerAccountId: input.customerAccountId,
+      planCode: input.planCode,
+      billingCycle: input.billingCycle,
+      billingProvider: subscription.billingProvider,
+    },
+  });
+
+  return {
+    checkoutSession: session,
+    overview: await getWorkspaceBillingOverview(input.customerAccountId),
+  };
 }
 
 async function getCapacityState(customerAccountId: number) {

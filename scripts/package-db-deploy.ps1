@@ -99,7 +99,7 @@ Run the files in this order:
 
 Notes:
 
-- `01_schema_current.sql` already includes the current schema, including workspace settings, reviewer workflow support, report access logging, and answer sequence tracking for protected sessions.
+- `01_schema_current.sql` already includes the current schema, including workspace settings, reviewer workflow support, report access logging, answer sequence tracking for protected sessions, and the billing foundation tables for checkout, invoices, webhooks, and usage snapshots.
 - Distribution policy and protected delivery are stored in both session settings JSON and the current schema for easier legacy compatibility.
 - `04_seed_demo_sessions.sql` is optional. Skip it in production if you do not want demo sessions, demo tokens, and demo customer accounts.
 "@
@@ -117,7 +117,9 @@ $upgradeFiles = @(
   '010_customer_assessment_participants.sql',
   '011_customer_workspace_members.sql',
   '012_workspace_subscriptions.sql',
-  '013_customer_assessment_participant_reminders.sql'
+  '013_customer_assessment_participant_reminders.sql',
+  '014_customer_workspace_member_activation.sql',
+  '015_billing_foundation.sql'
 ) | ForEach-Object { Join-Path $migrationsDir $_ }
 
 $upgradeBundle = @()
@@ -149,6 +151,7 @@ This bundled upgrade adds:
 - workspace team member records for multi-user customer operations
 - teammate activation credentials and invite links for shared customer workspace access
 - workspace subscription and plan limit records for SaaS billing workflows
+- provider-ready billing checkout, invoice, webhook, and usage tracking tables
 "@
 Set-Content (Join-Path $upgradeDir 'README.md') $upgradeReadme
 
@@ -163,4 +166,7 @@ $zipPaths = @(
 Compress-Archive -Path $zipPaths -DestinationPath $zipPath -Force
 
 Write-Host "Generated $zipPath"
+
+
+
 

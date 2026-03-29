@@ -175,3 +175,18 @@ Use together with:
 ## White-label principle
 
 White-label should run on the same API and assessment engine as the SaaS product. The recommended default is a shared multi-tenant platform with host-based workspace resolution, not a forked application.
+
+## Billing Foundation
+
+The SaaS platform now treats billing as a workspace-level subsystem.
+
+Core persistence includes:
+
+- `workspace_subscriptions`
+- `billing_checkout_sessions`
+- `billing_invoices`
+- `billing_webhook_events`
+- `workspace_usage_events`
+- `workspace_usage_snapshots`
+
+This keeps the current dummy checkout compatible with later provider-backed billing without redesigning the workspace contract.
