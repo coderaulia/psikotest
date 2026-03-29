@@ -369,6 +369,17 @@ export interface SendCustomerAssessmentParticipantInvitePayload {
   channel: CustomerAssessmentInviteChannel;
 }
 
+export interface SendCustomerAssessmentBulkInvitePayload {
+  channel: CustomerAssessmentInviteChannel;
+}
+
+export interface CustomerAssessmentBulkInviteResponse {
+  invitedCount: number;
+  skippedCount: number;
+  shareLink: string;
+  deliveryPreview: string;
+}
+
 export interface CustomerAssessmentParticipantSummary {
   total: number;
   draft: number;

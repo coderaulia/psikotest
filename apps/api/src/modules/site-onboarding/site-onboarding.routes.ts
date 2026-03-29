@@ -11,6 +11,7 @@ import {
   getCustomerAssessmentDetail,
   listCustomerAssessmentItems,
   listCustomerAssessmentParticipants,
+  sendCustomerAssessmentBulkInvites,
   sendCustomerAssessmentParticipantInvite,
   updateCustomerAssessment,
 } from './site-onboarding.service.js';
@@ -42,6 +43,10 @@ const participantCreateSchema = z.object({
 });
 
 const participantSendSchema = z.object({
+  channel: z.enum(['email', 'link']).default('email'),
+});
+
+const participantBulkSendSchema = z.object({
   channel: z.enum(['email', 'link']).default('email'),
 });
 
@@ -205,6 +210,25 @@ siteOnboardingRoutes.post(
     });
 
     response.status(201).json(participant);
+  }),
+);
+
+siteOnboardingRoutes.post(
+  '/assessments/:id/participants/send-bulk',
+  asyncHandler(async (request, response) => {
+    if (!request.customerSession) {
+      throw new HttpError(401, 'Customer session is required');
+    }
+
+    const { id } = assessmentParamsSchema.parse(request.params);
+    const payload = participantBulkSendSchema.parse(request.body ?? {});
+    const delivery = await sendCustomerAssessmentBulkInvites({
+      customerAccountId: request.customerSession.accountId,
+      assessmentId: id,
+      channel: payload.channel,
+    });
+
+    response.json(delivery);
   }),
 );
 

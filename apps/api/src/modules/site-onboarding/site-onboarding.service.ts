@@ -400,6 +400,70 @@ export async function addCustomerAssessmentParticipant(input: {
   return participant;
 }
 
+export async function sendCustomerAssessmentBulkInvites(input: {
+  customerAccountId: number;
+  assessmentId: number;
+  channel: CustomerAssessmentInviteChannel;
+}) {
+  await requireActiveCustomer(input.customerAccountId);
+  const participantList = await fetchCustomerAssessmentParticipants(input.customerAccountId, input.assessmentId);
+
+  if (!participantList) {
+    throw new HttpError(404, 'Assessment draft not found');
+  }
+
+  const targets = participantList.items.filter((item) => item.status !== 'completed');
+
+  if (targets.length === 0) {
+    return {
+      invitedCount: 0,
+      skippedCount: participantList.items.length,
+      shareLink: participantList.shareLink,
+      deliveryPreview: 'No pending participants require a reminder right now.',
+    };
+  }
+
+  let invitedCount = 0;
+  for (const participant of targets) {
+    const invited = await markCustomerAssessmentParticipantInvited({
+      customerAccountId: input.customerAccountId,
+      assessmentId: input.assessmentId,
+      participantRecordId: participant.id,
+      channel: input.channel,
+    });
+
+    if (invited) {
+      invitedCount += 1;
+    }
+  }
+
+  await createAuditEvent({
+    actorType: 'system',
+    entityType: 'customer_assessment_participant',
+    entityId: input.assessmentId,
+    action: 'customer_assessment_participant.bulk_invited',
+    metadata: {
+      customerAccountId: input.customerAccountId,
+      assessmentId: input.assessmentId,
+      channel: input.channel,
+      invitedCount,
+      skippedCount: participantList.items.length - invitedCount,
+      shareLink: participantList.shareLink,
+      dummyMode: true,
+    },
+  });
+
+  return {
+    invitedCount,
+    skippedCount: participantList.items.length - invitedCount,
+    shareLink: participantList.shareLink,
+    deliveryPreview:
+      input.channel === 'email'
+        ? `Dummy email invites queued for ${invitedCount} participant(s). Share link: ${participantList.shareLink}`
+        : `Share this link with ${invitedCount} participant(s): ${participantList.shareLink}`,
+  };
+}
+
 export async function sendCustomerAssessmentParticipantInvite(input: {
   customerAccountId: number;
   assessmentId: number;

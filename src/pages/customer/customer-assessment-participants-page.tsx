@@ -7,6 +7,7 @@ import {
   createCustomerAssessmentParticipant,
   getCustomerAssessment,
   listCustomerAssessmentParticipants,
+  sendCustomerAssessmentBulkInvites,
   sendCustomerAssessmentParticipantInvite,
 } from '@/services/customer-onboarding';
 import type {
@@ -38,6 +39,7 @@ export function CustomerAssessmentParticipantsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sendingId, setSendingId] = useState<number | null>(null);
+  const [isSendingBulk, setIsSendingBulk] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -149,6 +151,26 @@ export function CustomerAssessmentParticipantsPage() {
     }
   }
 
+  async function handleSendBulkInvites(channel: 'email' | 'link') {
+    if (!detail || !canInvite) {
+      return;
+    }
+
+    setIsSendingBulk(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const payload = await sendCustomerAssessmentBulkInvites(detail.assessmentId, { channel });
+      await loadData();
+      setSuccessMessage(payload.deliveryPreview);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to send bulk invites');
+    } finally {
+      setIsSendingBulk(false);
+    }
+  }
+
   async function handleCopyShareLink() {
     if (!participantData?.shareLink || typeof navigator === 'undefined' || !navigator.clipboard) {
       return;
@@ -192,9 +214,15 @@ export function CustomerAssessmentParticipantsPage() {
             <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-500">
               <p className="font-medium text-slate-950">Assessment link</p>
               <p className="mt-2 break-all">{participantData.shareLink}</p>
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Button type="button" variant="secondary" onClick={handleCopyShareLink}>
                   Copy link <Copy className="ml-2 h-4 w-4" />
+                </Button>
+                <Button type="button" variant="secondary" disabled={!canInvite || isSendingBulk} onClick={() => void handleSendBulkInvites('email')}>
+                  {isSendingBulk ? 'Sending...' : 'Send pending emails'} <Mail className="ml-2 h-4 w-4" />
+                </Button>
+                <Button type="button" variant="outline" disabled={!canInvite || isSendingBulk} onClick={() => void handleSendBulkInvites('link')}>
+                  {isSendingBulk ? 'Preparing...' : 'Prepare share links'} <Send className="ml-2 h-4 w-4" />
                 </Button>
                 <Button type="button" variant="outline" asChild>
                   <a href={participantData.shareLink} target="_blank" rel="noreferrer">Open participant link</a>

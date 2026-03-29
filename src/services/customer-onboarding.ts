@@ -2,10 +2,12 @@ import type {
   CreateCustomerAssessmentParticipantPayload,
   CreateCustomerAssessmentPayload,
   CustomerAssessmentCheckoutPayload,
+  CustomerAssessmentBulkInviteResponse,
   CustomerAssessmentDetail,
   CustomerAssessmentItem,
   CustomerAssessmentParticipantListResponse,
   CustomerAssessmentParticipantItem,
+  SendCustomerAssessmentBulkInvitePayload,
   SendCustomerAssessmentParticipantInvitePayload,
   UpdateCustomerAssessmentPayload,
 } from '@/types/assessment';
@@ -69,6 +71,16 @@ export async function sendCustomerAssessmentParticipantInvite(
     shareLink: string;
     deliveryPreview: string;
   }>(`/site-onboarding/assessments/${assessmentId}/participants/${participantId}/send`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function sendCustomerAssessmentBulkInvites(
+  assessmentId: number,
+  payload: SendCustomerAssessmentBulkInvitePayload,
+) {
+  return customerFetchJson<CustomerAssessmentBulkInviteResponse>(`/site-onboarding/assessments/${assessmentId}/participants/send-bulk`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
