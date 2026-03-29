@@ -1,5 +1,6 @@
 import { HttpError } from '../../lib/http-error.js';
 import { findCustomerById } from '../site-auth/site-auth.repository.js';
+import { recordWorkspaceUsageMetric } from '../site-billing/site-billing.service.js';
 import {
   fetchCustomerWorkspaceResultDetail,
   fetchCustomerWorkspaceResults,
@@ -98,5 +99,18 @@ export async function getCustomerWorkspaceResultDetail(customerAccountId: number
 
 export async function exportCustomerWorkspaceResultsCsv(customerAccountId: number) {
   const items = await loadWorkspaceResultItems(customerAccountId);
+
+  await recordWorkspaceUsageMetric({
+    customerAccountId,
+    metricKey: 'result_exported',
+    referenceType: 'customer_workspace_results',
+    referenceId: null,
+    metadata: {
+      exportedCount: items.length,
+      format: 'csv',
+    },
+  });
+
   return buildCsvRows(items);
 }
+

@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { env } from '../../config/env.js';
 import { createAuditEvent } from '../../lib/audit-log.js';
 import { HttpError } from '../../lib/http-error.js';
-import { assertTeamMemberCapacity } from '../site-billing/site-billing.service.js';
+import { assertTeamMemberCapacity, recordWorkspaceUsageMetric } from '../site-billing/site-billing.service.js';
 import { findActiveCustomerById } from '../site-auth/site-auth.repository.js';
 import {
   fetchCustomerWorkspaceActivity,
@@ -208,6 +208,19 @@ export async function addCustomerWorkspaceMember(input: {
     throw new HttpError(500, 'Workspace member could not be saved');
   }
 
+  if (!memberAlreadyExists) {
+    await recordWorkspaceUsageMetric({
+      customerAccountId: input.accountId,
+      metricKey: 'team_member_added',
+      referenceType: 'customer_workspace_member',
+      referenceId: member.id,
+      metadata: {
+        email: member.email,
+        role: member.role,
+      },
+    });
+  }
+
   await createAuditEvent({
     actorType: 'system',
     entityType: 'customer_workspace_member',
@@ -283,6 +296,7 @@ export async function sendCustomerWorkspaceMemberInvite(input: {
   }
 
   const activationLink = buildActivationLink(activationToken);
+
 
   await createAuditEvent({
     actorType: 'system',
@@ -445,3 +459,5 @@ export async function getCustomerWorkspaceActivity(accountId: number, limit = 24
     items,
   };
 }
+
+

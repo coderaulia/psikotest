@@ -133,7 +133,7 @@ Future provider webhooks or manual support actions keep the subscription in sync
 ### Current stage
 
 - checkout sessions and invoice history are now part of the billing data model
-- the workspace billing page can evolve without changing the backend contract again
+- the workspace billing page can evolve without changing the backend contract again`r`n- assessment creation, participant additions, team growth, and result exports now feed workspace usage events and snapshots
 - real payment collection is still deferred, but the operational flow now matches a production billing shape
 
 ## Participant Flow
@@ -308,4 +308,5 @@ Whenever the implementation changes any of the following, this document should b
 - reviewer flow
 - result release flow
 - research export flow
+
 

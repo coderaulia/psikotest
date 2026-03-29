@@ -7,6 +7,7 @@ import { parseCustomerWorkspaceSettings, renderWorkspaceTemplate } from '../site
 import {
   assertAssessmentCreationCapacity,
   assertParticipantCapacity,
+  recordWorkspaceUsageMetric,
   updateWorkspaceSubscriptionSelection,
   type DummyCheckoutBillingCycle,
   type DummyCheckoutPlan,
@@ -189,6 +190,18 @@ export async function createCustomerAssessment(input: {
     instructions: getParticipantInstructions(input.testType, input.purpose),
     timeLimitMinutes: input.timeLimitMinutes ?? workspaceSettings.defaultTimeLimitMinutes ?? getDefaultTimeLimit(input.testType),
     settings,
+  });
+
+  await recordWorkspaceUsageMetric({
+    customerAccountId: input.customerAccountId,
+    metricKey: 'assessment_created',
+    referenceType: 'customer_assessment',
+    referenceId: created.assessmentId,
+    metadata: {
+      sessionId: created.sessionId,
+      testType: input.testType,
+      purpose: input.purpose,
+    },
   });
 
   await createAuditEvent({
@@ -701,3 +714,9 @@ export async function sendCustomerAssessmentParticipantInvite(input: {
         : `Share this link with ${participant.fullName}: ${participantList.shareLink}`,
   };
 }
+
+
+
+
+
+

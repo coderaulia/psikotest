@@ -579,6 +579,30 @@ export async function createWorkspaceCheckoutSession(input: {
   };
 }
 
+
+export async function recordWorkspaceUsageMetric(input: {
+  customerAccountId: number;
+  metricKey: 'assessment_created' | 'participant_added' | 'team_member_added' | 'result_exported';
+  quantity?: number;
+  referenceType?: string | null;
+  referenceId?: number | null;
+  metadata?: Record<string, unknown>;
+}) {
+  const account = await requireActiveCustomer(input.customerAccountId);
+  const subscription = await ensureWorkspaceSubscription(account);
+
+  await recordWorkspaceUsageEvent({
+    customerAccountId: input.customerAccountId,
+    workspaceSubscriptionId: subscription.id,
+    metricKey: input.metricKey,
+    quantity: input.quantity ?? 1,
+    referenceType: input.referenceType ?? null,
+    referenceId: input.referenceId ?? null,
+    metadata: input.metadata ?? {},
+  });
+
+  await syncWorkspaceUsageSnapshot(input.customerAccountId, subscription);
+}
 async function getCapacityState(customerAccountId: number) {
   const overview = await getWorkspaceBillingOverview(customerAccountId);
   return {
@@ -610,3 +634,4 @@ export async function assertTeamMemberCapacity(customerAccountId: number, additi
     throw new HttpError(409, 'Team member limit reached for this workspace plan');
   }
 }
+
