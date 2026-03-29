@@ -1,17 +1,18 @@
 import { useEffect, useState } from 'react';
-import { EyeOff, FileText, ShieldCheck, Sparkles } from 'lucide-react';
+import { Download, EyeOff, FileText, ShieldCheck, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDateTime, formatTokenLabel } from '@/lib/formatters';
-import { getCustomerWorkspaceResults } from '@/services/customer-results';
+import { downloadCustomerWorkspaceResultsCsv, getCustomerWorkspaceResults } from '@/services/customer-results';
 import type { CustomerWorkspaceResultsResponse } from '@/types/assessment';
 
 export function CustomerResultsPage() {
   const [data, setData] = useState<CustomerWorkspaceResultsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,6 +39,19 @@ export function CustomerResultsPage() {
       mounted = false;
     };
   }, []);
+
+  async function handleExportCsv() {
+    setIsExporting(true);
+    setErrorMessage(null);
+
+    try {
+      await downloadCustomerWorkspaceResultsCsv();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to export workspace results');
+    } finally {
+      setIsExporting(false);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -67,6 +81,9 @@ export function CustomerResultsPage() {
           <h2 className="text-2xl font-semibold tracking-tight">Assessment results that respect release and visibility rules</h2>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
+          <Button variant="secondary" onClick={() => void handleExportCsv()} disabled={isExporting}>
+            {isExporting ? 'Exporting...' : 'Export CSV'} <Download className="ml-2 h-4 w-4" />
+          </Button>
           <Button variant="secondary" asChild>
             <Link to="/workspace">Back to assessments</Link>
           </Button>

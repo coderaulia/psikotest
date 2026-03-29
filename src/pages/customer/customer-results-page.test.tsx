@@ -1,4 +1,5 @@
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 import { saveCustomerSession } from '@/lib/customer-session';
@@ -7,9 +8,11 @@ import { renderWithRoute } from '@/test/render';
 import { CustomerResultsPage } from './customer-results-page';
 
 const getCustomerWorkspaceResultsMock = vi.fn();
+const downloadCustomerWorkspaceResultsCsvMock = vi.fn();
 
 vi.mock('@/services/customer-results', () => ({
   getCustomerWorkspaceResults: (...args: unknown[]) => getCustomerWorkspaceResultsMock(...args),
+  downloadCustomerWorkspaceResultsCsv: (...args: unknown[]) => downloadCustomerWorkspaceResultsCsvMock(...args),
 }));
 
 describe('CustomerResultsPage', () => {
@@ -17,6 +20,7 @@ describe('CustomerResultsPage', () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     getCustomerWorkspaceResultsMock.mockReset();
+    downloadCustomerWorkspaceResultsCsvMock.mockReset();
 
     saveCustomerSession({
       token: 'customer-token',
@@ -28,6 +32,49 @@ describe('CustomerResultsPage', () => {
         organizationName: 'Vanaila Labs',
       },
     });
+  });
+
+  it('exports the visible workspace results as csv', async () => {
+    getCustomerWorkspaceResultsMock.mockResolvedValue({
+      summary: {
+        total: 1,
+        released: 1,
+        awaitingReview: 0,
+        hiddenDrafts: 0,
+      },
+      items: [
+        {
+          resultId: 71,
+          assessmentId: 52,
+          assessmentTitle: 'Graduate Hiring Batch A',
+          participantName: 'Nadia Pratama',
+          participantEmail: 'nadia@example.com',
+          testType: 'disc',
+          submittedAt: '2026-03-28T10:00:00.000Z',
+          scoreTotal: null,
+          scoreBand: null,
+          profileCode: 'I/D',
+          reviewStatus: 'released',
+          distributionPolicy: 'full_report_with_consent',
+          participantResultAccess: 'full_released',
+          hrResultAccess: 'full',
+          protectedDeliveryMode: true,
+          releasedSummary: 'Released summary for hiring decision support.',
+          visibilityNote: 'The released report can now be shared according to the configured access policy.',
+        },
+      ],
+    });
+
+    renderWithRoute(<CustomerResultsPage />, {
+      route: '/workspace/results',
+      path: '/workspace/results',
+    });
+
+    const user = userEvent.setup();
+    await screen.findByText('Nadia Pratama');
+    await user.click(screen.getByRole('button', { name: /export csv/i }));
+
+    expect(downloadCustomerWorkspaceResultsCsvMock).toHaveBeenCalledTimes(1);
   });
 
   it('shows released summaries while hiding reviewer drafts from the customer workspace', async () => {
