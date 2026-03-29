@@ -12,7 +12,9 @@ const listCustomerAssessmentParticipantsMock = vi.fn();
 const createCustomerAssessmentParticipantMock = vi.fn();
 const importCustomerAssessmentParticipantsMock = vi.fn();
 const sendCustomerAssessmentParticipantInviteMock = vi.fn();
+const sendCustomerAssessmentParticipantReminderMock = vi.fn();
 const sendCustomerAssessmentBulkInvitesMock = vi.fn();
+const sendCustomerAssessmentBulkRemindersMock = vi.fn();
 
 vi.mock('@/services/customer-onboarding', () => ({
   getCustomerAssessment: (...args: unknown[]) => getCustomerAssessmentMock(...args),
@@ -20,7 +22,9 @@ vi.mock('@/services/customer-onboarding', () => ({
   createCustomerAssessmentParticipant: (...args: unknown[]) => createCustomerAssessmentParticipantMock(...args),
   importCustomerAssessmentParticipants: (...args: unknown[]) => importCustomerAssessmentParticipantsMock(...args),
   sendCustomerAssessmentParticipantInvite: (...args: unknown[]) => sendCustomerAssessmentParticipantInviteMock(...args),
+  sendCustomerAssessmentParticipantReminder: (...args: unknown[]) => sendCustomerAssessmentParticipantReminderMock(...args),
   sendCustomerAssessmentBulkInvites: (...args: unknown[]) => sendCustomerAssessmentBulkInvitesMock(...args),
+  sendCustomerAssessmentBulkReminders: (...args: unknown[]) => sendCustomerAssessmentBulkRemindersMock(...args),
 }));
 
 const detail = {
@@ -74,6 +78,8 @@ const participantList = {
       status: 'draft' as const,
       invitedVia: null,
       invitedAt: null,
+      reminderCount: 0,
+      lastReminderAt: null,
       lastSubmittedAt: null,
       submissionStatus: null,
       resultId: null,
@@ -89,6 +95,8 @@ const participantList = {
       status: 'invited' as const,
       invitedVia: 'email' as const,
       invitedAt: '2026-03-28T11:00:00.000Z',
+      reminderCount: 1,
+      lastReminderAt: '2026-03-28T12:30:00.000Z',
       lastSubmittedAt: null,
       submissionStatus: null,
       resultId: null,
@@ -105,7 +113,9 @@ describe('CustomerAssessmentParticipantsPage', () => {
     createCustomerAssessmentParticipantMock.mockReset();
     importCustomerAssessmentParticipantsMock.mockReset();
     sendCustomerAssessmentParticipantInviteMock.mockReset();
+    sendCustomerAssessmentParticipantReminderMock.mockReset();
     sendCustomerAssessmentBulkInvitesMock.mockReset();
+    sendCustomerAssessmentBulkRemindersMock.mockReset();
 
     saveCustomerSession({
       token: 'customer-token',
@@ -123,10 +133,10 @@ describe('CustomerAssessmentParticipantsPage', () => {
     getCustomerAssessmentMock.mockResolvedValue(detail);
     listCustomerAssessmentParticipantsMock.mockResolvedValue(participantList);
     sendCustomerAssessmentBulkInvitesMock.mockResolvedValue({
-      invitedCount: 2,
-      skippedCount: 0,
+      invitedCount: 1,
+      skippedCount: 1,
       shareLink: participantList.shareLink,
-      deliveryPreview: 'Dummy email invites queued for 2 participant(s). Share link: https://app.example.com/t/disc-hiring-a',
+      deliveryPreview: 'Dummy email invites queued for 1 participant(s). Share link: https://app.example.com/t/disc-hiring-a',
     });
 
     renderWithRoute(<CustomerAssessmentParticipantsPage />, {
@@ -137,10 +147,34 @@ describe('CustomerAssessmentParticipantsPage', () => {
     const user = userEvent.setup();
 
     await screen.findByText('Nadia Pratama');
-    await user.click(screen.getByRole('button', { name: /send pending emails/i }));
+    await user.click(screen.getByRole('button', { name: /invite draft emails/i }));
 
     expect(sendCustomerAssessmentBulkInvitesMock).toHaveBeenCalledWith(52, { channel: 'email' });
-    expect(await screen.findByText(/dummy email invites queued for 2 participant/i)).toBeInTheDocument();
+    expect(await screen.findByText(/dummy email invites queued for 1 participant/i)).toBeInTheDocument();
+  });
+
+  it('sends a reminder for invited participants', async () => {
+    getCustomerAssessmentMock.mockResolvedValue(detail);
+    listCustomerAssessmentParticipantsMock.mockResolvedValue(participantList);
+    sendCustomerAssessmentParticipantReminderMock.mockResolvedValue({
+      participant: participantList.items[1],
+      shareLink: participantList.shareLink,
+      deliveryPreview: 'Dummy reminder queued for raka@example.com. Share link: https://app.example.com/t/disc-hiring-a',
+    });
+
+    renderWithRoute(<CustomerAssessmentParticipantsPage />, {
+      route: '/workspace/assessments/52/participants',
+      path: '/workspace/assessments/:assessmentId/participants',
+    });
+
+    const user = userEvent.setup();
+
+    await screen.findByText('Raka Mahendra');
+    const reminderButtons = screen.getAllByRole('button', { name: /^send reminder/i });
+    await user.click(reminderButtons[1]!);
+
+    expect(sendCustomerAssessmentParticipantReminderMock).toHaveBeenCalledWith(52, 402, { channel: 'email' });
+    expect(await screen.findByText(/dummy reminder queued for raka@example.com/i)).toBeInTheDocument();
   });
 
   it('imports pasted participant rows before invite delivery', async () => {

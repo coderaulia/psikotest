@@ -351,6 +351,8 @@ export interface CustomerAssessmentParticipantItem {
   status: CustomerAssessmentParticipantStatus;
   invitedVia: CustomerAssessmentInviteChannel | null;
   invitedAt: string | null;
+  reminderCount: number;
+  lastReminderAt: string | null;
   lastSubmittedAt: string | null;
   submissionStatus: 'not_started' | 'in_progress' | 'submitted' | 'scored' | null;
   resultId: number | null;
@@ -375,6 +377,13 @@ export interface SendCustomerAssessmentBulkInvitePayload {
 
 export interface CustomerAssessmentBulkInviteResponse {
   invitedCount: number;
+  skippedCount: number;
+  shareLink: string;
+  deliveryPreview: string;
+}
+
+export interface CustomerAssessmentBulkReminderResponse {
+  remindedCount: number;
   skippedCount: number;
   shareLink: string;
   deliveryPreview: string;

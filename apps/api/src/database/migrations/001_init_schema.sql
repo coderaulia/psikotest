@@ -166,6 +166,8 @@ CREATE TABLE IF NOT EXISTS customer_assessment_participants (
   invitation_status ENUM('draft', 'invited') NOT NULL DEFAULT 'draft',
   invited_via ENUM('email', 'link') NULL,
   invited_at DATETIME NULL,
+  reminder_count INT UNSIGNED NOT NULL DEFAULT 0,
+  last_reminder_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),

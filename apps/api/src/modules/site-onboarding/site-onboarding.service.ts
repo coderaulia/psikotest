@@ -19,6 +19,7 @@ import {
   fetchCustomerAssessments,
   insertCustomerAssessment,
   markCustomerAssessmentParticipantInvited,
+  markCustomerAssessmentParticipantReminded,
   type CustomerAssessmentInviteChannel,
   type CustomerAssessmentParticipantListResponse,
   upsertCustomerAssessmentParticipant,
@@ -490,14 +491,14 @@ export async function sendCustomerAssessmentBulkInvites(input: {
     throw new HttpError(404, 'Assessment draft not found');
   }
 
-  const targets = participantList.items.filter((item) => item.status !== 'completed');
+  const targets = participantList.items.filter((item) => item.status === 'draft');
 
   if (targets.length === 0) {
     return {
       invitedCount: 0,
       skippedCount: participantList.items.length,
       shareLink: participantList.shareLink,
-      deliveryPreview: 'No pending participants require a reminder right now.',
+      deliveryPreview: 'No draft participants require a first invite right now.',
     };
   }
 
@@ -539,6 +540,126 @@ export async function sendCustomerAssessmentBulkInvites(input: {
       input.channel === 'email'
         ? `Dummy email invites queued for ${invitedCount} participant(s). Share link: ${participantList.shareLink}`
         : `Share this link with ${invitedCount} participant(s): ${participantList.shareLink}`,
+  };
+}
+
+export async function sendCustomerAssessmentBulkReminders(input: {
+  customerAccountId: number;
+  assessmentId: number;
+  channel: CustomerAssessmentInviteChannel;
+}) {
+  await requireActiveCustomer(input.customerAccountId);
+  const participantList = await fetchCustomerAssessmentParticipants(input.customerAccountId, input.assessmentId);
+
+  if (!participantList) {
+    throw new HttpError(404, 'Assessment draft not found');
+  }
+
+  const targets = participantList.items.filter((item) => item.status === 'invited' || item.status === 'in_progress');
+
+  if (targets.length === 0) {
+    return {
+      remindedCount: 0,
+      skippedCount: participantList.items.length,
+      shareLink: participantList.shareLink,
+      deliveryPreview: 'No invited participants need a reminder right now.',
+    };
+  }
+
+  let remindedCount = 0;
+  for (const participant of targets) {
+    const reminded = await markCustomerAssessmentParticipantReminded({
+      customerAccountId: input.customerAccountId,
+      assessmentId: input.assessmentId,
+      participantRecordId: participant.id,
+      channel: input.channel,
+    });
+
+    if (reminded) {
+      remindedCount += 1;
+    }
+  }
+
+  await createAuditEvent({
+    actorType: 'system',
+    entityType: 'customer_assessment_participant',
+    entityId: input.assessmentId,
+    action: 'customer_assessment_participant.bulk_reminded',
+    metadata: {
+      customerAccountId: input.customerAccountId,
+      assessmentId: input.assessmentId,
+      channel: input.channel,
+      remindedCount,
+      skippedCount: participantList.items.length - remindedCount,
+      shareLink: participantList.shareLink,
+      dummyMode: true,
+    },
+  });
+
+  return {
+    remindedCount,
+    skippedCount: participantList.items.length - remindedCount,
+    shareLink: participantList.shareLink,
+    deliveryPreview:
+      input.channel === 'email'
+        ? `Dummy reminder emails queued for ${remindedCount} participant(s). Share link: ${participantList.shareLink}`
+        : `Reminder links prepared for ${remindedCount} participant(s): ${participantList.shareLink}`,
+  };
+}
+
+export async function sendCustomerAssessmentParticipantReminder(input: {
+  customerAccountId: number;
+  assessmentId: number;
+  participantRecordId: number;
+  channel: CustomerAssessmentInviteChannel;
+}) {
+  await requireActiveCustomer(input.customerAccountId);
+  const participantList = await fetchCustomerAssessmentParticipants(input.customerAccountId, input.assessmentId);
+
+  if (!participantList) {
+    throw new HttpError(404, 'Assessment draft not found');
+  }
+
+  const existingParticipant = participantList.items.find((item) => item.id === input.participantRecordId);
+  if (!existingParticipant) {
+    throw new HttpError(404, 'Participant invite record not found');
+  }
+
+  if (existingParticipant.status === 'draft') {
+    throw new HttpError(409, 'Participant has not been invited yet');
+  }
+
+  if (existingParticipant.status === 'completed') {
+    throw new HttpError(409, 'Completed participants do not need a reminder');
+  }
+
+  const participant = await markCustomerAssessmentParticipantReminded(input);
+  if (!participant) {
+    throw new HttpError(404, 'Participant invite record not found');
+  }
+
+  await createAuditEvent({
+    actorType: 'system',
+    entityType: 'customer_assessment_participant',
+    entityId: participant.id,
+    action: 'customer_assessment_participant.reminded',
+    metadata: {
+      customerAccountId: input.customerAccountId,
+      assessmentId: input.assessmentId,
+      channel: input.channel,
+      shareLink: participantList.shareLink,
+      email: participant.email,
+      dummyMode: true,
+    },
+  });
+
+  return {
+    participant,
+    shareLink: participantList.shareLink,
+    deliveryPreview:
+      input.channel === 'email'
+        ? `Dummy reminder queued for ${participant.email}. Share link: ${participantList.shareLink}`
+        : `Share this reminder link with ${participant.fullName}: ${participantList.shareLink}`,
   };
 }
 

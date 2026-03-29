@@ -61,6 +61,8 @@ export interface CustomerAssessmentParticipantItem {
   status: CustomerAssessmentParticipantStatus;
   invitedVia: CustomerAssessmentInviteChannel | null;
   invitedAt: string | null;
+  reminderCount: number;
+  lastReminderAt: string | null;
   lastSubmittedAt: string | null;
   submissionStatus: 'not_started' | 'in_progress' | 'submitted' | 'scored' | null;
   resultId: number | null;
@@ -116,6 +118,8 @@ interface CustomerAssessmentParticipantRow extends RowDataPacket {
   invitation_status: 'draft' | 'invited';
   invited_via: CustomerAssessmentInviteChannel | null;
   invited_at: string | Date | null;
+  reminder_count: number;
+  last_reminder_at: string | Date | null;
 }
 
 interface SubmissionMatchRow extends RowDataPacket {
@@ -597,7 +601,9 @@ export async function fetchCustomerAssessmentParticipants(customerAccountId: num
         cap.note,
         cap.invitation_status,
         cap.invited_via,
-        cap.invited_at
+        cap.invited_at,
+        cap.reminder_count,
+        cap.last_reminder_at
       FROM customer_assessment_participants cap
       WHERE cap.customer_assessment_id = ?
       ORDER BY cap.created_at DESC, cap.id DESC
@@ -623,6 +629,8 @@ export async function fetchCustomerAssessmentParticipants(customerAccountId: num
       status: mapSubmissionStatusToParticipantStatus(row.invitation_status, match?.submission_status ?? null),
       invitedVia: row.invited_via,
       invitedAt: toIsoString(row.invited_at),
+      reminderCount: Number(row.reminder_count ?? 0),
+      lastReminderAt: toIsoString(row.last_reminder_at),
       lastSubmittedAt: toIsoString(match?.submitted_at ?? null),
       submissionStatus: match?.submission_status ?? null,
       resultId: match?.result_id ?? null,
@@ -715,6 +723,42 @@ export async function markCustomerAssessmentParticipantInvited(input: {
       SET invitation_status = 'invited',
           invited_via = ?,
           invited_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+        AND customer_assessment_id = ?
+    `,
+    [input.channel, input.participantRecordId, input.assessmentId],
+  );
+
+  if (result.affectedRows === 0) {
+    return null;
+  }
+
+  const participantList = await fetchCustomerAssessmentParticipants(input.customerAccountId, input.assessmentId);
+  return participantList?.items.find((item) => item.id === input.participantRecordId) ?? null;
+}
+
+
+export async function markCustomerAssessmentParticipantReminded(input: {
+  customerAccountId: number;
+  assessmentId: number;
+  participantRecordId: number;
+  channel: CustomerAssessmentInviteChannel;
+}) {
+  const assessment = await fetchCustomerAssessmentById(input.customerAccountId, input.assessmentId);
+  if (!assessment) {
+    return null;
+  }
+
+  const pool = getDbPool();
+  const [result] = await pool.query<ResultSetHeader>(
+    `
+      UPDATE customer_assessment_participants
+      SET invitation_status = 'invited',
+          invited_via = ?,
+          invited_at = COALESCE(invited_at, CURRENT_TIMESTAMP),
+          reminder_count = reminder_count + 1,
+          last_reminder_at = CURRENT_TIMESTAMP,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
         AND customer_assessment_id = ?

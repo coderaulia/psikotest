@@ -13,7 +13,9 @@ import {
   listCustomerAssessmentItems,
   listCustomerAssessmentParticipants,
   sendCustomerAssessmentBulkInvites,
+  sendCustomerAssessmentBulkReminders,
   sendCustomerAssessmentParticipantInvite,
+  sendCustomerAssessmentParticipantReminder,
   updateCustomerAssessment,
 } from './site-onboarding.service.js';
 
@@ -256,6 +258,45 @@ siteOnboardingRoutes.post(
     const delivery = await sendCustomerAssessmentBulkInvites({
       customerAccountId: request.customerSession.accountId,
       assessmentId: id,
+      channel: payload.channel,
+    });
+
+    response.json(delivery);
+  }),
+);
+
+siteOnboardingRoutes.post(
+  '/assessments/:id/participants/remind-bulk',
+  asyncHandler(async (request, response) => {
+    if (!request.customerSession) {
+      throw new HttpError(401, 'Customer session is required');
+    }
+
+    const { id } = assessmentParamsSchema.parse(request.params);
+    const payload = participantBulkSendSchema.parse(request.body ?? {});
+    const delivery = await sendCustomerAssessmentBulkReminders({
+      customerAccountId: request.customerSession.accountId,
+      assessmentId: id,
+      channel: payload.channel,
+    });
+
+    response.json(delivery);
+  }),
+);
+
+siteOnboardingRoutes.post(
+  '/assessments/:id/participants/:participantId/remind',
+  asyncHandler(async (request, response) => {
+    if (!request.customerSession) {
+      throw new HttpError(401, 'Customer session is required');
+    }
+
+    const { id, participantId } = participantParamsSchema.parse(request.params);
+    const payload = participantSendSchema.parse(request.body ?? {});
+    const delivery = await sendCustomerAssessmentParticipantReminder({
+      customerAccountId: request.customerSession.accountId,
+      assessmentId: id,
+      participantRecordId: participantId,
       channel: payload.channel,
     });
 

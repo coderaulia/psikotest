@@ -21,3 +21,7 @@ CREATE TABLE IF NOT EXISTS customer_assessment_participants (
     FOREIGN KEY (customer_assessment_id) REFERENCES customer_assessments (id)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE customer_assessment_participants
+  ADD COLUMN IF NOT EXISTS reminder_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER invited_at,
+  ADD COLUMN IF NOT EXISTS last_reminder_at DATETIME NULL AFTER reminder_count;

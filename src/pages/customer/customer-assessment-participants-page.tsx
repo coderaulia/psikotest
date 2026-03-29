@@ -9,7 +9,9 @@ import {
   importCustomerAssessmentParticipants,
   listCustomerAssessmentParticipants,
   sendCustomerAssessmentBulkInvites,
+  sendCustomerAssessmentBulkReminders,
   sendCustomerAssessmentParticipantInvite,
+  sendCustomerAssessmentParticipantReminder,
 } from '@/services/customer-onboarding';
 import type {
   CreateCustomerAssessmentParticipantPayload,
@@ -76,7 +78,9 @@ export function CustomerAssessmentParticipantsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [sendingId, setSendingId] = useState<number | null>(null);
+  const [remindingId, setRemindingId] = useState<number | null>(null);
   const [isSendingBulk, setIsSendingBulk] = useState(false);
+  const [isRemindingBulk, setIsRemindingBulk] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -234,6 +238,46 @@ export function CustomerAssessmentParticipantsPage() {
     }
   }
 
+  async function handleSendReminder(participant: CustomerAssessmentParticipantItem, channel: 'email' | 'link') {
+    if (!detail) {
+      return;
+    }
+
+    setRemindingId(participant.id);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const payload = await sendCustomerAssessmentParticipantReminder(detail.assessmentId, participant.id, { channel });
+      await loadData();
+      setSuccessMessage(payload.deliveryPreview);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to send reminder');
+    } finally {
+      setRemindingId(null);
+    }
+  }
+
+  async function handleSendBulkReminders(channel: 'email' | 'link') {
+    if (!detail || !canInvite) {
+      return;
+    }
+
+    setIsRemindingBulk(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const payload = await sendCustomerAssessmentBulkReminders(detail.assessmentId, { channel });
+      await loadData();
+      setSuccessMessage(payload.deliveryPreview);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to send reminders');
+    } finally {
+      setIsRemindingBulk(false);
+    }
+  }
+
   async function handleCopyShareLink() {
     if (!participantData?.shareLink || typeof navigator === 'undefined' || !navigator.clipboard) {
       return;
@@ -271,7 +315,7 @@ export function CustomerAssessmentParticipantsPage() {
         <Card className="bg-white/84">
           <CardHeader>
             <CardTitle>Participant invitations</CardTitle>
-            <CardDescription>Add participants now, then send dummy email invites or share the live assessment link.</CardDescription>
+            <CardDescription>Add participants now, then send dummy invites, follow-up reminders, or share the live assessment link.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-500">
@@ -282,10 +326,16 @@ export function CustomerAssessmentParticipantsPage() {
                   Copy link <Copy className="ml-2 h-4 w-4" />
                 </Button>
                 <Button type="button" variant="secondary" disabled={!canInvite || isSendingBulk} onClick={() => void handleSendBulkInvites('email')}>
-                  {isSendingBulk ? 'Sending...' : 'Send pending emails'} <Mail className="ml-2 h-4 w-4" />
+                  {isSendingBulk ? 'Sending...' : 'Invite draft emails'} <Mail className="ml-2 h-4 w-4" />
                 </Button>
                 <Button type="button" variant="outline" disabled={!canInvite || isSendingBulk} onClick={() => void handleSendBulkInvites('link')}>
-                  {isSendingBulk ? 'Preparing...' : 'Prepare share links'} <Send className="ml-2 h-4 w-4" />
+                  {isSendingBulk ? 'Preparing...' : 'Prepare draft links'} <Send className="ml-2 h-4 w-4" />
+                </Button>
+                <Button type="button" variant="secondary" disabled={!canInvite || isRemindingBulk} onClick={() => void handleSendBulkReminders('email')}>
+                  {isRemindingBulk ? 'Sending...' : 'Send reminders'} <Mail className="ml-2 h-4 w-4" />
+                </Button>
+                <Button type="button" variant="outline" disabled={!canInvite || isRemindingBulk} onClick={() => void handleSendBulkReminders('link')}>
+                  {isRemindingBulk ? 'Preparing...' : 'Prepare reminder links'} <Send className="ml-2 h-4 w-4" />
                 </Button>
                 <Button type="button" variant="outline" asChild>
                   <a href={participantData.shareLink} target="_blank" rel="noreferrer">Open participant link</a>
@@ -414,16 +464,35 @@ export function CustomerAssessmentParticipantsPage() {
                         {participant.department ? <span>{participant.department}</span> : null}
                         {participant.positionTitle ? <span>{participant.positionTitle}</span> : null}
                         {participant.invitedAt ? <span>Invited {formatDateTime(participant.invitedAt)}</span> : null}
+                        {participant.reminderCount > 0 ? <span>{participant.reminderCount} reminder{participant.reminderCount > 1 ? 's' : ''}</span> : null}
+                        {participant.lastReminderAt ? <span>Last reminder {formatDateTime(participant.lastReminderAt)}</span> : null}
                         {participant.lastSubmittedAt ? <span>Submitted {formatDateTime(participant.lastSubmittedAt)}</span> : null}
                       </div>
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
-                      <Button type="button" size="sm" variant="secondary" disabled={!canInvite || sendingId === participant.id} onClick={() => void handleSendInvite(participant, 'email')}>
-                        {sendingId === participant.id ? 'Sending...' : 'Send dummy email'} <Mail className="ml-2 h-4 w-4" />
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" disabled={!canInvite || sendingId === participant.id} onClick={() => void handleSendInvite(participant, 'link')}>
-                        Share link <Send className="ml-2 h-4 w-4" />
-                      </Button>
+                      {participant.status === 'draft' ? (
+                        <>
+                          <Button type="button" size="sm" variant="secondary" disabled={!canInvite || sendingId === participant.id} onClick={() => void handleSendInvite(participant, 'email')}>
+                            {sendingId === participant.id ? 'Sending...' : 'Send dummy email'} <Mail className="ml-2 h-4 w-4" />
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" disabled={!canInvite || sendingId === participant.id} onClick={() => void handleSendInvite(participant, 'link')}>
+                            Share link <Send className="ml-2 h-4 w-4" />
+                          </Button>
+                        </>
+                      ) : participant.status === 'completed' ? (
+                        <Button type="button" size="sm" variant="outline" disabled>
+                          Completed
+                        </Button>
+                      ) : (
+                        <>
+                          <Button type="button" size="sm" variant="secondary" disabled={!canInvite || remindingId === participant.id} onClick={() => void handleSendReminder(participant, 'email')}>
+                            {remindingId === participant.id ? 'Sending...' : 'Send reminder'} <Mail className="ml-2 h-4 w-4" />
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" disabled={!canInvite || remindingId === participant.id} onClick={() => void handleSendReminder(participant, 'link')}>
+                            Reminder link <Send className="ml-2 h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                   {participant.note ? <p className="mt-3 text-sm text-slate-500">Note: {participant.note}</p> : null}

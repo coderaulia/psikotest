@@ -116,7 +116,8 @@ $upgradeFiles = @(
   '009_submission_progressive_security.sql',
   '010_customer_assessment_participants.sql',
   '011_customer_workspace_members.sql',
-  '012_workspace_subscriptions.sql'
+  '012_workspace_subscriptions.sql',
+  '013_customer_assessment_participant_reminders.sql'
 ) | ForEach-Object { Join-Path $migrationsDir $_ }
 
 $upgradeBundle = @()

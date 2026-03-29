@@ -3,6 +3,7 @@ import type {
   CreateCustomerAssessmentPayload,
   CustomerAssessmentCheckoutPayload,
   CustomerAssessmentBulkInviteResponse,
+  CustomerAssessmentBulkReminderResponse,
   CustomerAssessmentDetail,
   CustomerAssessmentItem,
   CustomerAssessmentParticipantListResponse,
@@ -83,6 +84,31 @@ export async function sendCustomerAssessmentBulkInvites(
   payload: SendCustomerAssessmentBulkInvitePayload,
 ) {
   return customerFetchJson<CustomerAssessmentBulkInviteResponse>(`/site-onboarding/assessments/${assessmentId}/participants/send-bulk`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function sendCustomerAssessmentParticipantReminder(
+  assessmentId: number,
+  participantId: number,
+  payload: SendCustomerAssessmentParticipantInvitePayload,
+) {
+  return customerFetchJson<{
+    participant: CustomerAssessmentParticipantItem;
+    shareLink: string;
+    deliveryPreview: string;
+  }>(`/site-onboarding/assessments/${assessmentId}/participants/${participantId}/remind`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function sendCustomerAssessmentBulkReminders(
+  assessmentId: number,
+  payload: SendCustomerAssessmentBulkInvitePayload,
+) {
+  return customerFetchJson<CustomerAssessmentBulkReminderResponse>(`/site-onboarding/assessments/${assessmentId}/participants/remind-bulk`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
