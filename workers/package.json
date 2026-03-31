@@ -3,19 +3,10 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build": "tsc",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "db:create": "wrangler d1 create psikotest-db",
-    "db:migrate": "wrangler d1 migrations apply psikotest-db"
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "hono": "^4.4.0",
-    "zod": "^4.1.11"
-  },
-  "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240529.0",
-    "typescript": "^5.9.2",
-    "wrangler": "^3.57.0"
+    "hono": "^4.4.0"
   }
 }

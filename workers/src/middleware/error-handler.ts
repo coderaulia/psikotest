@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import type { Env } from '../index';
+import type { Env } from '../types';
 
 export function errorHandler(err: Error, c: Context<{ Bindings: Env }>) {
   console.error('Error:', err);
