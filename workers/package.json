@@ -1,12 +1,21 @@
 {
   "name": "psikotest-api-workers",
-  "version": "0.1.0",
+  "version": "2.1.0",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "migrate:local": "wrangler d1 execute psikotest-db --local --file=./migrations/001_initial_schema.sql && wrangler d1 execute psikotest-db --local --file=./migrations/002_add_missing_tables.sql && wrangler d1 execute psikotest-db --local --file=./migrations/003_customer_saas_surface.sql",
+    "migrate:remote": "wrangler d1 execute psikotest-db --file=./migrations/001_initial_schema.sql && wrangler d1 execute psikotest-db --file=./migrations/002_add_missing_tables.sql && wrangler d1 execute psikotest-db --file=./migrations/003_customer_saas_surface.sql"
   },
   "dependencies": {
-    "hono": "^4.4.0"
+    "hono": "^4.4.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240529.0",
+    "typescript": "^5.4.0",
+    "wrangler": "^3.57.0"
   }
 }
