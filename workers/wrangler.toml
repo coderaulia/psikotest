@@ -1,0 +1,25 @@
+name = "psikotest-api"
+main = "src/index.ts"
+compatibility_date = "2024-05-29"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "psikotest-db"
+database_id = "85a598d2-66cb-47f6-a089-736a731762c6"
+
+# Environment variables
+[vars]
+NODE_ENV = "production"
+APP_ORIGIN = "https://psikotest.vanaila.com"
+
+# Secrets (set via wrangler secret put)
+# JWT_SECRET = "your-32-char-secret"
+
+# Optional: Custom domain
+# routes = [
+#   { pattern = "api.psikotest.vanaila.com/*", custom_domain = true }
+# ]
+
+# Enable Node.js compatibility for crypto
+compatibility_flags = ["nodejs_compat"]
