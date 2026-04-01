@@ -355,16 +355,13 @@ const updateReviewSchema = z.object({
   reviewerNotes: z.string().nullable().optional(),
 });
 
-app.patch('/:id/review', async (c) => {
-  const id = parseInt(c.req.param('id'));
-  if (!Number.isFinite(id) || id < 1) {
-    return c.json({ error: 'Invalid result id' }, 400);
-  }
-
-  const payload = c.get('adminPayload');
-  const body = await c.req.json();
-  const updates = updateReviewSchema.parse(body);
-
+// Helper function to handle review updates
+async function handleReviewUpdate(
+  c: { env: { DB: D1Database }; get: (key: string) => AdminJwtPayload },
+  id: number,
+  updates: z.infer<typeof updateReviewSchema>,
+  payload: AdminJwtPayload,
+) {
   const existing = await queryOne<{ id: number }>(
     c.env.DB,
     'SELECT id FROM results WHERE id = ? LIMIT 1',
@@ -372,7 +369,7 @@ app.patch('/:id/review', async (c) => {
   );
 
   if (!existing) {
-    return c.json({ error: 'Result not found' }, 404);
+    return { error: 'Result not found', status: 404 };
   }
 
   const setClauses: string[] = [];
@@ -422,17 +419,57 @@ app.patch('/:id/review', async (c) => {
   );
 
   if (!row) {
-    return c.json({ error: 'Result not found after update' }, 500);
+    return { error: 'Result not found after update', status: 500 };
   }
 
-  return c.json({
+  return {
     id: Number(row.id),
     reviewStatus: normalizeReviewStatus(row.review_status as string | null, row.released_at as string | null),
     professionalSummary: row.professional_summary ? String(row.professional_summary) : null,
     recommendation: row.recommendation ? String(row.recommendation) : null,
     limitations: row.limitations ? String(row.limitations) : null,
     reviewerNotes: row.reviewer_notes ? String(row.reviewer_notes) : null,
-  });
+  };
+}
+
+// PATCH /api/results/:id/review-status (frontend compatibility)
+app.patch('/:id/review-status', async (c) => {
+  const id = parseInt(c.req.param('id'));
+  if (!Number.isFinite(id) || id < 1) {
+    return c.json({ error: 'Invalid result id' }, 400);
+  }
+
+  const payload = c.get('adminPayload');
+  const body = await c.req.json();
+  const updates = updateReviewSchema.parse(body);
+
+  const result = await handleReviewUpdate(c, id, updates, payload);
+  
+  if ('error' in result && 'status' in result) {
+    return c.json({ error: result.error }, result.status as 404 | 500);
+  }
+
+  return c.json(result);
+});
+
+// PATCH /api/results/:id/review (deprecated, use /review-status)
+app.patch('/:id/review', async (c) => {
+  const id = parseInt(c.req.param('id'));
+  if (!Number.isFinite(id) || id < 1) {
+    return c.json({ error: 'Invalid result id' }, 400);
+  }
+
+  const payload = c.get('adminPayload');
+  const body = await c.req.json();
+  const updates = updateReviewSchema.parse(body);
+
+  const result = await handleReviewUpdate(c, id, updates, payload);
+  
+  if ('error' in result && 'status' in result) {
+    return c.json({ error: result.error }, result.status as 404 | 500);
+  }
+
+  return c.json(result);
 });
 
 app.patch('/:id/assign-reviewer', async (c) => {
