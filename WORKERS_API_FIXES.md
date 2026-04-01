@@ -65,6 +65,21 @@ This document tracks all issues identified during the Workers API audit and thei
 **Fix**: Implemented basic scoring for IQ/DISC/Workload and result record creation
 **Commit**: Already fixed in earlier commit
 
+### 10. Dashboard Crash (TypeError: reading 'map') (CRITICAL - FIXED)
+**Issue**: Frontend dashboard crashed because `GET /api/dashboard/summary` returned a compact metrics slice instead of the full `DashboardSummaryResponse` with arrays like `distributions` and `liveSessions`.
+**File**: `workers/src/routes/dashboard.ts`
+**Fix**: Unified the `/summary` endpoint with the main dashboard query to ensure it returns the complete mapped payload.
+
+### 11. Settings Endpoint 500 Internal Server Error (HIGH - FIXED)
+**Issue**: `GET /api/settings` returned 500 error because the `audit_events` table query crashed, triggering an unhandled promise rejection.
+**File**: `workers/src/routes/settings.ts`
+**Fix**: Wrapped the `fetchAuditFeed` routine in a generic `try/catch` block that defaults to an empty array so settings gracefully degradable without crashing the route.
+
+### 12. Missing Question Bank Data Support (CRITICAL - FIXED)
+**Issue**: The deployed testing data lived in legacy tables (`questions`, `question_options`, `test_types`), but the dashboard `GET /api/question-bank/questions` utilized an incompatible `question_bank` pseudo-table introduced arbitrarily by a bad migration script.
+**File**: `workers/src/routes/question-bank.ts`
+**Fix**: Completely rewrote the `question-bank` endpoints to fetch from and mutate the original `questions` and `question_options` tables, matching the schema strictly expected by the frontend payload (`QuestionBankQuestionListItem`).
+
 ---
 
 ## ⚠️ Known Limitations
@@ -78,10 +93,7 @@ The current scoring in `public-sessions.ts` is simplified:
 **Recommendation**: Create dedicated scoring modules in `workers/src/lib/scoring/` for production use.
 
 ### 2. Question Bank Seeding
-Migration adds only 3 sample questions. Production deployment would need:
-- Complete question library imports
-- Question validation and approval workflow
-- Question version management
+The arbitrary `question_bank` table was safely bypassed. For initial seeding (if needed), ensure your original `questions` and `question_options` mapping matches the active deployment structure.
 
 ### 3. Migration Order
 Migrations must be applied in sequence:

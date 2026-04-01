@@ -6,64 +6,127 @@ import type { AdminJwtPayload, Env } from '../types';
 
 const app = new Hono<{ Bindings: Env; Variables: { adminPayload: AdminJwtPayload } }>();
 
-// Test types supported
 const testTypeEnum = z.enum(['iq', 'disc', 'workload', 'custom']);
 const questionStatusEnum = z.enum(['draft', 'active', 'archived']);
 
-// Question option schema
 const optionSchema = z.object({
-  id: z.string().optional(),
-  label: z.string().min(1),
-  value: z.union([z.string(), z.number()]),
-  score: z.number().optional(),
+  id: z.number().optional(),
+  optionKey: z.string(),
+  optionText: z.string(),
+  dimensionKey: z.string().nullable().optional(),
+  valueNumber: z.number().nullable().optional(),
+  isCorrect: z.boolean().optional(),
+  optionOrder: z.number(),
+  scorePayload: z.record(z.unknown()).nullable().optional(),
 });
 
-// Question schema for create/update
 const questionSchema = z.object({
   testType: testTypeEnum,
-  questionText: z.string().min(5),
-  questionType: z.enum(['single_choice', 'multiple_choice', 'text', 'scale']),
-  options: z.array(optionSchema).optional(),
-  category: z.string().optional(),
-  subcategory: z.string().optional(),
-  difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
-  timeEstimateSeconds: z.number().int().positive().optional(),
-  status: questionStatusEnum.default('draft'),
-  orderIndex: z.number().int().default(0),
-  metadata: z.record(z.unknown()).optional(),
-});
-
-// Query schema for listing
-const listQuerySchema = z.object({
-  search: z.string().optional(),
-  testType: testTypeEnum.optional(),
-  status: z.enum(['draft', 'active', 'archived', 'all']).optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  questionCode: z.string(),
+  instructionText: z.string().nullable().optional(),
+  prompt: z.string().nullable().optional(),
+  questionGroupKey: z.string().nullable().optional(),
+  dimensionKey: z.string().nullable().optional(),
+  questionType: z.enum(['single_choice', 'forced_choice', 'likert']),
+  questionOrder: z.number().int(),
+  isRequired: z.boolean(),
+  status: questionStatusEnum,
+  questionMeta: z.record(z.unknown()).nullable().optional(),
+  options: z.array(optionSchema).default([]),
 });
 
 app.use('*', requireAdmin);
 
-// GET /api/question-bank/questions
+function parseSafe(val: any) {
+  if (!val) return {};
+  if (typeof val !== 'string') return val;
+  try { return JSON.parse(val); } catch { return {}; }
+}
+
+async function getQuestionById(db: any, id: number) {
+  const qRows = await query(
+    db,
+    `SELECT
+      q.id,
+      tt.code AS test_type,
+      q.question_code,
+      q.instruction_text,
+      q.prompt,
+      q.question_group_key,
+      q.dimension_key,
+      q.question_type,
+      q.question_order,
+      q.is_required,
+      q.status,
+      q.question_meta_json,
+      q.updated_at,
+      COUNT(qo.id) AS option_count
+    FROM questions q
+    INNER JOIN test_types tt ON tt.id = q.test_type_id
+    LEFT JOIN question_options qo ON qo.question_id = q.id
+    WHERE q.id = ?
+    GROUP BY q.id
+    LIMIT 1`,
+    [id]
+  );
+  
+  if (!qRows.results || qRows.results.length === 0) return null;
+  const row: any = qRows.results[0];
+  
+  const optRows = await query(
+    db,
+    `SELECT * FROM question_options WHERE question_id = ? ORDER BY option_order ASC`,
+    [id]
+  );
+
+  return {
+    id: Number(row.id),
+    testType: row.test_type,
+    questionCode: row.question_code,
+    prompt: row.prompt,
+    instructionText: row.instruction_text,
+    questionGroupKey: row.question_group_key,
+    dimensionKey: row.dimension_key,
+    questionType: row.question_type,
+    questionOrder: Number(row.question_order ?? 0),
+    isRequired: Boolean(row.is_required),
+    status: row.status,
+    optionCount: Number(row.option_count ?? 0),
+    updatedAt: row.updated_at ? String(row.updated_at) : new Date().toISOString(),
+    questionMeta: row.question_meta_json ? parseSafe(row.question_meta_json) : {},
+    options: (optRows.results ?? []).map((o: any) => ({
+      id: o.id,
+      optionKey: o.option_key,
+      optionText: o.option_text,
+      dimensionKey: o.dimension_key,
+      valueNumber: o.value_number == null ? null : Number(o.value_number),
+      isCorrect: Boolean(o.is_correct),
+      optionOrder: o.option_order,
+      scorePayload: o.score_payload_json ? parseSafe(o.score_payload_json) : {},
+    })),
+  };
+}
+
 app.get('/questions', async (c) => {
-  const filters = listQuerySchema.parse(c.req.query());
+  const url = new URL(c.req.url);
+  const search = url.searchParams.get('search');
+  const testType = url.searchParams.get('testType');
+  const status = url.searchParams.get('status');
 
   const conditions: string[] = [];
   const params: unknown[] = [];
 
-  if (filters.search) {
-    const like = `%${filters.search}%`;
-    conditions.push('(question_text LIKE ? OR category LIKE ? OR subcategory LIKE ?)');
-    params.push(like, like, like);
+  if (search) {
+    conditions.push('(q.question_code LIKE ? OR q.prompt LIKE ? OR q.instruction_text LIKE ?)');
+    params.push(`%${search}%`, `%${search}%`, `%${search}%`);
   }
-
-  if (filters.testType) {
-    conditions.push('test_type = ?');
-    params.push(filters.testType);
+  if (testType && testType !== 'all') {
+    conditions.push('tt.code = ?');
+    params.push(testType);
   }
-
-  if (filters.status && filters.status !== 'all') {
-    conditions.push('status = ?');
-    params.push(filters.status);
+  if (status && status !== 'all') {
+    conditions.push('q.status = ?');
+    params.push(status);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -72,285 +135,147 @@ app.get('/questions', async (c) => {
     const rows = await query(
       c.env.DB,
       `SELECT
-        id,
-        test_type,
-        question_text,
-        question_type,
-        options_json,
-        category,
-        subcategory,
-        difficulty,
-        time_estimate_seconds,
-        status,
-        order_index,
-        metadata_json,
-        created_at,
-        updated_at
-      FROM question_bank
+        q.id,
+        tt.code AS test_type,
+        q.question_code,
+        q.instruction_text,
+        q.prompt,
+        q.question_group_key,
+        q.dimension_key,
+        q.question_type,
+        q.question_order,
+        q.is_required,
+        q.status,
+        q.updated_at,
+        COUNT(qo.id) AS option_count
+      FROM questions q
+      INNER JOIN test_types tt ON tt.id = q.test_type_id
+      LEFT JOIN question_options qo ON qo.question_id = q.id
       ${where}
-      ORDER BY order_index ASC, created_at DESC
-      LIMIT ?`,
-      [...params, filters.limit],
+      GROUP BY q.id
+      ORDER BY tt.code ASC, q.question_order ASC, q.id ASC
+      LIMIT 100`,
+      params,
     );
 
-    const items = (rows.results ?? []).map((r) => {
-      const row = r as Record<string, unknown>;
-      return {
-        id: Number(row.id),
-        testType: row.test_type as string,
-        questionText: String(row.question_text ?? ''),
-        questionType: row.question_type as string,
-        options: row.options_json ? JSON.parse(String(row.options_json)) : [],
-        category: row.category ? String(row.category) : null,
-        subcategory: row.subcategory ? String(row.subcategory) : null,
-        difficulty: row.difficulty as string | null,
-        timeEstimateSeconds: row.time_estimate_seconds ? Number(row.time_estimate_seconds) : null,
-        status: row.status as string,
-        orderIndex: Number(row.order_index ?? 0),
-        metadata: row.metadata_json ? JSON.parse(String(row.metadata_json)) : {},
-        createdAt: row.created_at ? String(row.created_at) : null,
-        updatedAt: row.updated_at ? String(row.updated_at) : null,
-      };
-    });
+    const items = (rows.results ?? []).map((r: any) => ({
+      id: Number(r.id),
+      testType: r.test_type,
+      questionCode: r.question_code,
+      prompt: r.prompt,
+      instructionText: r.instruction_text,
+      questionGroupKey: r.question_group_key,
+      dimensionKey: r.dimension_key,
+      questionType: r.question_type,
+      questionOrder: Number(r.question_order ?? 0),
+      isRequired: Boolean(r.is_required),
+      status: r.status,
+      optionCount: Number(r.option_count ?? 0),
+      updatedAt: r.updated_at ? String(r.updated_at) : new Date().toISOString(),
+    }));
 
     return c.json({ items });
   } catch (error) {
-    // Table doesn't exist or other error - return empty list
-    console.error('[question-bank] Error fetching questions:', error);
+    console.error('Error fetching questions:', error);
     return c.json({ items: [] });
   }
 });
 
-// GET /api/question-bank/questions/:id
 app.get('/questions/:id', async (c) => {
   const id = parseInt(c.req.param('id'));
-  if (!Number.isFinite(id) || id < 1) {
-    return c.json({ error: 'Invalid question id' }, 400);
-  }
-
-  const row = await queryOne<Record<string, unknown>>(
-    c.env.DB,
-    `SELECT
-      id,
-      test_type,
-      question_text,
-      question_type,
-      options_json,
-      category,
-      subcategory,
-      difficulty,
-      time_estimate_seconds,
-      status,
-      order_index,
-      metadata_json,
-      created_at,
-      updated_at
-    FROM question_bank
-    WHERE id = ?
-    LIMIT 1`,
-    [id],
-  );
-
-  if (!row) {
-    return c.json({ error: 'Question not found' }, 404);
-  }
-
-  return c.json({
-    id: Number(row.id),
-    testType: row.test_type as string,
-    questionText: String(row.question_text ?? ''),
-    questionType: row.question_type as string,
-    options: row.options_json ? JSON.parse(String(row.options_json)) : [],
-    category: row.category ? String(row.category) : null,
-    subcategory: row.subcategory ? String(row.subcategory) : null,
-    difficulty: row.difficulty as string | null,
-    timeEstimateSeconds: row.time_estimate_seconds ? Number(row.time_estimate_seconds) : null,
-    status: row.status as string,
-    orderIndex: Number(row.order_index ?? 0),
-    metadata: row.metadata_json ? JSON.parse(String(row.metadata_json)) : {},
-    createdAt: row.created_at ? String(row.created_at) : null,
-    updatedAt: row.updated_at ? String(row.updated_at) : null,
-  });
+  const question = await getQuestionById(c.env.DB, id);
+  if (!question) return c.json({ error: 'Question not found' }, 404);
+  return c.json(question);
 });
 
-// POST /api/question-bank/questions
 app.post('/questions', async (c) => {
   try {
     const body = await c.req.json();
     const data = questionSchema.parse(body);
 
-    const result = await run(
+    const tt = await queryOne<{id: number}>(c.env.DB, 'SELECT id FROM test_types WHERE code = ? LIMIT 1', [data.testType]);
+    if (!tt) return c.json({ error: 'Unknown test type' }, 400);
+
+    const res = await run(
       c.env.DB,
-      `INSERT INTO question_bank (
-        test_type, question_text, question_type, options_json,
-        category, subcategory, difficulty, time_estimate_seconds,
-        status, order_index, metadata_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      `INSERT INTO questions (test_type_id, question_code, instruction_text, prompt, question_group_key, dimension_key, question_type, question_order, is_required, status, question_meta_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        data.testType,
-        data.questionText.trim(),
-        data.questionType,
-        data.options ? JSON.stringify(data.options) : null,
-        data.category?.trim() || null,
-        data.subcategory?.trim() || null,
-        data.difficulty || null,
-        data.timeEstimateSeconds || null,
-        data.status,
-        data.orderIndex,
-        data.metadata ? JSON.stringify(data.metadata) : null,
-      ],
+        tt.id, data.questionCode, data.instructionText || null, data.prompt || null, data.questionGroupKey || null, data.dimensionKey || null, data.questionType, data.questionOrder, data.isRequired ? 1 : 0, data.status, data.questionMeta ? JSON.stringify(data.questionMeta) : null
+      ]
     );
-
-    const newId = result.meta.last_row_id as number;
     
-    const row = await queryOne<Record<string, unknown>>(
-      c.env.DB,
-      `SELECT * FROM question_bank WHERE id = ? LIMIT 1`,
-      [newId],
-    );
-
-    if (!row) {
-      return c.json({ error: 'Failed to create question' }, 500);
+    const newId = Number(res.meta.last_row_id);
+    
+    for (const opt of data.options) {
+      await run(
+        c.env.DB,
+        `INSERT INTO question_options (question_id, option_key, option_text, dimension_key, value_number, is_correct, option_order, score_payload_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [newId, opt.optionKey, opt.optionText, opt.dimensionKey || null, opt.valueNumber ?? null, opt.isCorrect ? 1 : 0, opt.optionOrder, opt.scorePayload ? JSON.stringify(opt.scorePayload) : null]
+      );
     }
 
-    return c.json({
-      id: Number(row.id),
-      testType: row.test_type as string,
-      questionText: String(row.question_text ?? ''),
-      questionType: row.question_type as string,
-      options: row.options_json ? JSON.parse(String(row.options_json)) : [],
-      category: row.category ? String(row.category) : null,
-      subcategory: row.subcategory ? String(row.subcategory) : null,
-      difficulty: row.difficulty as string | null,
-      timeEstimateSeconds: row.time_estimate_seconds ? Number(row.time_estimate_seconds) : null,
-      status: row.status as string,
-      orderIndex: Number(row.order_index ?? 0),
-      metadata: row.metadata_json ? JSON.parse(String(row.metadata_json)) : {},
-      createdAt: row.created_at ? String(row.created_at) : null,
-      updatedAt: row.updated_at ? String(row.updated_at) : null,
-    }, 201);
+    const created = await getQuestionById(c.env.DB, newId);
+    return c.json(created, 201);
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return c.json({ error: error.errors[0].message }, 400);
-    }
+    if (error instanceof z.ZodError) return c.json({ error: error.errors[0].message }, 400);
     throw error;
   }
 });
 
-// PATCH /api/question-bank/questions/:id
 app.patch('/questions/:id', async (c) => {
   const id = parseInt(c.req.param('id'));
-  if (!Number.isFinite(id) || id < 1) {
-    return c.json({ error: 'Invalid question id' }, 400);
+  const body = await c.req.json();
+  const data = questionSchema.partial().parse(body);
+
+  const existing = await getQuestionById(c.env.DB, id);
+  if (!existing) return c.json({ error: 'Question not found' }, 404);
+
+  let ttId = null;
+  if (data.testType) {
+    const tt = await queryOne<{id: number}>(c.env.DB, 'SELECT id FROM test_types WHERE code = ? LIMIT 1', [data.testType]);
+    if (!tt) return c.json({ error: 'Unknown test type' }, 400);
+    ttId = tt.id;
   }
 
-  try {
-    const body = await c.req.json();
-    const data = questionSchema.partial().parse(body);
+  const testTypeId = ttId !== null ? ttId : existing.testType;
+  const questionCode = data.questionCode !== undefined ? data.questionCode : existing.questionCode;
+  const instructionText = data.instructionText !== undefined ? data.instructionText : existing.instructionText;
+  const prompt = data.prompt !== undefined ? data.prompt : existing.prompt;
+  const questionGroupKey = data.questionGroupKey !== undefined ? data.questionGroupKey : existing.questionGroupKey;
+  const dimensionKey = data.dimensionKey !== undefined ? data.dimensionKey : existing.dimensionKey;
+  const questionType = data.questionType !== undefined ? data.questionType : existing.questionType;
+  const questionOrder = data.questionOrder !== undefined ? data.questionOrder : existing.questionOrder;
+  const isRequired = data.isRequired !== undefined ? data.isRequired : existing.isRequired;
+  const status = data.status !== undefined ? data.status : existing.status;
+  const questionMeta = data.questionMeta !== undefined ? data.questionMeta : existing.questionMeta;
 
-    const existing = await queryOne<{ id: number }>(
-      c.env.DB,
-      'SELECT id FROM question_bank WHERE id = ? LIMIT 1',
-      [id],
-    );
-
-    if (!existing) {
-      return c.json({ error: 'Question not found' }, 404);
+  await run(
+    c.env.DB,
+    `UPDATE questions SET
+      test_type_id = COALESCE(?, test_type_id), question_code = ?, instruction_text = ?, prompt = ?, question_group_key = ?, dimension_key = ?, question_type = ?, question_order = ?, is_required = ?, status = ?, question_meta_json = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    [
+      ttId, questionCode, instructionText || null, prompt || null, questionGroupKey || null, dimensionKey || null, questionType, questionOrder, isRequired ? 1 : 0, status, questionMeta ? JSON.stringify(questionMeta) : null, id
+    ]
+  );
+  
+  if (data.options) {
+    await run(c.env.DB, 'DELETE FROM question_options WHERE question_id = ?', [id]);
+    
+    for (const opt of data.options) {
+      await run(
+        c.env.DB,
+        `INSERT INTO question_options (question_id, option_key, option_text, dimension_key, value_number, is_correct, option_order, score_payload_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, opt.optionKey, opt.optionText, opt.dimensionKey || null, opt.valueNumber ?? null, opt.isCorrect ? 1 : 0, opt.optionOrder, opt.scorePayload ? JSON.stringify(opt.scorePayload) : null]
+      );
     }
-
-    const setClauses: string[] = [];
-    const params: unknown[] = [];
-
-    if (data.testType !== undefined) {
-      setClauses.push('test_type = ?');
-      params.push(data.testType);
-    }
-    if (data.questionText !== undefined) {
-      setClauses.push('question_text = ?');
-      params.push(data.questionText.trim());
-    }
-    if (data.questionType !== undefined) {
-      setClauses.push('question_type = ?');
-      params.push(data.questionType);
-    }
-    if (data.options !== undefined) {
-      setClauses.push('options_json = ?');
-      params.push(JSON.stringify(data.options));
-    }
-    if (data.category !== undefined) {
-      setClauses.push('category = ?');
-      params.push(data.category?.trim() || null);
-    }
-    if (data.subcategory !== undefined) {
-      setClauses.push('subcategory = ?');
-      params.push(data.subcategory?.trim() || null);
-    }
-    if (data.difficulty !== undefined) {
-      setClauses.push('difficulty = ?');
-      params.push(data.difficulty);
-    }
-    if (data.timeEstimateSeconds !== undefined) {
-      setClauses.push('time_estimate_seconds = ?');
-      params.push(data.timeEstimateSeconds);
-    }
-    if (data.status !== undefined) {
-      setClauses.push('status = ?');
-      params.push(data.status);
-    }
-    if (data.orderIndex !== undefined) {
-      setClauses.push('order_index = ?');
-      params.push(data.orderIndex);
-    }
-    if (data.metadata !== undefined) {
-      setClauses.push('metadata_json = ?');
-      params.push(JSON.stringify(data.metadata));
-    }
-
-    if (setClauses.length === 0) {
-      return c.json({ error: 'No fields to update' }, 400);
-    }
-
-    setClauses.push('updated_at = CURRENT_TIMESTAMP');
-    params.push(id);
-
-    await run(
-      c.env.DB,
-      `UPDATE question_bank SET ${setClauses.join(', ')} WHERE id = ?`,
-      params,
-    );
-
-    const row = await queryOne<Record<string, unknown>>(
-      c.env.DB,
-      `SELECT * FROM question_bank WHERE id = ? LIMIT 1`,
-      [id],
-    );
-
-    if (!row) {
-      return c.json({ error: 'Question not found after update' }, 500);
-    }
-
-    return c.json({
-      id: Number(row.id),
-      testType: row.test_type as string,
-      questionText: String(row.question_text ?? ''),
-      questionType: row.question_type as string,
-      options: row.options_json ? JSON.parse(String(row.options_json)) : [],
-      category: row.category ? String(row.category) : null,
-      subcategory: row.subcategory ? String(row.subcategory) : null,
-      difficulty: row.difficulty as string | null,
-      timeEstimateSeconds: row.time_estimate_seconds ? Number(row.time_estimate_seconds) : null,
-      status: row.status as string,
-      orderIndex: Number(row.order_index ?? 0),
-      metadata: row.metadata_json ? JSON.parse(String(row.metadata_json)) : {},
-      createdAt: row.created_at ? String(row.created_at) : null,
-      updatedAt: row.updated_at ? String(row.updated_at) : null,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return c.json({ error: error.errors[0].message }, 400);
-    }
-    throw error;
   }
+
+  const updated = await getQuestionById(c.env.DB, id);
+  return c.json(updated);
 });
 
 export default app;

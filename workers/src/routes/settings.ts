@@ -107,39 +107,44 @@ async function fetchSessionDefaults(db: D1Database) {
 
 async function fetchAuditFeed(db: D1Database, limit = 12) {
   const safeLimit = Math.max(1, Math.min(limit, 50));
-  const rows = await query(
-    db,
-    `SELECT
-      al.id,
-      al.actor_type,
-      al.actor_admin_id,
-      al.entity_type,
-      al.entity_id,
-      al.action,
-      al.metadata_json,
-      al.created_at,
-      a.full_name AS actor_name
-    FROM audit_events al
-    LEFT JOIN admins a ON a.id = al.actor_admin_id
-    ORDER BY al.created_at DESC, al.id DESC
-    LIMIT ?`,
-    [safeLimit],
-  );
+  try {
+    const rows = await query(
+      db,
+      `SELECT
+        al.id,
+        al.actor_type,
+        al.actor_admin_id,
+        al.entity_type,
+        al.entity_id,
+        al.action,
+        al.metadata_json,
+        al.created_at,
+        a.full_name AS actor_name
+      FROM audit_events al
+      LEFT JOIN admins a ON a.id = al.actor_admin_id
+      ORDER BY al.created_at DESC, al.id DESC
+      LIMIT ?`,
+      [safeLimit],
+    );
 
-  return (rows.results ?? []).map((r) => {
-    const row = r as Record<string, unknown>;
-    return {
-      id: Number(row.id),
-      actorType: row.actor_type as string,
-      actorAdminId: row.actor_admin_id ? Number(row.actor_admin_id) : null,
-      actorName: row.actor_name ? String(row.actor_name) : null,
-      entityType: row.entity_type as string,
-      entityId: row.entity_id ? Number(row.entity_id) : null,
-      action: row.action as string,
-      metadata: parseJson(String(row.metadata_json ?? '{}')) || {},
-      createdAt: row.created_at ? String(row.created_at) : new Date().toISOString(),
-    };
-  });
+    return (rows.results ?? []).map((r) => {
+      const row = r as Record<string, unknown>;
+      return {
+        id: Number(row.id),
+        actorType: row.actor_type as string,
+        actorAdminId: row.actor_admin_id ? Number(row.actor_admin_id) : null,
+        actorName: row.actor_name ? String(row.actor_name) : null,
+        entityType: row.entity_type as string,
+        entityId: row.entity_id ? Number(row.entity_id) : null,
+        action: row.action as string,
+        metadata: parseJson(String(row.metadata_json ?? '{}')) || {},
+        createdAt: row.created_at ? String(row.created_at) : new Date().toISOString(),
+      };
+    });
+  } catch (error) {
+    console.error('[settings] Error fetching audit feed:', error);
+    return [];
+  }
 }
 
 app.use('*', requireAdmin);
