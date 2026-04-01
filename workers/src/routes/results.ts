@@ -86,14 +86,14 @@ app.get('/', async (c) => {
       p.email AS participant_email,
       p.department,
       p.position_title,
-      s.test_session_id,
+      s.session_id as test_session_id,
       ts.title AS session_title,
       ts.access_token,
       s.submitted_at
     FROM results r
     INNER JOIN submissions s ON s.id = r.submission_id
     INNER JOIN participants p ON p.id = s.participant_id
-    INNER JOIN test_sessions ts ON ts.id = s.test_session_id
+    INNER JOIN test_sessions ts ON ts.id = s.session_id
     ${where}
     ORDER BY COALESCE(s.submitted_at, r.created_at) DESC, r.id DESC
     LIMIT 100`,
@@ -190,7 +190,7 @@ app.get('/reviewer-queue', async (c) => {
     FROM results r
     INNER JOIN submissions s ON s.id = r.submission_id
     INNER JOIN participants p ON p.id = s.participant_id
-    INNER JOIN test_sessions ts ON ts.id = s.test_session_id
+    INNER JOIN test_sessions ts ON ts.id = s.session_id
     ${whereClause}
     ORDER BY COALESCE(s.submitted_at, r.created_at) DESC
     LIMIT 50`,
@@ -277,14 +277,14 @@ app.get('/:id', async (c) => {
       p.employee_code,
       p.department,
       p.position_title,
-      s.test_session_id,
+      s.session_id as test_session_id,
       ts.title AS session_title,
       ts.access_token,
       s.submitted_at
     FROM results r
     INNER JOIN submissions s ON s.id = r.submission_id
     INNER JOIN participants p ON p.id = s.participant_id
-    INNER JOIN test_sessions ts ON ts.id = s.test_session_id
+    INNER JOIN test_sessions ts ON ts.id = s.session_id
     WHERE r.id = ?
     LIMIT 1`,
     [id],
