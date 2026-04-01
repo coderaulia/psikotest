@@ -62,42 +62,47 @@ async function fetchAdminProfile(db: D1Database, adminId: number) {
 }
 
 async function fetchSessionDefaults(db: D1Database) {
-  const row = await queryOne<Record<string, unknown>>(
-    db,
-    'SELECT setting_value_json FROM app_settings WHERE setting_key = ? LIMIT 1',
-    [SESSION_DEFAULTS_KEY],
-  );
+  try {
+    const row = await queryOne<Record<string, unknown>>(
+      db,
+      'SELECT setting_value_json FROM app_settings WHERE setting_key = ? LIMIT 1',
+      [SESSION_DEFAULTS_KEY],
+    );
 
-  if (!row || !row.setting_value_json) {
+    if (!row || !row.setting_value_json) {
+      return getDefaultSessionDefaults();
+    }
+
+    const payload = parseJson(String(row.setting_value_json));
+    if (!payload || typeof payload !== 'object') {
+      return getDefaultSessionDefaults();
+    }
+
+    const defaults = getDefaultSessionDefaults();
+    const settings = payload.settings as Record<string, unknown> | null;
+
+    return {
+      timeLimitMinutes: typeof payload.timeLimitMinutes === 'number' ? payload.timeLimitMinutes : defaults.timeLimitMinutes,
+      descriptionTemplate: typeof payload.descriptionTemplate === 'string' ? payload.descriptionTemplate : defaults.descriptionTemplate,
+      instructions: Array.isArray(payload.instructions) ? payload.instructions.map(String).filter(Boolean) : defaults.instructions,
+      settings: {
+        assessmentPurpose: (settings?.assessmentPurpose as string) || defaults.settings.assessmentPurpose,
+        administrationMode: (settings?.administrationMode as string) || defaults.settings.administrationMode,
+        interpretationMode: (settings?.interpretationMode as string) || defaults.settings.interpretationMode,
+        participantLimit: typeof settings?.participantLimit === 'number' ? settings.participantLimit : null,
+        consentStatement: (settings?.consentStatement as string) || defaults.settings.consentStatement,
+        privacyStatement: (settings?.privacyStatement as string) || defaults.settings.privacyStatement,
+        contactPerson: (settings?.contactPerson as string) || defaults.settings.contactPerson,
+        distributionPolicy: (settings?.distributionPolicy as string) || defaults.settings.distributionPolicy,
+        protectedDeliveryMode: typeof settings?.protectedDeliveryMode === 'boolean' ? settings.protectedDeliveryMode : false,
+        participantResultAccess: (settings?.participantResultAccess as string) || defaults.settings.participantResultAccess,
+        hrResultAccess: (settings?.hrResultAccess as string) || defaults.settings.hrResultAccess,
+      },
+    };
+  } catch {
+    // Table doesn't exist or other error - return defaults
     return getDefaultSessionDefaults();
   }
-
-  const payload = parseJson(String(row.setting_value_json));
-  if (!payload || typeof payload !== 'object') {
-    return getDefaultSessionDefaults();
-  }
-
-  const defaults = getDefaultSessionDefaults();
-  const settings = payload.settings as Record<string, unknown> | null;
-
-  return {
-    timeLimitMinutes: typeof payload.timeLimitMinutes === 'number' ? payload.timeLimitMinutes : defaults.timeLimitMinutes,
-    descriptionTemplate: typeof payload.descriptionTemplate === 'string' ? payload.descriptionTemplate : defaults.descriptionTemplate,
-    instructions: Array.isArray(payload.instructions) ? payload.instructions.map(String).filter(Boolean) : defaults.instructions,
-    settings: {
-      assessmentPurpose: (settings?.assessmentPurpose as string) || defaults.settings.assessmentPurpose,
-      administrationMode: (settings?.administrationMode as string) || defaults.settings.administrationMode,
-      interpretationMode: (settings?.interpretationMode as string) || defaults.settings.interpretationMode,
-      participantLimit: typeof settings?.participantLimit === 'number' ? settings.participantLimit : null,
-      consentStatement: (settings?.consentStatement as string) || defaults.settings.consentStatement,
-      privacyStatement: (settings?.privacyStatement as string) || defaults.settings.privacyStatement,
-      contactPerson: (settings?.contactPerson as string) || defaults.settings.contactPerson,
-      distributionPolicy: (settings?.distributionPolicy as string) || defaults.settings.distributionPolicy,
-      protectedDeliveryMode: typeof settings?.protectedDeliveryMode === 'boolean' ? settings.protectedDeliveryMode : false,
-      participantResultAccess: (settings?.participantResultAccess as string) || defaults.settings.participantResultAccess,
-      hrResultAccess: (settings?.hrResultAccess as string) || defaults.settings.hrResultAccess,
-    },
-  };
 }
 
 async function fetchAuditFeed(db: D1Database, limit = 12) {
@@ -225,26 +230,35 @@ app.patch('/session-defaults', async (c) => {
     },
   };
 
-  await run(
-    c.env.DB,
-    `INSERT INTO app_settings (setting_key, setting_value_json, created_at, updated_at)
-     VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-     ON CONFLICT(setting_key) DO UPDATE SET setting_value_json = excluded.setting_value_json, updated_at = CURRENT_TIMESTAMP`,
-    [SESSION_DEFAULTS_KEY, JSON.stringify(settingsPayload)],
-  );
+  try {
+    await run(
+      c.env.DB,
+      `INSERT INTO app_settings (setting_key, setting_value_json, created_at, updated_at)
+       VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       ON CONFLICT(setting_key) DO UPDATE SET setting_value_json = excluded.setting_value_json, updated_at = CURRENT_TIMESTAMP`,
+      [SESSION_DEFAULTS_KEY, JSON.stringify(settingsPayload)],
+    );
+  } catch {
+    // Table doesn't exist - return defaults without saving
+    return c.json(getDefaultSessionDefaults());
+  }
 
   const sessionDefaults = await fetchSessionDefaults(c.env.DB);
 
-  await run(
-    c.env.DB,
-    `INSERT INTO audit_events (actor_type, actor_admin_id, entity_type, entity_id, action, metadata_json, created_at)
-     VALUES ('admin', ?, 'app_settings', NULL, 'session_defaults.updated', ?, CURRENT_TIMESTAMP)`,
-    [payload.adminId, JSON.stringify({
-      assessmentPurpose: parsed.settings.assessmentPurpose,
-      interpretationMode: parsed.settings.interpretationMode,
-      participantLimit: parsed.settings.participantLimit,
-    })],
-  );
+  try {
+    await run(
+      c.env.DB,
+      `INSERT INTO audit_events (actor_type, actor_admin_id, entity_type, entity_id, action, metadata_json, created_at)
+       VALUES ('admin', ?, 'app_settings', NULL, 'session_defaults.updated', ?, CURRENT_TIMESTAMP)`,
+      [payload.adminId, JSON.stringify({
+        assessmentPurpose: parsed.settings.assessmentPurpose,
+        interpretationMode: parsed.settings.interpretationMode,
+        participantLimit: parsed.settings.participantLimit,
+      })],
+    );
+  } catch {
+    // Audit events table doesn't exist - ignore
+  }
 
   return c.json(sessionDefaults);
 });

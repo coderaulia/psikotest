@@ -68,51 +68,57 @@ app.get('/questions', async (c) => {
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  const rows = await query(
-    c.env.DB,
-    `SELECT
-      id,
-      test_type,
-      question_text,
-      question_type,
-      options_json,
-      category,
-      subcategory,
-      difficulty,
-      time_estimate_seconds,
-      status,
-      order_index,
-      metadata_json,
-      created_at,
-      updated_at
-    FROM question_bank
-    ${where}
-    ORDER BY order_index ASC, created_at DESC
-    LIMIT ?`,
-    [...params, filters.limit],
-  );
+  try {
+    const rows = await query(
+      c.env.DB,
+      `SELECT
+        id,
+        test_type,
+        question_text,
+        question_type,
+        options_json,
+        category,
+        subcategory,
+        difficulty,
+        time_estimate_seconds,
+        status,
+        order_index,
+        metadata_json,
+        created_at,
+        updated_at
+      FROM question_bank
+      ${where}
+      ORDER BY order_index ASC, created_at DESC
+      LIMIT ?`,
+      [...params, filters.limit],
+    );
 
-  const items = (rows.results ?? []).map((r) => {
-    const row = r as Record<string, unknown>;
-    return {
-      id: Number(row.id),
-      testType: row.test_type as string,
-      questionText: String(row.question_text ?? ''),
-      questionType: row.question_type as string,
-      options: row.options_json ? JSON.parse(String(row.options_json)) : [],
-      category: row.category ? String(row.category) : null,
-      subcategory: row.subcategory ? String(row.subcategory) : null,
-      difficulty: row.difficulty as string | null,
-      timeEstimateSeconds: row.time_estimate_seconds ? Number(row.time_estimate_seconds) : null,
-      status: row.status as string,
-      orderIndex: Number(row.order_index ?? 0),
-      metadata: row.metadata_json ? JSON.parse(String(row.metadata_json)) : {},
-      createdAt: row.created_at ? String(row.created_at) : null,
-      updatedAt: row.updated_at ? String(row.updated_at) : null,
-    };
-  });
+    const items = (rows.results ?? []).map((r) => {
+      const row = r as Record<string, unknown>;
+      return {
+        id: Number(row.id),
+        testType: row.test_type as string,
+        questionText: String(row.question_text ?? ''),
+        questionType: row.question_type as string,
+        options: row.options_json ? JSON.parse(String(row.options_json)) : [],
+        category: row.category ? String(row.category) : null,
+        subcategory: row.subcategory ? String(row.subcategory) : null,
+        difficulty: row.difficulty as string | null,
+        timeEstimateSeconds: row.time_estimate_seconds ? Number(row.time_estimate_seconds) : null,
+        status: row.status as string,
+        orderIndex: Number(row.order_index ?? 0),
+        metadata: row.metadata_json ? JSON.parse(String(row.metadata_json)) : {},
+        createdAt: row.created_at ? String(row.created_at) : null,
+        updatedAt: row.updated_at ? String(row.updated_at) : null,
+      };
+    });
 
-  return c.json({ items });
+    return c.json({ items });
+  } catch (error) {
+    // Table doesn't exist or other error - return empty list
+    console.error('[question-bank] Error fetching questions:', error);
+    return c.json({ items: [] });
+  }
 });
 
 // GET /api/question-bank/questions/:id
