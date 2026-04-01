@@ -106,7 +106,5 @@ CREATE INDEX IF NOT EXISTS idx_submissions_token ON submissions(token);
 CREATE INDEX IF NOT EXISTS idx_submissions_access ON submissions(access_token);
 CREATE INDEX IF NOT EXISTS idx_participants_email ON participants(email);
 
--- Insert default admin (CHANGE THIS PASSWORD!)
--- Password hash is for 'admin123' - replace with bcrypt hash
-INSERT OR IGNORE INTO admins (id, full_name, email, password_hash, role, status) 
-VALUES (1, 'Administrator', 'admin@vanaila.com', '$2b$10$YourHashedPasswordHere', 'super_admin', 'active');
+-- NOTE: Admin accounts should be created via the password reset flow or a secure seed script.
+-- Do NOT put plaintext or sample password hashes in migration files.

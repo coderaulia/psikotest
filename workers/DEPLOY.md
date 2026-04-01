@@ -170,7 +170,7 @@ Should return:
 ```bash
 curl -X POST https://psikotest-api.YOUR_SUBDOMAIN.workers.dev/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@vanaila.com","password":"admin123"}'
+  -d '{"email":"your-admin@example.com","password":"your-secure-password"}'
 ```
 
 ## Troubleshooting
