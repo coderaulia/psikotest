@@ -7,6 +7,54 @@ const app = new Hono<{ Bindings: Env; Variables: { adminPayload: AdminJwtPayload
 
 app.use('*', requireAdmin);
 
+// GET /api/dashboard/summary
+app.get('/summary', async (c) => {
+  const db = c.env.DB;
+
+  // Run metrics queries in parallel
+  const [activeSessionResult, draftSessionResult, participantResult, submissionResult] = await Promise.all([
+    queryOne<{ value: number }>(db, "SELECT COUNT(*) AS value FROM test_sessions WHERE status = 'active'"),
+    queryOne<{ value: number }>(db, "SELECT COUNT(*) AS value FROM test_sessions WHERE status = 'draft'"),
+    queryOne<{ value: number }>(db, 'SELECT COUNT(*) AS value FROM participants'),
+    queryOne<{ total: number; completed: number }>(
+      db,
+      `SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN status IN ('submitted', 'scored') THEN 1 ELSE 0 END) AS completed
+       FROM submissions`,
+    ),
+  ]);
+
+  const activeSessions = Number(activeSessionResult?.value ?? 0);
+  const draftSessions = Number(draftSessionResult?.value ?? 0);
+  const participantCount = Number(participantResult?.value ?? 0);
+  const totalSubmissions = Number(submissionResult?.total ?? 0);
+  const completedSubmissions = Number(submissionResult?.completed ?? 0);
+
+  // Average IQ score
+  const iqAvg = await queryOne<{ value: number | null }>(
+    db,
+    `SELECT ROUND(AVG(r.score_total), 0) AS value
+     FROM results r
+     WHERE r.test_type = 'iq'`,
+  );
+  const averageIqScore = iqAvg?.value != null ? Number(iqAvg.value) : null;
+
+  const completionRate = totalSubmissions > 0
+    ? Math.round((completedSubmissions / totalSubmissions) * 100)
+    : 0;
+
+  return c.json({
+    activeSessions,
+    draftSessions,
+    participantCount,
+    totalSubmissions,
+    completedSubmissions,
+    averageIqScore,
+    completionRate,
+  });
+});
+
 // GET /api/dashboard
 app.get('/', async (c) => {
   const db = c.env.DB;
