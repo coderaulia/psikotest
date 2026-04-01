@@ -173,11 +173,21 @@ Before deploying to production:
    - `JWT_SECRET` (shared secret)
    - `APP_ORIGIN` (CORS allowed origin)
 
-2. **D1 Migrations**:
+2. **D1 Migrations Applied**:
    ```bash
-   wrangler d1 execute psikotest-db --file=./migrations/005_add_app_settings.sql
-   wrangler d1 execute psikotest-db --file=./migrations/006_add_question_bank.sql
+   # Apply all migrations in order
+   wrangler d1 execute psikotest-db --file=./migrations/001_initial_schema.sql --remote
+   wrangler d1 execute psikotest-db --file=./migrations/002_add_missing_tables.sql --remote
+   wrangler d1 execute psikotest-db --file=./migrations/003_customer_saas_surface.sql --remote
+   wrangler d1 execute psikotest-db --file=./migrations/004_admin_api_support.sql --remote
+   wrangler d1 execute psikotest-db --file=./migrations/005_password_resets.sql --remote
+   wrangler d1 execute psikotest-db --file=./migrations/006_add_question_bank.sql --remote
+   wrangler d1 execute psikotest-db --file=./migrations/007_add_app_settings.sql --remote
    ```
+
+3. **Migration Status**: All migrations have been applied to production D1 database.
+
+4. **Defensive Code**: Routes now handle missing tables gracefully and return defaults.
 
 3. **Frontend Updates Required**:
    - Update endpoint paths if any were changed
