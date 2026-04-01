@@ -16,6 +16,7 @@ import settingsRoutes from './routes/settings';
 import reportsRoutes from './routes/reports';
 import participantsRoutes from './routes/participants';
 import resultsRoutes from './routes/results';
+import questionBankRoutes from './routes/question-bank';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -55,6 +56,7 @@ app.route('/api/reports', reportsRoutes);
 app.route('/api/participants', participantsRoutes);
 app.route('/api/results', resultsRoutes);
 app.route('/api/test-sessions', testSessionRoutes);
+app.route('/api/question-bank', questionBankRoutes);
 
 app.notFound((c) => {
   return c.json({ error: 'Not Found', path: c.req.path }, 404);
