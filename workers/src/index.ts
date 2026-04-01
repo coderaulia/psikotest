@@ -12,6 +12,10 @@ import dashboardRoutes from './routes/dashboard';
 import testSessionRoutes from './routes/test-sessions';
 import customerRoutes from './routes/customers';
 import publicSessionRoutes from './routes/public-sessions';
+import settingsRoutes from './routes/settings';
+import reportsRoutes from './routes/reports';
+import participantsRoutes from './routes/participants';
+import resultsRoutes from './routes/results';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -32,7 +36,7 @@ app.get('/api/health', (c) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     message: 'Psikotest API running on Cloudflare Workers',
-    version: '2.1.0',
+    version: '2.2.0',
   });
 });
 
@@ -46,6 +50,11 @@ app.route('/api/dashboard', dashboardRoutes);
 app.route('/api/sessions', testSessionRoutes);
 app.route('/api/customers', customerRoutes);
 app.route('/api/public', publicSessionRoutes);
+app.route('/api/settings', settingsRoutes);
+app.route('/api/reports', reportsRoutes);
+app.route('/api/participants', participantsRoutes);
+app.route('/api/results', resultsRoutes);
+app.route('/api/test-sessions', testSessionRoutes);
 
 app.notFound((c) => {
   return c.json({ error: 'Not Found', path: c.req.path }, 404);
