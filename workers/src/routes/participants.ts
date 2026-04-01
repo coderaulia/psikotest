@@ -37,9 +37,12 @@ app.get('/', async (c) => {
       p.position_title,
       p.latest_test_type,
       p.latest_status,
-      p.last_activity_at
+      p.last_activity_at,
+      COUNT(s.id) as total_submissions
     FROM participants p
+    LEFT JOIN submissions s ON s.participant_id = p.id
     ${where}
+    GROUP BY p.id, p.full_name, p.email, p.employee_code, p.department, p.position_title, p.latest_test_type, p.latest_status, p.last_activity_at
     ORDER BY p.last_activity_at DESC, p.id DESC
     LIMIT 100`,
     params,
@@ -56,7 +59,7 @@ app.get('/', async (c) => {
       positionTitle: row.position_title ? String(row.position_title) : null,
       latestTestType: row.latest_test_type as string | null,
       latestStatus: row.latest_status as string | null,
-      totalSubmissions: 0,
+      totalSubmissions: Number(row.total_submissions ?? 0),
       lastActivityAt: row.last_activity_at ? String(row.last_activity_at) : null,
     };
   });
