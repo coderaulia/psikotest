@@ -49,7 +49,7 @@ app.get('/', async (c) => {
     params.push(filters.accountType);
   }
 
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const rows = await query(
     c.env.DB,
@@ -62,11 +62,11 @@ app.get('/', async (c) => {
        ca.status,
        ca.last_login_at,
        ca.created_at,
-       COUNT(DISTINCT ts.id) AS session_count
-     FROM customer_accounts ca
-     LEFT JOIN test_sessions ts ON ts.created_by = ca.id
-     ${where}
-     GROUP BY ca.id, ca.full_name, ca.email, ca.account_type, ca.organization_name, ca.status, ca.last_login_at, ca.created_at
+       COUNT(DISTINCT ca_test.test_session_id) AS session_count
+      FROM customer_accounts ca
+      LEFT JOIN customer_assessments ca_test ON ca_test.customer_account_id = ca.id
+      ${where}
+      GROUP BY ca.id, ca.full_name, ca.email, ca.account_type, ca.organization_name, ca.status, ca.last_login_at, ca.created_at
      ORDER BY ca.created_at DESC`,
     params,
   );
