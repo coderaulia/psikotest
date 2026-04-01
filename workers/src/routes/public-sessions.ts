@@ -197,13 +197,57 @@ app.get('/submissions/:id/questions', async (c) => {
     return c.json({ error: 'Submission already completed' }, 409);
   }
 
-  // NOTE: Questions are stored externally / seeded into D1.
-  // For now return empty — the front-end falls back to local question bank.
-  // TODO: Implement question bank in D1 and join here.
+  // Get session test type to filter questions
+  const session = await queryOne<{ test_type: string }>(
+    c.env.DB,
+    'SELECT test_type FROM test_sessions WHERE id = ? LIMIT 1',
+    [submission.session_id],
+  );
+
+  if (!session) {
+    return c.json({ submissionId, groupIndex, questions: [] });
+  }
+
+  // Fetch active questions for this test type
+  const questions = await query(
+    c.env.DB,
+    `SELECT
+      id,
+      test_type,
+      question_text,
+      question_type,
+      options_json,
+      category,
+      subcategory,
+      difficulty,
+      time_estimate_seconds,
+      order_index
+    FROM question_bank
+    WHERE test_type = ? AND status = 'active'
+    ORDER BY order_index ASC, id ASC`,
+    [session.test_type],
+  );
+
+  const questionItems = (questions.results ?? []).map((r) => {
+    const row = r as Record<string, unknown>;
+    return {
+      id: Number(row.id),
+      testType: row.test_type as string,
+      questionText: String(row.question_text ?? ''),
+      questionType: row.question_type as string,
+      options: row.options_json ? JSON.parse(String(row.options_json)) : [],
+      category: row.category ? String(row.category) : null,
+      subcategory: row.subcategory ? String(row.subcategory) : null,
+      difficulty: row.difficulty as string | null,
+      timeEstimateSeconds: row.time_estimate_seconds ? Number(row.time_estimate_seconds) : null,
+      orderIndex: Number(row.order_index ?? 0),
+    };
+  });
+
   return c.json({
     submissionId,
     groupIndex,
-    questions: [],
+    questions: questionItems,
   });
 });
 
@@ -276,11 +320,106 @@ app.post('/submissions/:id/submit', async (c) => {
   }
 
   // Fetch session test type for scoring
-  const session = await queryOne<{ test_type: string }>(
+  const session = await queryOne<{ id: number; test_type: string }>(
     c.env.DB,
-    'SELECT test_type FROM test_sessions WHERE id = ? LIMIT 1',
+    'SELECT id, test_type FROM test_sessions WHERE id = ? LIMIT 1',
     [submission.session_id],
   );
+
+  // Parse stored answers for scoring
+  let scoreTotal: number | null = null;
+  let scoreBand: string | null = null;
+  let profileCode: string | null = null;
+  let primaryType: string | null = null;
+  let resultPayload: Record<string, unknown> = {};
+
+  if (submission.result_json) {
+    try {
+      const parsed = JSON.parse(submission.result_json);
+      const answers = parsed.answers ?? [];
+      resultPayload = { answers, submittedAt: new Date().toISOString() };
+
+      // Basic scoring based on test type
+      if (session?.test_type === 'iq') {
+        // For IQ: count correct answers from question bank
+        const questions = await query(
+          c.env.DB,
+          `SELECT id, options_json FROM question_bank WHERE test_type = 'iq' AND status = 'active'`,
+          [],
+        );
+
+        let correctCount = 0;
+        let totalCount = 0;
+
+        for (const q of questions.results ?? []) {
+          const row = q as Record<string, unknown>;
+          const options = row.options_json ? JSON.parse(String(row.options_json)) : [];
+          const correctOption = options.find((opt: { score?: number }) => opt.score === 1);
+          const userAnswer = answers.find((a: { questionId: number }) => a.questionId === row.id);
+
+          if (correctOption && userAnswer) {
+            totalCount += 1;
+            if (userAnswer.answer === correctOption.value) {
+              correctCount += 1;
+            }
+          }
+        }
+
+        // Calculate approximate IQ score (100 base + deviation)
+        if (totalCount > 0) {
+          const percentage = (correctCount / totalCount) * 100;
+          scoreTotal = Math.round(100 + (percentage - 50) * 0.8); // Simplified scoring
+          scoreBand = scoreTotal >= 130 ? 'very_high' : scoreTotal >= 110 ? 'high' : scoreTotal >= 90 ? 'average' : scoreTotal >= 70 ? 'below_average' : 'low';
+        }
+
+        resultPayload = { ...resultPayload, correctCount, totalCount, percentage: totalCount > 0 ? (correctCount / totalCount) * 100 : 0 };
+      } else if (session?.test_type === 'disc') {
+        // For DISC: count type frequencies
+        const typeCounts: Record<string, number> = { D: 0, I: 0, S: 0, C: 0 };
+        
+        for (const answer of answers) {
+          const value = String(answer.answer).toUpperCase();
+          if (typeCounts[value] !== undefined) {
+            typeCounts[value] += 1;
+          }
+        }
+
+        // Find primary type with highest count
+        let maxCount = 0;
+        let maxType = 'D';
+        for (const [type, count] of Object.entries(typeCounts)) {
+          if (count > maxCount) {
+            maxCount = count;
+            maxType = type;
+          }
+        }
+
+        primaryType = maxType;
+        profileCode = maxType; // Simplified - could be combination like 'DI', 'SC', etc.
+        resultPayload = { ...resultPayload, typeCounts, primaryType: maxType };
+      } else if (session?.test_type === 'workload') {
+        // For Workload: sum Likert scale responses
+        let totalScore = 0;
+        let count = 0;
+
+        for (const answer of answers) {
+          if (typeof answer.answer === 'number') {
+            totalScore += answer.answer;
+            count += 1;
+          }
+        }
+
+        if (count > 0) {
+          const avgScore = totalScore / count;
+          scoreTotal = Math.round(totalScore);
+          scoreBand = avgScore <= 2 ? 'low_workload' : avgScore <= 3 ? 'moderate_workload' : 'high_workload';
+          resultPayload = { ...resultPayload, averageScore: avgScore, totalQuestions: count };
+        }
+      }
+    } catch {
+      // Invalid JSON - continue without scoring
+    }
+  }
 
   // Mark as submitted
   await run(
@@ -296,17 +435,52 @@ app.post('/submissions/:id/submit', async (c) => {
     [submission.participant_id],
   );
 
-  // Auto-score if answers are present (basic scoring — expand per test type)
-  // For a full implementation, scoring logic per test type should live in
-  // workers/src/lib/scoring/<test-type>.ts
-  const resultId: number | null = null;
+  // Create result record
+  let resultId: number | null = null;
+
+  if (session) {
+    const resultInsert = await run(
+      c.env.DB,
+      `INSERT INTO results (
+        submission_id, participant_id, session_id, test_type,
+        score_total, score_band, profile_code, primary_type,
+        result_payload_json, review_status, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'scored_preliminary', CURRENT_TIMESTAMP)`,
+      [
+        submissionId,
+        submission.participant_id,
+        session.id,
+        session.test_type,
+        scoreTotal,
+        scoreBand,
+        profileCode,
+        primaryType,
+        JSON.stringify(resultPayload),
+      ],
+    );
+    resultId = resultInsert.meta.last_row_id as number;
+
+    // Mark submission as scored
+    await run(
+      c.env.DB,
+      "UPDATE submissions SET status = 'scored' WHERE id = ?",
+      [submissionId],
+    );
+
+    // Update participant latest status to scored
+    await run(
+      c.env.DB,
+      "UPDATE participants SET latest_status = 'scored' WHERE id = ?",
+      [submission.participant_id],
+    );
+  }
 
   return c.json({
     submissionId,
     status: 'submitted',
     testType: session?.test_type ?? null,
     resultId,
-    message: 'Test submitted successfully. Results will be processed shortly.',
+    message: 'Test submitted successfully. Your results have been processed.',
   });
 });
 

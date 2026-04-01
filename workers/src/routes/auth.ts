@@ -137,4 +137,123 @@ app.post('/set-password', requireAdmin, async (c) => {
   return c.json({ success: true });
 });
 
+// POST /api/auth/forgot-password - Request password reset
+app.post('/forgot-password', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { email } = z.object({ email: z.string().email() }).parse(body);
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Check if admin exists
+    const admin = await queryOne<{ id: number; full_name: string; email: string }>(
+      c.env.DB,
+      'SELECT id, full_name, email FROM admins WHERE email = ? AND status = ? LIMIT 1',
+      [normalizedEmail, 'active'],
+    );
+
+    if (!admin) {
+      // Return success even if email not found (security best practice)
+      return c.json({ success: true, message: 'If an account exists, a reset link has been sent' });
+    }
+
+    // Generate reset token
+    const resetToken = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    // Token expires in 1 hour
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    // Save reset token
+    await run(
+      c.env.DB,
+      `INSERT INTO password_resets (email, token, expires_at, created_at)
+       VALUES (?, ?, ?, CURRENT_TIMESTAMP)`,
+      [normalizedEmail, resetToken, expiresAt],
+    );
+
+    // Log the reset request
+    console.log(`[password-reset] Token generated for ${normalizedEmail}: ${resetToken}`);
+
+    return c.json({
+      success: true,
+      message: 'If an account exists, a reset link has been sent',
+      // In production, you would send an email here
+      // For now, return the token for testing
+      previewToken: resetToken,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: error.errors[0].message }, 400);
+    }
+    throw error;
+  }
+});
+
+// POST /api/auth/reset-password - Confirm password reset
+app.post('/reset-password', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { token, newPassword } = z.object({
+      token: z.string().min(1),
+      newPassword: z.string().min(8),
+    }).parse(body);
+
+    // Find valid reset token
+    const resetRecord = await queryOne<{ id: number; email: string; expires_at: string }>(
+      c.env.DB,
+      `SELECT id, email, expires_at FROM password_resets
+       WHERE token = ? AND used = 0 AND expires_at > CURRENT_TIMESTAMP
+       LIMIT 1`,
+      [token],
+    );
+
+    if (!resetRecord) {
+      return c.json({ error: 'Invalid or expired reset token' }, 400);
+    }
+
+    // Check if admin still exists and is active
+    const admin = await queryOne<{ id: number }>(
+      c.env.DB,
+      'SELECT id FROM admins WHERE email = ? AND status = ? LIMIT 1',
+      [resetRecord.email, 'active'],
+    );
+
+    if (!admin) {
+      return c.json({ error: 'Account not found or inactive' }, 400);
+    }
+
+    // Hash new password
+    const passwordHash = await hashPassword(newPassword);
+
+    // Update password
+    await run(
+      c.env.DB,
+      'UPDATE admins SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [passwordHash, admin.id],
+    );
+
+    // Mark token as used
+    await run(
+      c.env.DB,
+      'UPDATE password_resets SET used = 1, used_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [resetRecord.id],
+    );
+
+    // Increment session version to invalidate existing sessions
+    await run(
+      c.env.DB,
+      'UPDATE admins SET session_version = session_version + 1 WHERE id = ?',
+      [admin.id],
+    );
+
+    return c.json({ success: true, message: 'Password has been reset successfully' });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: error.errors[0].message }, 400);
+    }
+    throw error;
+  }
+});
+
 export default app;
