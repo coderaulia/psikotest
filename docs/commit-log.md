@@ -4,6 +4,45 @@ A running log of meaningful commits with deployment status.
 
 ---
 
+## [2026-04-02] — Rate Limiting & Security Headers
+
+### What Changed
+- Implemented D1-backed rate limiting middleware for auth and submission endpoints
+- Added security response headers to all API responses
+- Rate limits:
+  - Admin login: 5 req/15 min per IP
+  - Customer login: 10 req/15 min per IP
+  - Customer signup: 5 req/hour per IP
+  - Forgot password: 3 req/15 min per IP
+  - Reset password: 5 req/15 min per IP
+  - Test start: 3 req/5 min per IP
+  - Answer saves: 60 req/5 min per submission token
+  - Test submit: 3 req/5 min per submission token
+- Security headers: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy
+- CORS already properly configured (no wildcards)
+
+### Files Affected
+- `workers/src/middleware/rate-limit.ts` - NEW - Rate limiting middleware
+- `workers/src/middleware/security-headers.ts` - NEW - Security headers middleware
+- `workers/src/index.ts` - Added security headers middleware
+- `workers/src/routes/auth.ts` - Added rate limits to login, forgot-password
+- `workers/src/routes/site-auth.ts` - Added rate limits to login, signup, forgot-password, reset-password
+- `workers/src/routes/public-sessions.ts` - Added rate limits to start, answers, submit
+- `workers/migrations/008_rate_limiting.sql` - NEW - Rate limit counter table
+
+### Migration Applied
+- ✅ `008_rate_limiting.sql` (local and remote)
+
+### Deployed
+- ✅ Workers deployed to production
+
+### Verified in Production
+- ✅ Rate limiting returns 429 with Retry-After header when exceeded
+- ✅ Security headers present in responses
+- ✅ X-RateLimit-Limit, X-RateLimit-Remaining headers set
+
+---
+
 ## [2026-04-02] — Scoring & Report Export
 
 ### What Changed

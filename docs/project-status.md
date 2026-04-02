@@ -88,6 +88,8 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | Print-optimized reports (admin & customer) | ✅ Working |
 | Professional scoring (IQ/DISC/Workload) | ✅ Working |
 | Scoring result to result_summaries | ✅ Working |
+| Rate limiting (auth & submission routes) | ✅ Working |
+| Security headers | ✅ Working |
 | Dummy billing | ✅ Working |
 
 ---
@@ -101,12 +103,9 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | Issue | Severity | Notes |
 |-------|----------|-------|
 | Question bank frontend/backend schema mismatch | Medium | Frontend expects more fields than backend provides |
-| Basic scoring algorithms | Medium | Professional psychometric scoring not implemented |
 | No email delivery | High | All invites/reminders are dummy (generate links only) |
-| No PDF automation service | Low | Browser print-to-PDF is working; external service can be added later |
+| External PDF service | Low | Browser print-to-PDF works; can add Gotenberg later |
 | No Stripe integration | Medium | Billing is dummy/placeholder |
-| No rate limiting | Low | API endpoints have no rate limiting |
-| No 2FA | Low | Only password authentication |
 
 ---
 
@@ -117,6 +116,8 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 - [x] Professional scoring algorithms implementation
 - [x] Print-optimized reports (browser PDF export)
 - [x] Scoring results to result_summaries table
+- [x] Rate limiting implementation
+- [x] Security response headers
 - [ ] Gmail SMTP integration for email delivery
 
 ---
@@ -227,6 +228,7 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | Result creation → review → release | ✅ Verified | 2026-04-01 |
 | Result detail → print report (admin) | ✅ Verified | 2026-04-02 |
 | Result detail → print report (customer) | ✅ Verified | 2026-04-02 |
+| Rate limiting on auth endpoints | ✅ Verified | 2026-04-02 |
 | Team invite → accept → login | ✅ Verified | 2026-04-01 |
 | Password reset (admin) | ✅ Verified | 2026-04-01 |
 | Password reset (customer) | ✅ Verified | 2026-04-01 |

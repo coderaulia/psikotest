@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Env } from './types';
+import { securityHeaders } from './middleware/security-headers';
 
 import authRoutes from './routes/auth';
 import siteAuthRoutes from './routes/site-auth';
@@ -31,6 +32,8 @@ app.use('*', async (c, next) => {
   });
   return corsMiddleware(c, next);
 });
+
+app.use('*', securityHeaders);
 
 app.get('/api/health', (c) => {
   return c.json({

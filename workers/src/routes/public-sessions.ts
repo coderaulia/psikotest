@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { query, queryOne, run } from '../lib/db';
 import { scoreIQ, scoreDISC, scoreWorkload, createScoringResult, type ScoredQuestion, type SubmissionAnswer } from '../lib/scoring';
+import { rateLimitByIp, rateLimit, getIpFromContext } from '../middleware/rate-limit';
 import type { Env } from '../types';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -102,7 +103,11 @@ app.get('/session/:token', async (c) => {
 
 // ─── POST /api/public/session/:token/start ───────────────────────────────────
 
-app.post('/session/:token/start', async (c) => {
+app.post('/session/:token/start', rateLimitByIp({
+  windowSeconds: 300,
+  maxRequests: 3,
+  message: 'Too many test start attempts. Please wait 5 minutes before trying again.',
+}), async (c) => {
   const token = c.req.param('token');
 
   try {
@@ -302,7 +307,15 @@ app.get('/submissions/:id/questions', async (c) => {
 
 // ─── POST /api/public/submissions/:id/answers ────────────────────────────────
 
-app.post('/submissions/:id/answers', async (c) => {
+app.post('/submissions/:id/answers', rateLimit({
+  windowSeconds: 300,
+  maxRequests: 60,
+  keyFn: (c) => {
+    const token = c.req.header('X-Submission-Token') ?? c.req.query('token') ?? 'unknown';
+    return `sub:${token}`;
+  },
+  message: 'Too many answer save requests. Please wait before submitting again.',
+}), async (c) => {
   const submissionId = parseInt(c.req.param('id'));
   const accessToken = c.req.header('X-Submission-Token') ?? c.req.query('token');
 
@@ -343,7 +356,15 @@ app.post('/submissions/:id/answers', async (c) => {
 
 // ─── POST /api/public/submissions/:id/submit ─────────────────────────────────
 
-app.post('/submissions/:id/submit', async (c) => {
+app.post('/submissions/:id/submit', rateLimit({
+  windowSeconds: 300,
+  maxRequests: 3,
+  keyFn: (c) => {
+    const token = c.req.header('X-Submission-Token') ?? c.req.query('token') ?? 'unknown';
+    return `submit:${token}`;
+  },
+  message: 'Too many submit attempts. Please wait before trying again.',
+}), async (c) => {
   const submissionId = parseInt(c.req.param('id'));
   const accessToken = c.req.header('X-Submission-Token') ?? c.req.query('token');
 

@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword } from '../lib/password';
 import { signCustomerToken } from '../lib/jwt';
 import { queryOne, run } from '../lib/db';
 import { requireCustomer } from '../middleware/auth';
+import { rateLimitByIp } from '../middleware/rate-limit';
 import type { CustomerJwtPayload, Env } from '../types';
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -253,8 +254,12 @@ async function buildMemberSessionResponse(
 
 const app = new Hono<{ Bindings: Env; Variables: { customerPayload: CustomerJwtPayload } }>();
 
-// POST /api/site-auth/signup
-app.post('/signup', async (c) => {
+// POST /api/site-auth/signup - Rate limited: 5 requests per hour per IP
+app.post('/signup', rateLimitByIp({
+  windowSeconds: 3600,
+  maxRequests: 5,
+  message: 'Too many signup attempts. Please try again in 1 hour.',
+}), async (c) => {
   try {
     const body = await c.req.json();
     const data = registerSchema.parse(body);
@@ -300,8 +305,12 @@ app.post('/signup', async (c) => {
   }
 });
 
-// POST /api/site-auth/login
-app.post('/login', async (c) => {
+// POST /api/site-auth/login - Rate limited: 10 requests per 15 minutes per IP
+app.post('/login', rateLimitByIp({
+  windowSeconds: 900,
+  maxRequests: 10,
+  message: 'Too many login attempts. Please try again in 15 minutes.',
+}), async (c) => {
   try {
     const body = await c.req.json();
     const { email, password } = loginSchema.parse(body);
@@ -565,8 +574,12 @@ app.post('/invite/accept', async (c) => {
   }
 });
 
-// POST /api/site-auth/forgot-password
-app.post('/forgot-password', async (c) => {
+// POST /api/site-auth/forgot-password - Rate limited: 3 requests per 15 minutes per IP (uses existing rate limit logic)
+app.post('/forgot-password', rateLimitByIp({
+  windowSeconds: 900,
+  maxRequests: 3,
+  message: 'Too many password reset requests. Please try again in 15 minutes.',
+}), async (c) => {
   try {
     const body = await c.req.json();
     const { email } = forgotPasswordSchema.parse(body);
@@ -636,8 +649,12 @@ app.get('/reset-password/validate', async (c) => {
   return c.json({ valid: true });
 });
 
-// POST /api/site-auth/reset-password
-app.post('/reset-password', async (c) => {
+// POST /api/site-auth/reset-password - Rate limited: 5 requests per 15 minutes per IP
+app.post('/reset-password', rateLimitByIp({
+  windowSeconds: 900,
+  maxRequests: 5,
+  message: 'Too many password reset attempts. Please try again in 15 minutes.',
+}), async (c) => {
   try {
     const body = await c.req.json();
     const { token, newPassword } = resetPasswordSchema.parse(body);

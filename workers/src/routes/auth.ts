@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword } from '../lib/password';
 import { signAdminToken } from '../lib/jwt';
 import { queryOne, run } from '../lib/db';
 import { requireAdmin } from '../middleware/auth';
+import { rateLimitByIp, rateLimit } from '../middleware/rate-limit';
 import type { AdminJwtPayload, Env } from '../types';
 
 const loginSchema = z.object({
@@ -23,8 +24,12 @@ interface AdminRow {
 
 const app = new Hono<{ Bindings: Env; Variables: { adminPayload: AdminJwtPayload } }>();
 
-// POST /api/auth/login
-app.post('/login', async (c) => {
+// POST /api/auth/login - Rate limited: 5 requests per 15 minutes per IP
+app.post('/login', rateLimitByIp({
+  windowSeconds: 900,
+  maxRequests: 5,
+  message: 'Too many login attempts. Please try again in 15 minutes.',
+}), async (c) => {
   try {
     const body = await c.req.json();
     const { email, password } = loginSchema.parse(body);
@@ -137,8 +142,12 @@ app.post('/set-password', requireAdmin, async (c) => {
   return c.json({ success: true });
 });
 
-// POST /api/auth/forgot-password - Request password reset
-app.post('/forgot-password', async (c) => {
+// POST /api/auth/forgot-password - Rate limited: 3 requests per 15 minutes per IP
+app.post('/forgot-password', rateLimitByIp({
+  windowSeconds: 900,
+  maxRequests: 3,
+  message: 'Too many password reset requests. Please try again in 15 minutes.',
+}), async (c) => {
   try {
     const body = await c.req.json();
     const { email } = z.object({ email: z.string().email() }).parse(body);
