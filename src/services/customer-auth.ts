@@ -86,3 +86,4 @@ export async function resetCustomerPassword(token: string, newPassword: string) 
 
   return readJson<ResetPasswordResponse>(response);
 }
+

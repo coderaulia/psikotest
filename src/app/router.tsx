@@ -94,6 +94,7 @@ const WhiteLabelPage = lazyNamed(() => import('@/pages/white-label-page'), 'Whit
 const CustomerSignupPage = lazyNamed(() => import('@/pages/customer/customer-signup-page'), 'CustomerSignupPage');
 const CustomerLoginPage = lazyNamed(() => import('@/pages/customer/customer-login-page'), 'CustomerLoginPage');
 const CustomerForgotPasswordPage = lazyNamed(() => import('@/pages/customer/customer-forgot-password-page'), 'CustomerForgotPasswordPage');
+const CustomerResetPasswordPage = lazyNamed(() => import('@/pages/customer/customer-reset-password-page'), 'CustomerResetPasswordPage');
 const CustomerWorkspacePage = lazyNamed(() => import('@/pages/customer/customer-workspace-page'), 'CustomerWorkspacePage');
 const CustomerCompanyPage = lazyNamed(() => import('@/pages/customer/customer-company-page'), 'CustomerCompanyPage');
 const CustomerBillingPage = lazyNamed(() => import('@/pages/customer/customer-billing-page'), 'CustomerBillingPage');
@@ -217,6 +218,7 @@ export const router = createBrowserRouter([
     errorElement: routeErrorElement,
   },
 ]);
+
 
 
 
