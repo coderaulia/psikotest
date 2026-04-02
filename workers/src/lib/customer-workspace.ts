@@ -129,11 +129,11 @@ export function buildParticipantLink(origin: string, accessToken: string) {
 
 export function buildPreviewDemoLink(origin: string, testType: 'iq' | 'disc' | 'workload' | 'custom') {
   const token = testType === 'iq'
-    ? 'iq-screening'
+    ? 'iq-public-001'
     : testType === 'disc'
-      ? 'disc-batch-a'
+      ? 'disc-public-001'
       : testType === 'workload'
-        ? 'workload-check'
+        ? 'workload-public-001'
         : 'research-scale-pilot';
 
   return `${origin.replace(/\/$/, '')}/t/${token}`;

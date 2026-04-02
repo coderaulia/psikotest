@@ -29,11 +29,11 @@ describe('ParticipantTestPage', () => {
     submitPublicSubmissionMock.mockReset();
 
     saveParticipantSession(
-      'disc-batch-a',
+      'disc-public-001',
       {
         submissionId: 21,
         participantId: 12,
-        token: 'disc-batch-a',
+        token: 'disc-public-001',
         submissionAccessToken: 'submission-token',
         submissionAccessExpiresAt: new Date(Date.now() + 60_000).toISOString(),
         answerSequence: 0,
@@ -144,7 +144,7 @@ describe('ParticipantTestPage', () => {
     });
 
     renderWithRoute(<ParticipantTestPage />, {
-      route: '/t/disc-batch-a/test',
+      route: '/t/disc-public-001/test',
       path: '/t/:token/test',
     });
 

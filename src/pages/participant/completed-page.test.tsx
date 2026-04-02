@@ -10,11 +10,11 @@ describe('ParticipantCompletedPage', () => {
 
   it('hides detailed results until a review-required report is released', async () => {
     window.sessionStorage.setItem(
-      'psikotest:participant:disc-batch-a',
+      'psikotest:participant:disc-public-001',
       JSON.stringify({
         submissionId: 1,
         participantId: 2,
-        token: 'disc-batch-a',
+        token: 'disc-public-001',
         submissionAccessToken: 'submission-token',
         testType: 'disc',
         participantResultMode: 'review_required',
@@ -34,7 +34,7 @@ describe('ParticipantCompletedPage', () => {
           positionTitle: null,
           sessionId: 10,
           sessionTitle: 'Graduate Hiring Batch',
-          accessToken: 'disc-batch-a',
+          accessToken: 'disc-public-001',
           testType: 'disc',
           submittedAt: new Date().toISOString(),
           scoreTotal: null,
@@ -64,7 +64,7 @@ describe('ParticipantCompletedPage', () => {
     );
 
     renderWithRoute(<ParticipantCompletedPage />, {
-      route: '/t/disc-batch-a/completed',
+      route: '/t/disc-public-001/completed',
       path: '/t/:token/completed',
     });
 
@@ -75,11 +75,11 @@ describe('ParticipantCompletedPage', () => {
 
   it('shows detailed results after release', async () => {
     window.sessionStorage.setItem(
-      'psikotest:participant:disc-batch-a',
+      'psikotest:participant:disc-public-001',
       JSON.stringify({
         submissionId: 1,
         participantId: 2,
-        token: 'disc-batch-a',
+        token: 'disc-public-001',
         submissionAccessToken: 'submission-token',
         testType: 'disc',
         participantResultMode: 'review_required',
@@ -99,7 +99,7 @@ describe('ParticipantCompletedPage', () => {
           positionTitle: null,
           sessionId: 10,
           sessionTitle: 'Graduate Hiring Batch',
-          accessToken: 'disc-batch-a',
+          accessToken: 'disc-public-001',
           testType: 'disc',
           submittedAt: new Date().toISOString(),
           scoreTotal: 0,
@@ -128,7 +128,7 @@ describe('ParticipantCompletedPage', () => {
     );
 
     renderWithRoute(<ParticipantCompletedPage />, {
-      route: '/t/disc-batch-a/completed',
+      route: '/t/disc-public-001/completed',
       path: '/t/:token/completed',
     });
 
