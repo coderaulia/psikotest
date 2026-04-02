@@ -366,6 +366,21 @@ Request: {
 Request: { "reviewerAdminId": 2 } | null
 ```
 
+#### GET /api/results/:id/pdf
+- **Auth:** Admin Bearer
+- **Handler:** `results.ts`
+- **Status:** ✅ Working (stub)
+- **Description:** Get PDF export URL (currently returns browser print URL for manual PDF generation)
+
+```json
+Response: {
+  "method": "browser_print",
+  "printUrl": "/admin/results/:id/export",
+  "message": "PDF generation via external service not yet configured. Use browser print instead."
+}
+```
+**Note:** Future implementation will stream PDF bytes when external service is configured.
+
 ---
 
 ### Reports
@@ -628,6 +643,22 @@ Request: { "selectedPlan": "starter"|"growth"|"research", "billingCycle": "month
 - **Handler:** `site-results.ts`
 - **Status:** ✅ Working
 - **Description:** Export results as CSV
+
+#### GET /api/site-results/:id/pdf
+- **Auth:** Customer Bearer
+- **Handler:** `site-results.ts`
+- **Status:** ✅ Working (stub)
+- **Description:** Get PDF export URL (currently returns browser print URL for manual PDF generation)
+- **Note:** Only released results can be exported; returns 403 for non-released results
+
+```json
+Response: {
+  "method": "browser_print",
+  "printUrl": "/workspace/results/:id/export",
+  "message": "PDF generation via external service not yet configured. Use browser print instead."
+}
+```
+**Note:** Future implementation will stream PDF bytes when external service is configured.
 
 ---
 

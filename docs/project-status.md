@@ -1,6 +1,6 @@
 # Project Status
 
-**Last Updated:** 2026-04-01
+**Last Updated:** 2026-04-02
 
 ## Live and Working
 
@@ -36,6 +36,7 @@
 | Billing | `/workspace/billing` | ✅ Working |
 | Results | `/workspace/results` | ✅ Working |
 | Result Detail | `/workspace/results/:id` | ✅ Working |
+| Result Export | `/workspace/results/:id/export` | ✅ Working |
 | Activity | `/workspace/activity` | ✅ Working |
 | Team | `/workspace/team` | ✅ Working |
 | Create Assessment | `/workspace/create` | ✅ Working |
@@ -84,6 +85,9 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | Reviewer queue | ✅ Working |
 | Result review workflow | ✅ Working |
 | CSV export (customer) | ✅ Working |
+| Print-optimized reports (admin & customer) | ✅ Working |
+| Professional scoring (IQ/DISC/Workload) | ✅ Working |
+| Scoring result to result_summaries | ✅ Working |
 | Dummy billing | ✅ Working |
 
 ---
@@ -99,7 +103,7 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | Question bank frontend/backend schema mismatch | Medium | Frontend expects more fields than backend provides |
 | Basic scoring algorithms | Medium | Professional psychometric scoring not implemented |
 | No email delivery | High | All invites/reminders are dummy (generate links only) |
-| No PDF report generation | Medium | Results only viewable via web UI |
+| No PDF automation service | Low | Browser print-to-PDF is working; external service can be added later |
 | No Stripe integration | Medium | Billing is dummy/placeholder |
 | No rate limiting | Low | API endpoints have no rate limiting |
 | No 2FA | Low | Only password authentication |
@@ -109,10 +113,11 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 ## In Progress
 
 ### Current Sprint (April 2026)
-- [ ] Question bank schema alignment (add missing columns)
+- [x] Question bank schema alignment (seeded IQ/DISC/Workload questions)
+- [x] Professional scoring algorithms implementation
+- [x] Print-optimized reports (browser PDF export)
+- [x] Scoring results to result_summaries table
 - [ ] Gmail SMTP integration for email delivery
-- [ ] Professional scoring algorithms implementation
-- [ ] PDF report generation
 
 ---
 
@@ -128,8 +133,9 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 ### Phase 2 — High Value (Post-MVP)
 | Task | Description | Effort |
 |------|-------------|--------|
-| PDF reports | Generate downloadable result reports | 5 days |
-| Professional scoring | Validated IQ/DISC/Workload algorithms | 7 days |
+| External PDF service | Gotenberg or Browserless for automated PDFs | 3 days |
+| Email delivery | Gmail SMTP integration for invites/reminders | 3 days |
+| Validated questions | Import professional psychometric questions | 1 day (after receiving content) |
 | Stripe integration | Replace dummy billing with Stripe | 5 days |
 | Question import/export | Admin bulk question management | 2 days |
 
@@ -190,7 +196,7 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 ### Last Deployments
 | Component | Date | Commit |
 |-----------|------|--------|
-| Workers API | 2026-04-01 | `8cfc11d` |
+| Workers API | 2026-04-02 | `d742428` (scoring + seeds) |
 | Migrations | 2026-04-01 | All migrations applied |
 | Frontend | Continuous | Auto-deploy from main |
 
@@ -219,6 +225,8 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | Create assessment → activate → invite | ✅ Verified | 2026-04-01 |
 | Participant consent → test → submit | ✅ Verified | 2026-04-01 |
 | Result creation → review → release | ✅ Verified | 2026-04-01 |
+| Result detail → print report (admin) | ✅ Verified | 2026-04-02 |
+| Result detail → print report (customer) | ✅ Verified | 2026-04-02 |
 | Team invite → accept → login | ✅ Verified | 2026-04-01 |
 | Password reset (admin) | ✅ Verified | 2026-04-01 |
 | Password reset (customer) | ✅ Verified | 2026-04-01 |

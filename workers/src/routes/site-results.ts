@@ -114,4 +114,30 @@ app.get('/', async (c) => {
   });
 });
 
+app.get('/:id/pdf', async (c) => {
+  const payload = c.get('customerPayload');
+  await requireActiveCustomer(c.env.DB, payload.accountId);
+  const resultId = Number(c.req.param('id'));
+  
+  const items = await fetchWorkspaceResults(c.env.DB, payload.accountId);
+  const detail = items.find((item) => item.resultId === resultId);
+  
+  if (!detail) {
+    throw new HTTPException(404, { message: 'Workspace result not found' });
+  }
+
+  if (detail.reviewStatus !== 'released') {
+    return c.json({ 
+      error: 'Result not released',
+      message: 'PDF export is only available for released results.',
+    }, 403);
+  }
+
+  return c.json({
+    method: 'browser_print',
+    printUrl: `/workspace/results/${resultId}/export`,
+    message: 'PDF generation via external service not yet configured. Use browser print instead.',
+  });
+});
+
 export default app;

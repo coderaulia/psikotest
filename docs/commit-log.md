@@ -4,6 +4,46 @@ A running log of meaningful commits with deployment status.
 
 ---
 
+## [2026-04-02] — Scoring & Report Export
+
+### What Changed
+- Implemented professional scoring algorithms for IQ, DISC, and Workload tests
+- Seeded 85 demonstration questions (37 IQ, 24 DISC, 24 Workload)
+- Fixed public-sessions to use correct `questions` and `question_options` tables
+- Added scoring results to `result_summaries` table dimension breakdowns
+- Created print-optimized report pages for admin and customer portals
+- Added CSS bar visualizations for dimension scores (print-safe)
+- Added PDF endpoint stubs for future automation
+
+### Files Affected
+- `workers/src/lib/scoring/index.ts` - NEW - IQ, DISC, Workload scoring algorithms
+- `workers/src/routes/public-sessions.ts` - Fixed table queries, integrated scoring
+- `workers/src/routes/results.ts` - Added GET /:id/pdf stub
+- `workers/src/routes/site-results.ts` - Added GET /:id/pdf stub
+- `workers/seeds/seed_iq_questions.sql` - NEW - IQ questions (Indonesian)
+- `workers/seeds/seed_disc_questions.sql` - NEW - DISC questions (Indonesian)
+- `workers/seeds/seed_workload_questions.sql` - NEW - Workload questions (Indonesian)
+- `src/pages/admin/report-export-page.tsx` - Enhanced with dimension bars, print CSS
+- `src/pages/customer/customer-report-export-page.tsx` - NEW - Customer print report
+- `src/app/router.tsx` - Added customer export route
+
+### Seeds Applied
+- ✅ IQ questions (37 total: 10 pattern, 10 numerical, 10 verbal, 7 spatial)
+- ✅ DISC questions (24 total: 6 per dimension D/I/S/C)
+- ✅ Workload questions (24 total: 4 per NASA-TLX dimension)
+
+### Deployed
+- ✅ Workers deployed to production
+- ✅ Seeds applied to remote database
+- Frontend pending deployment
+
+### Verified in Production
+- ✅ Questions seeded correctly (verified via D1 query)
+- ✅ Scoring module returns proper result structures
+- Pending: E2E test of report download flow
+
+---
+
 ## [2026-04-01] — Password Reset Flow
 
 ### What Changed

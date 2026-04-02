@@ -508,4 +508,27 @@ app.patch('/:id/assign-reviewer', async (c) => {
   return c.json({ id, reviewerAdminId });
 });
 
+app.get('/:id/pdf', async (c) => {
+  const id = parseInt(c.req.param('id'));
+  if (!Number.isFinite(id) || id < 1) {
+    return c.json({ error: 'Invalid result id' }, 400);
+  }
+
+  const row = await queryOne<{ id: number }>(
+    c.env.DB,
+    'SELECT id FROM results WHERE id = ? LIMIT 1',
+    [id],
+  );
+
+  if (!row) {
+    return c.json({ error: 'Result not found' }, 404);
+  }
+
+  return c.json({
+    method: 'browser_print',
+    printUrl: `/admin/results/${id}/export`,
+    message: 'PDF generation via external service not yet configured. Use browser print instead.',
+  });
+});
+
 export default app;

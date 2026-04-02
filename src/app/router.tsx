@@ -100,6 +100,7 @@ const CustomerCompanyPage = lazyNamed(() => import('@/pages/customer/customer-co
 const CustomerBillingPage = lazyNamed(() => import('@/pages/customer/customer-billing-page'), 'CustomerBillingPage');
 const CustomerResultsPage = lazyNamed(() => import('@/pages/customer/customer-results-page'), 'CustomerResultsPage');
 const CustomerResultDetailPage = lazyNamed(() => import('@/pages/customer/customer-result-detail-page'), 'CustomerResultDetailPage');
+const CustomerReportExportPage = lazyNamed(() => import('@/pages/customer/customer-report-export-page'), 'CustomerReportExportPage');
 const CustomerActivityPage = lazyNamed(() => import('@/pages/customer/customer-activity-page'), 'CustomerActivityPage');
 const CustomerTeamPage = lazyNamed(() => import('@/pages/customer/customer-team-page'), 'CustomerTeamPage');
 const CustomerOnboardingPage = lazyNamed(() => import('@/pages/customer/customer-onboarding-page'), 'CustomerOnboardingPage');
@@ -166,6 +167,7 @@ export const router = createBrowserRouter([
       { path: 'billing', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner']}><CustomerBillingPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
       { path: 'results', element: withSuspense(<CustomerResultsPage />), errorElement: routeErrorElement },
       { path: 'results/:resultId', element: withSuspense(<CustomerResultDetailPage />), errorElement: routeErrorElement },
+      { path: 'results/:resultId/export', element: withSuspense(<CustomerReportExportPage />), errorElement: routeErrorElement },
       { path: 'activity', element: withSuspense(<CustomerActivityPage />), errorElement: routeErrorElement },
       { path: 'team', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner', 'admin']}><CustomerTeamPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
       { path: 'create', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner', 'admin', 'operator']}><CustomerOnboardingPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
