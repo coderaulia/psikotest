@@ -438,21 +438,36 @@ app.post('/assessments', async (c) => {
     protectedDeliveryMode: body.protectedDeliveryMode,
   });
 
-const sessionInsert = await run(
+const timeLimit = body.timeLimitMinutes ?? defaults.defaultTimeLimitMinutes ?? getDefaultTimeLimit(body.testType);
+  const instructions = getParticipantInstructions(body.testType, body.purpose).join('\n');
+  
+  // Resolve test_type_id from test_types table
+  const testTypeRow = await queryOne<{ id: number }>(
+    c.env.DB,
+    'SELECT id FROM test_types WHERE code = ? LIMIT 1',
+    [body.testType],
+  );
+  
+  if (!testTypeRow) {
+    throw new HTTPException(400, { message: `Invalid test type: ${body.testType}. Test type not found in database.` });
+  }
+
+  const sessionInsert = await run(
     c.env.DB,
     `INSERT INTO test_sessions (
-       title, description, test_type, status, access_token,
-       starts_at, ends_at, time_limit_minutes, settings_json, instructions,
+       title, description, test_type_id, test_type, status, access_token,
+       time_limit_minutes, settings_json, instructions,
        created_at, updated_at
-     ) VALUES (?, ?, ?, 'draft', ?, NULL, NULL, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+     ) VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     [
       body.title.trim(),
       `Draft ${body.testType.toUpperCase()} assessment for ${body.organizationName.trim()} (${body.purpose.replace(/_/g, ' ')}).`,
+      testTypeRow.id,
       body.testType,
       generateToken(12),
-      body.timeLimitMinutes ?? defaults.defaultTimeLimitMinutes ?? getDefaultTimeLimit(body.testType),
+      timeLimit,
       JSON.stringify(settings),
-      getParticipantInstructions(body.testType, body.purpose).join('\n'),
+      instructions,
     ],
   );
 
@@ -508,20 +523,35 @@ app.patch('/assessments/:id', async (c) => {
     protectedDeliveryMode: body.protectedDeliveryMode,
   });
 
+  // Resolve test_type_id from test_types table
+  const testTypeRow = await queryOne<{ id: number }>(
+    c.env.DB,
+    'SELECT id FROM test_types WHERE code = ? LIMIT 1',
+    [body.testType],
+  );
+  
+  if (!testTypeRow) {
+    throw new HTTPException(400, { message: `Invalid test type: ${body.testType}. Test type not found in database.` });
+  }
+
+  const timeLimit = body.timeLimitMinutes ?? defaults.defaultTimeLimitMinutes ?? getDefaultTimeLimit(body.testType);
+  const instructions = getParticipantInstructions(body.testType, body.purpose).join('\n');
+
   await run(c.env.DB, `UPDATE customer_accounts SET organization_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [body.organizationName.trim(), payload.accountId]);
   await run(c.env.DB, `UPDATE customer_assessments SET organization_name_snapshot = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND customer_account_id = ?`, [body.organizationName.trim(), assessmentId, payload.accountId]);
   await run(
     c.env.DB,
     `UPDATE test_sessions
-     SET title = ?, description = ?, test_type = ?, time_limit_minutes = ?, settings_json = ?, instructions = ?, updated_at = CURRENT_TIMESTAMP
+     SET title = ?, description = ?, test_type_id = ?, test_type = ?, time_limit_minutes = ?, settings_json = ?, instructions = ?, updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
     [
       body.title.trim(),
       `Draft ${body.testType.toUpperCase()} assessment for ${body.organizationName.trim()} (${body.purpose.replace(/_/g, ' ')}).`,
+      testTypeRow.id,
       body.testType,
-      body.timeLimitMinutes ?? defaults.defaultTimeLimitMinutes ?? getDefaultTimeLimit(body.testType),
+      timeLimit,
       JSON.stringify(settings),
-      getParticipantInstructions(body.testType, body.purpose).join('\n'),
+      instructions,
       Number(existing.session_id),
     ],
   );
