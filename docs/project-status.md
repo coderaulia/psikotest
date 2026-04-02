@@ -4,7 +4,7 @@
 
 ## Live and Working
 
-### Frontend Pages (58 total)
+### Frontend Pages (59 total)
 
 #### Admin Portal (15 pages)
 | Page | Route | Status |
@@ -56,12 +56,13 @@
 | Test | `/t/:token/test` | ✅ Working |
 | Completed | `/t/:token/completed` | ✅ Working |
 
-#### Public Pages (3 pages)
+#### Public Pages (4 pages)
 | Page | Route | Status |
 |------|-------|--------|
-| Landing | `/` | ✅ Working |
-| Manual | `/manual` | ✅ Working |
-| White Label | `/white-label` | ✅ Working |
+| B2C Landing | / | ✅ Working |
+| SaaS Landing | /saas | ✅ Working |
+| Manual | /manual | ✅ Working |
+| White Label | /white-label | ✅ Working |
 
 ### API Endpoints (80 total)
 
@@ -245,3 +246,5 @@ Update checklist:
 - [ ] Review in-progress tasks
 - [ ] Update migration status
 - [ ] Record new architecture decisions
+
+

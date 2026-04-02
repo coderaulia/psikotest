@@ -1,12 +1,19 @@
+import '@testing-library/jest-dom/vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 import { MarketingLayout } from '@/layouts/marketing-layout';
 import { LanguageProvider } from '@/lib/language';
-import { LandingPage } from '@/pages/landing-page';
+import { LandingPage } from '@/pages/public/landing-page';
 
-describe('LandingPage language toggle', () => {
+function LocationProbe() {
+  const location = useLocation();
+
+  return <p data-testid="location">{location.pathname}</p>;
+}
+
+describe('LandingPage', () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -27,13 +34,32 @@ describe('LandingPage language toggle', () => {
       </LanguageProvider>,
     );
 
-    expect(screen.getByRole('heading', { name: /build digital assessments with a calmer workflow/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /pick a test, enter your email in the flow, and start immediately/i })).toBeInTheDocument();
 
     const idButtons = screen.getAllByRole('button', { name: 'id' });
     await user.click(idButtons[0]!);
 
-    expect(screen.getByRole('heading', { name: /bangun asesmen digital dengan alur kerja yang lebih tenang/i })).toBeInTheDocument();
-    expect(screen.getByText(/platform asesmen psikologis/i)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /beragam alat asesmen dalam satu platform/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /pilih tes, isi email di alur yang ada, lalu mulai langsung/i })).toBeInTheDocument();
+    expect(screen.getByText(/email dikumpulkan di langkah identitas participant/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /tiga pintu masuk cepat untuk insight personal atau screening awal/i })).toBeInTheDocument();
   }, 15000);
+
+  it('navigates to the DISC participant route from the test selection card', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <LanguageProvider>
+        <MemoryRouter initialEntries={['/']}>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/t/:token" element={<LocationProbe />} />
+          </Routes>
+        </MemoryRouter>
+      </LanguageProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: /disc/i }));
+
+    expect(screen.getByTestId('location')).toHaveTextContent('/t/disc-batch-a');
+  });
 });

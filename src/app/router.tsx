@@ -88,7 +88,8 @@ const CustomerLayout = lazyNamed(() => import('@/layouts/customer-layout'), 'Cus
 const AdminLayout = lazyNamed(() => import('@/layouts/admin-layout'), 'AdminLayout');
 const ParticipantLayout = lazyNamed(() => import('@/layouts/participant-layout'), 'ParticipantLayout');
 
-const LandingPage = lazyNamed(() => import('@/pages/landing-page'), 'LandingPage');
+const LandingPage = lazyNamed(() => import('@/pages/public/landing-page'), 'LandingPage');
+const SaasLandingPage = lazyNamed(() => import('@/pages/saas-landing-page'), 'SaasLandingPage');
 const ManualPage = lazyNamed(() => import('@/pages/manual-page'), 'ManualPage');
 const WhiteLabelPage = lazyNamed(() => import('@/pages/white-label-page'), 'WhiteLabelPage');
 const CustomerSignupPage = lazyNamed(() => import('@/pages/customer/customer-signup-page'), 'CustomerSignupPage');
@@ -138,6 +139,7 @@ export const router = createBrowserRouter([
     errorElement: routeErrorElement,
     children: [
       { index: true, element: withSuspense(<LandingPage />), errorElement: routeErrorElement },
+      { path: 'saas', element: withSuspense(<SaasLandingPage />), errorElement: routeErrorElement },
       { path: 'manual', element: withSuspense(<ManualPage />), errorElement: routeErrorElement },
       { path: 'white-label', element: withSuspense(<WhiteLabelPage />), errorElement: routeErrorElement },
     ],
@@ -220,6 +222,7 @@ export const router = createBrowserRouter([
     errorElement: routeErrorElement,
   },
 ]);
+
 
 
 

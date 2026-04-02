@@ -4,6 +4,33 @@ A running log of meaningful commits with deployment status.
 
 ---
 
+## [2026-04-02] - B2C Landing Split
+
+### What Changed
+- Replaced `/` with a B2C-first landing page focused on immediate test starts
+- Moved the existing SaaS marketing landing to `/saas`
+- Added hardcoded public-session routing for DISC, IQ, and workload CTAs
+- Positioned free snapshot vs full report without changing backend result behavior
+- Preserved existing participant, SaaS, and white-label flows
+
+### Files Affected
+- `src/pages/public/landing-page.tsx` - NEW - B2C landing page
+- `src/pages/saas-landing-page.tsx` - NEW - SaaS landing export
+- `src/app/router.tsx` - Added `/saas` route and new `/` landing
+- `src/layouts/marketing-layout.tsx` - Updated shared marketing navigation
+- `src/pages/landing-page.test.tsx` - Updated landing coverage for new root path
+- `docs/project-status.md` - Updated public route map
+
+### Deployed
+- Frontend pending deployment
+
+### Verified
+- ✅ `npm run check`
+- ✅ `npm test -- landing-page.test.tsx`
+- Pending production smoke test on `/`, `/saas`, and the three `/t/:token` entries
+
+---
+
 ## [2026-04-02] — Assessment Creation test_type_id FK Fix
 
 ### What Changed
