@@ -4,6 +4,28 @@ A running log of meaningful commits with deployment status.
 
 ---
 
+## [2026-04-02] — Assessment Creation 500 Fix
+
+### What Changed
+- Fixed 500 Internal Server Error on POST /api/site-onboarding/assessments
+- Removed non-existent columns from test_sessions INSERT statement
+- Columns removed: participant_count, completed_count, created_by
+- These columns were never part of the test_sessions schema
+
+### Root Cause
+The INSERT statement referenced columns that don't exist in test_sessions:
+- `participant_count` - not a column (count queried via participants table)
+- `completed_count` - not a column (count queried via submissions table)
+- `created_by` - not a column (only `created_by_admin_id` exists for admin-created sessions)
+
+### Files Affected
+- `workers/src/routes/site-onboarding.ts` - Fixed INSERT columns
+
+### Deployed
+- ✅ Workers deployed to production
+
+---
+
 ## [2026-04-02] — Rate Limiting & Security Headers
 
 ### What Changed
