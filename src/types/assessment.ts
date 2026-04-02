@@ -191,6 +191,21 @@ export interface CustomerAuthResponse {
   account: CustomerUser;
 }
 
+export type PasswordResetValidationReason = 'expired' | 'used' | 'invalid';
+
+export interface ForgotPasswordResponse {
+  success: true;
+}
+
+export interface ResetPasswordValidationResponse {
+  valid: boolean;
+  reason?: PasswordResetValidationReason;
+}
+
+export interface ResetPasswordResponse {
+  success: true;
+}
+
 export interface CustomerWorkspaceSettings {
   brandName: string;
   brandTagline: string;
@@ -203,11 +218,20 @@ export interface CustomerWorkspaceSettings {
   defaultTimeLimitMinutes: number | null;
   defaultConsentStatement: string;
   defaultPrivacyStatement: string;
+  completionPageMessage: string;
+  postSubmitRedirectUrl: string;
+  notifyOnSubmission: boolean;
+  notifyOnReportReleased: boolean;
+  notificationEmailAddress: string;
 }
 
 export interface CustomerWorkspaceSettingsResponse {
   account: CustomerUser;
   settings: CustomerWorkspaceSettings;
+  lockedSettings: {
+    completionPageMessage: boolean;
+    postSubmitRedirectUrl: boolean;
+  };
 }
 
 export interface CustomerWorkspaceMemberItem {
@@ -420,6 +444,11 @@ export interface UpdateCustomerWorkspaceSettingsPayload {
   defaultTimeLimitMinutes: number | null;
   defaultConsentStatement: string;
   defaultPrivacyStatement: string;
+  completionPageMessage: string;
+  postSubmitRedirectUrl: string;
+  notifyOnSubmission: boolean;
+  notifyOnReportReleased: boolean;
+  notificationEmailAddress: string;
 }
 
 export interface CreateCustomerWorkspaceMemberPayload {
@@ -925,8 +954,29 @@ export interface AuditFeedItem {
 export interface SettingsOverviewResponse {
   profile: AdminProfileSettings;
   sessionDefaults: SessionDefaultsSettings;
+  platformIdentity: {
+    platformDisplayName: string;
+    supportEmail: string;
+    publicContactUrl: string;
+  };
+  complianceDefaults: {
+    consentStatementTemplate: string;
+    privacyStatementTemplate: string;
+    reviewerAssignmentMode: 'auto_assign' | 'manual_claim';
+  };
+  securityDefaults: {
+    submissionTokenExpiryHours: number;
+    protectedDeliveryModeDefault: boolean;
+    answerSequenceStrictness: 'standard' | 'strict';
+  };
+  customerControls: {
+    defaultPlanCode: string;
+    trialDurationDays: number;
+    requireManualActivation: boolean;
+  };
   auditFeed: AuditFeedItem[];
 }
+
 
 
 

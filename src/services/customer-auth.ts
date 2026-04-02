@@ -1,4 +1,4 @@
-import type { AcceptWorkspaceInvitePayload, CustomerAuthResponse, WorkspaceInvitePreviewResponse } from '@/types/assessment';
+import type { AcceptWorkspaceInvitePayload, CustomerAuthResponse, ForgotPasswordResponse, ResetPasswordResponse, ResetPasswordValidationResponse, WorkspaceInvitePreviewResponse } from '@/types/assessment';
 
 import { apiBaseUrl } from './api-client';
 
@@ -56,4 +56,33 @@ export async function acceptWorkspaceInvite(token: string, payload: AcceptWorksp
   });
 
   return readJson<CustomerAuthResponse>(response);
+}
+
+export async function requestCustomerPasswordReset(email: string) {
+  const response = await fetch(`${apiBaseUrl}/site-auth/forgot-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email }),
+  });
+
+  return readJson<ForgotPasswordResponse>(response);
+}
+
+export async function validateCustomerPasswordResetToken(token: string) {
+  const response = await fetch(`${apiBaseUrl}/site-auth/reset-password/validate?token=${token}`);
+  return readJson<ResetPasswordValidationResponse>(response);
+}
+
+export async function resetCustomerPassword(token: string, newPassword: string) {
+  const response = await fetch(`${apiBaseUrl}/site-auth/reset-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ token, newPassword }),
+  });
+
+  return readJson<ResetPasswordResponse>(response);
 }

@@ -162,8 +162,10 @@ Customer workspace settings provide organization-level defaults for future asses
 - support email and contact person
 - default purpose, administration mode, and result visibility
 - default consent and privacy statements
+- default completion page message and post-submit redirect URL (Growth plan required for redirect)
+- notification preferences for submission and report release events
 
-These defaults are injected into newly created customer assessments.
+These defaults are injected into newly created customer assessments and used by the participant flow.
 
 ## Why this matters for white-label
 

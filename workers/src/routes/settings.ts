@@ -105,6 +105,21 @@ async function fetchSessionDefaults(db: D1Database) {
   }
 }
 
+async function fetchAppSetting<T>(db: D1Database, key: string, defaultVal: T): Promise<T> {
+  try {
+    const row = await queryOne<Record<string, unknown>>(
+      db,
+      'SELECT setting_value_json FROM app_settings WHERE setting_key = ? LIMIT 1',
+      [key],
+    );
+    if (!row || !row.setting_value_json) return defaultVal;
+    const parsed = parseJson(String(row.setting_value_json));
+    return parsed ? (parsed as T) : defaultVal;
+  } catch {
+    return defaultVal;
+  }
+}
+
 async function fetchAuditFeed(db: D1Database, limit = 12) {
   const safeLimit = Math.max(1, Math.min(limit, 50));
   try {
@@ -151,17 +166,37 @@ app.use('*', requireAdmin);
 
 app.get('/', async (c) => {
   const payload = c.get('adminPayload');
-  const [profile, sessionDefaults, auditFeed] = await Promise.all([
+  const [
+    profile, 
+    sessionDefaults, 
+    auditFeed,
+    platformIdentity,
+    complianceDefaults,
+    securityDefaults,
+    customerControls
+  ] = await Promise.all([
     fetchAdminProfile(c.env.DB, payload.adminId),
     fetchSessionDefaults(c.env.DB),
     fetchAuditFeed(c.env.DB),
+    fetchAppSetting(c.env.DB, 'platform_identity', { platformDisplayName: 'Vanaila Psikotest', supportEmail: 'support@vanaila.com', publicContactUrl: 'https://vanaila.com/contact' }),
+    fetchAppSetting(c.env.DB, 'compliance_defaults', { consentStatementTemplate: '', privacyStatementTemplate: '', reviewerAssignmentMode: 'auto_assign' }),
+    fetchAppSetting(c.env.DB, 'security_defaults', { submissionTokenExpiryHours: 4, protectedDeliveryModeDefault: false, answerSequenceStrictness: 'standard' }),
+    fetchAppSetting(c.env.DB, 'customer_controls', { defaultPlanCode: 'starter', trialDurationDays: 14, requireManualActivation: false }),
   ]);
 
   if (!profile) {
     return c.json({ error: 'Admin profile not found' }, 404);
   }
 
-  return c.json({ profile, sessionDefaults, auditFeed });
+  return c.json({ 
+    profile, 
+    sessionDefaults, 
+    platformIdentity,
+    complianceDefaults,
+    securityDefaults,
+    customerControls,
+    auditFeed 
+  });
 });
 
 const profileSchema = z.object({
@@ -266,6 +301,37 @@ app.patch('/session-defaults', async (c) => {
   }
 
   return c.json(sessionDefaults);
+});
+
+app.patch('/app-settings/:key', async (c) => {
+  const payload = c.get('adminPayload');
+  const key = c.req.param('key');
+  const allowedKeys = ['platform_identity', 'compliance_defaults', 'security_defaults', 'customer_controls'];
+  
+  if (!allowedKeys.includes(key)) {
+    return c.json({ error: 'Invalid settings key' }, 400);
+  }
+
+  const body = await c.req.json();
+  
+  await run(
+    c.env.DB,
+    `INSERT INTO app_settings (setting_key, setting_value_json, created_at, updated_at)
+     VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+     ON CONFLICT(setting_key) DO UPDATE SET setting_value_json = excluded.setting_value_json, updated_at = CURRENT_TIMESTAMP`,
+    [key, JSON.stringify(body)],
+  );
+
+  try {
+    await run(
+      c.env.DB,
+      `INSERT INTO audit_events (actor_type, actor_admin_id, entity_type, entity_id, action, metadata_json, created_at)
+       VALUES ('admin', ?, 'app_settings', NULL, 'app_setting.updated', ?, CURRENT_TIMESTAMP)`,
+      [payload.adminId, JSON.stringify({ key })],
+    );
+  } catch {}
+
+  return c.json({ success: true, key, data: body });
 });
 
 export default app;

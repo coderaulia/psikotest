@@ -31,6 +31,11 @@ const workspaceSettingsSchema = z.object({
   defaultTimeLimitMinutes: z.coerce.number().int().positive().max(180).nullable(),
   defaultConsentStatement: z.string().min(10).max(2000),
   defaultPrivacyStatement: z.string().min(10).max(2000),
+  completionPageMessage: z.string().max(1000),
+  postSubmitRedirectUrl: z.string().max(2000),
+  notifyOnSubmission: z.boolean(),
+  notifyOnReportReleased: z.boolean(),
+  notificationEmailAddress: z.string().email().or(z.literal('')),
 });
 
 const workspaceMemberSchema = z.object({
@@ -68,9 +73,15 @@ app.use('*', requireCustomer);
 app.get('/settings', async (c) => {
   const payload = requireWorkspaceRole(c, ['owner', 'admin'], 'Workspace settings are limited to owners and workspace admins');
   const account = await requireActiveCustomer(c.env.DB, payload.accountId);
+  const subscription = await ensureWorkspaceSubscription(c.env.DB, account);
+  const isStarter = subscription.plan_code === 'starter';
   return c.json({
     account: mapCustomerUser(account, payload),
     settings: parseWorkspaceSettings(account),
+    lockedSettings: {
+      completionPageMessage: isStarter,
+      postSubmitRedirectUrl: isStarter,
+    }
   });
 });
 
@@ -89,13 +100,24 @@ app.patch('/settings', async (c) => {
     defaultTimeLimitMinutes: body.defaultTimeLimitMinutes,
     defaultConsentStatement: body.defaultConsentStatement.trim(),
     defaultPrivacyStatement: body.defaultPrivacyStatement.trim(),
+    completionPageMessage: body.completionPageMessage.trim(),
+    postSubmitRedirectUrl: body.postSubmitRedirectUrl.trim(),
+    notifyOnSubmission: body.notifyOnSubmission,
+    notifyOnReportReleased: body.notifyOnReportReleased,
+    notificationEmailAddress: body.notificationEmailAddress.trim(),
   });
 
   await run(c.env.DB, `UPDATE customer_accounts SET organization_name = ?, settings_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [body.organizationName.trim(), settingsJson, payload.accountId]);
   const account = await requireActiveCustomer(c.env.DB, payload.accountId);
+  const subscription = await ensureWorkspaceSubscription(c.env.DB, account);
+  const isStarter = subscription.plan_code === 'starter';
   return c.json({
     account: mapCustomerUser(account, payload),
     settings: parseWorkspaceSettings(account),
+    lockedSettings: {
+      completionPageMessage: isStarter,
+      postSubmitRedirectUrl: isStarter,
+    }
   });
 });
 

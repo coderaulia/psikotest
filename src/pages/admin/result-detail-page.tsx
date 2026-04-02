@@ -89,6 +89,10 @@ export function ResultDetailPage() {
     [reviewers, result?.reviewerAdminId],
   );
 
+  const isCustomerRole = ['hr_user', 'customer_owner'].includes(adminRole ?? '');
+  const showInterpretation = !isCustomerRole || result?.reviewStatus === 'released';
+  const showReviewerNotes = !isCustomerRole;
+
   async function loadResult() {
     setIsLoading(true);
     setError(null);
@@ -213,6 +217,11 @@ export function ResultDetailPage() {
         actions={
           <div className="flex flex-wrap gap-3">
             <Button variant="outline" asChild><Link to={`/admin/test-sessions/${result.session.id}`}>Open session</Link></Button>
+            {result.reviewStatus === 'released' ? (
+              <Button asChild variant="outline" className="border-indigo-600 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800">
+                <Link to={`/admin/results/${result.id}/export`} target="_blank">Export PDF</Link>
+              </Button>
+            ) : null}
             {adminRole === 'psychologist_reviewer' && result.reviewerAdminId === null ? (
               <Button variant="outline" onClick={() => void handleAssignReviewer(adminId)} disabled={isAssigning || !adminId}>
                 {isAssigning ? 'Claiming...' : 'Claim review'}
@@ -375,50 +384,58 @@ export function ResultDetailPage() {
         </Card>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card className="bg-white/80">
-          <CardHeader>
-            <CardTitle>Professional interpretation</CardTitle>
-            <CardDescription>Reviewer-facing narrative that separates professional output from machine scoring.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="mb-2 text-sm font-medium text-slate-950">Professional summary</p>
-              <Textarea disabled={!canReview} value={form.professionalSummary} onChange={(event) => setForm((current) => ({ ...current, professionalSummary: event.target.value }))} placeholder="Write the reviewed interpretation summary." />
-            </div>
-            <div>
-              <p className="mb-2 text-sm font-medium text-slate-950">Recommendation</p>
-              <Textarea disabled={!canReview} value={form.recommendation} onChange={(event) => setForm((current) => ({ ...current, recommendation: event.target.value }))} placeholder="Add role-fit or follow-up recommendation." />
-            </div>
-            <div>
-              <p className="mb-2 text-sm font-medium text-slate-950">Limitations</p>
-              <Textarea disabled={!canReview} value={form.limitations} onChange={(event) => setForm((current) => ({ ...current, limitations: event.target.value }))} placeholder="Record constraints, caveats, or validity notes." />
-            </div>
-          </CardContent>
-        </Card>
+      <div className={`grid gap-6 ${showReviewerNotes ? 'xl:grid-cols-2' : ''}`}>
+        {showInterpretation ? (
+          <Card className="bg-white/80">
+            <CardHeader>
+              <CardTitle>Professional interpretation</CardTitle>
+              <CardDescription>Reviewer-facing narrative that separates professional output from machine scoring.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <p className="mb-2 text-sm font-medium text-slate-950">Professional summary</p>
+                <Textarea disabled={!canReview} value={form.professionalSummary} onChange={(event) => setForm((current) => ({ ...current, professionalSummary: event.target.value }))} placeholder="Write the reviewed interpretation summary." />
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-medium text-slate-950">Recommendation</p>
+                <Textarea disabled={!canReview} value={form.recommendation} onChange={(event) => setForm((current) => ({ ...current, recommendation: event.target.value }))} placeholder="Add role-fit or follow-up recommendation." />
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-medium text-slate-950">Limitations</p>
+                <Textarea disabled={!canReview} value={form.limitations} onChange={(event) => setForm((current) => ({ ...current, limitations: event.target.value }))} placeholder="Record constraints, caveats, or validity notes." />
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="flex flex-col items-center justify-center bg-white/80 p-8 text-center min-h-[200px]">
+             <p className="text-slate-500 text-sm">Professional interpretation is pending reviewer release.</p>
+          </Card>
+        )}
 
-        <Card className="bg-white/80">
-          <CardHeader>
-            <CardTitle>Reviewer notes</CardTitle>
-            <CardDescription>Internal notes and workflow context.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="mb-2 text-sm font-medium text-slate-950">Internal reviewer notes</p>
-              <Textarea disabled={!canReview} value={form.reviewerNotes} onChange={(event) => setForm((current) => ({ ...current, reviewerNotes: event.target.value }))} placeholder="Capture reviewer observations, follow-ups, or release notes." />
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Review started</p>
-                <p className="mt-2 font-medium text-slate-950">{result.reviewStartedAt ? formatDateTime(result.reviewStartedAt) : '-'}</p>
+        {showReviewerNotes ? (
+          <Card className="bg-white/80">
+            <CardHeader>
+              <CardTitle>Reviewer notes</CardTitle>
+              <CardDescription>Internal notes and workflow context.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <p className="mb-2 text-sm font-medium text-slate-950">Internal reviewer notes</p>
+                <Textarea disabled={!canReview} value={form.reviewerNotes} onChange={(event) => setForm((current) => ({ ...current, reviewerNotes: event.target.value }))} placeholder="Capture reviewer observations, follow-ups, or release notes." />
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Released by</p>
-                <p className="mt-2 font-medium text-slate-950">{result.releasedByAdminId ?? '-'}</p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Review started</p>
+                  <p className="mt-2 font-medium text-slate-950">{result.reviewStartedAt ? formatDateTime(result.reviewStartedAt) : '-'}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Released by</p>
+                  <p className="mt-2 font-medium text-slate-950">{result.releasedByAdminId ?? '-'}</p>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
 
       {note ? (

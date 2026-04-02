@@ -163,6 +163,11 @@ export function parseWorkspaceSettings(account: Pick<CustomerAccountRow, 'organi
     defaultTimeLimitMinutes: 20,
     defaultConsentStatement: `I understand that ${account.organization_name || 'this workspace'} will use my responses for the stated assessment purpose.`,
     defaultPrivacyStatement: `My responses will be processed by ${account.organization_name || 'this workspace'} and only shared according to the stated privacy policy.`,
+    completionPageMessage: 'Thank you for completing the assessment.',
+    postSubmitRedirectUrl: '',
+    notifyOnSubmission: false,
+    notifyOnReportReleased: false,
+    notificationEmailAddress: account.email,
   } as const;
 
   return parseJson(account.settings_json, defaults);

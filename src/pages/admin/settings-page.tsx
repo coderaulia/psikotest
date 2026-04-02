@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { fetchSettingsOverview, updateAdminProfile, updateSessionDefaults } from '@/services/admin-data';
+import { fetchSettingsOverview, updateAdminProfile, updateSessionDefaults, updateAppSetting } from '@/services/admin-data';
 import type { SettingsOverviewResponse } from '@/types/assessment';
 import { updateStoredAdminProfile } from '@/lib/admin-session';
 import { formatDateTime, formatTokenLabel } from '@/lib/formatters';
@@ -28,6 +28,7 @@ export function SettingsPage() {
   const [data, setData] = useState<SettingsOverviewResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
   const [profileForm, setProfileForm] = useState({ fullName: '', email: '' });
   const [defaultsForm, setDefaultsForm] = useState({
     timeLimitMinutes: '15',
@@ -45,8 +46,27 @@ export function SettingsPage() {
     participantResultAccess: 'summary',
     hrResultAccess: 'full',
   });
+
+  const [platformForm, setPlatformForm] = useState({ platformDisplayName: '', supportEmail: '', publicContactUrl: '' });
+  const [complianceForm, setComplianceForm] = useState({ 
+    consentStatementTemplate: '', 
+    privacyStatementTemplate: '', 
+    reviewerAssignmentMode: 'auto_assign' as 'auto_assign' | 'manual_claim'
+  });
+  const [securityForm, setSecurityForm] = useState({ 
+    submissionTokenExpiryHours: 4, 
+    protectedDeliveryModeDefault: false, 
+    answerSequenceStrictness: 'standard' as 'standard' | 'strict'
+  });
+  const [controlsForm, setControlsForm] = useState({ defaultPlanCode: 'starter', trialDurationDays: 14, requireManualActivation: false });
+
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingDefaults, setIsSavingDefaults] = useState(false);
+  const [isSavingPlatform, setIsSavingPlatform] = useState(false);
+  const [isSavingCompliance, setIsSavingCompliance] = useState(false);
+  const [isSavingSecurity, setIsSavingSecurity] = useState(false);
+  const [isSavingControls, setIsSavingControls] = useState(false);
+  
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   async function loadSettings() {
@@ -75,6 +95,10 @@ export function SettingsPage() {
         participantResultAccess: overview.sessionDefaults.settings.participantResultAccess ?? 'summary',
         hrResultAccess: overview.sessionDefaults.settings.hrResultAccess ?? 'full',
       });
+      setPlatformForm(overview.platformIdentity);
+      setComplianceForm(overview.complianceDefaults);
+      setSecurityForm(overview.securityDefaults);
+      setControlsForm(overview.customerControls);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to load settings');
     } finally {
@@ -144,6 +168,20 @@ export function SettingsPage() {
     }
   }
 
+  async function handleSaveAppSetting(key: string, payload: any, setSaving: (val: boolean) => void) {
+    setSaving(true);
+    setSuccessMessage(null);
+    setError(null);
+    try {
+      await updateAppSetting(key, payload);
+      setSuccessMessage(`${formatTokenLabel(key)} updated.`);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : `Unable to update ${key}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (isLoading && !data) {
     return <StateCard title="Loading settings" description="Preparing profile, session defaults, and audit activity." />;
   }
@@ -201,6 +239,108 @@ export function SettingsPage() {
 
         <Card className="bg-white/80">
           <CardHeader>
+            <CardTitle>Platform identity</CardTitle>
+            <CardDescription>Configure the global branding and support identity of the platform.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleSaveAppSetting('platform_identity', platformForm, setIsSavingPlatform); }}>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Platform display name</label>
+                <Input value={platformForm.platformDisplayName} onChange={(e) => setPlatformForm(c => ({...c, platformDisplayName: e.target.value}))} required />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Support email</label>
+                <Input type="email" value={platformForm.supportEmail} onChange={(e) => setPlatformForm(c => ({...c, supportEmail: e.target.value}))} required />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Public contact URL</label>
+                <Input value={platformForm.publicContactUrl} onChange={(e) => setPlatformForm(c => ({...c, publicContactUrl: e.target.value}))} required />
+              </div>
+              <Button type="submit" disabled={isSavingPlatform}>{isSavingPlatform ? 'Saving...' : 'Save platform identity'}</Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white/80">
+          <CardHeader>
+            <CardTitle>Compliance defaults</CardTitle>
+            <CardDescription>Default statements used for participant agreements and reviews.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleSaveAppSetting('compliance_defaults', complianceForm, setIsSavingCompliance); }}>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Consent template</label>
+                <textarea className={textAreaClassName} value={complianceForm.consentStatementTemplate} onChange={(e) => setComplianceForm(c => ({...c, consentStatementTemplate: e.target.value}))} required />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Privacy template</label>
+                <textarea className={textAreaClassName} value={complianceForm.privacyStatementTemplate} onChange={(e) => setComplianceForm(c => ({...c, privacyStatementTemplate: e.target.value}))} required />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Reviewer Assignment Mode</label>
+                <Select value={complianceForm.reviewerAssignmentMode} onChange={(e) => setComplianceForm(c => ({...c, reviewerAssignmentMode: e.target.value as any}))}>
+                  <option value="auto_assign">Auto Assign</option>
+                  <option value="manual_claim">Manual Claim</option>
+                </Select>
+              </div>
+              <Button type="submit" disabled={isSavingCompliance}>{isSavingCompliance ? 'Saving...' : 'Save compliance defaults'}</Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white/80">
+          <CardHeader>
+            <CardTitle>Session security defaults</CardTitle>
+            <CardDescription>Hardening parameters for test sessions and participant flows.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleSaveAppSetting('security_defaults', securityForm, setIsSavingSecurity); }}>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Submission token expiry (hours)</label>
+                <Input type="number" min={1} max={72} value={securityForm.submissionTokenExpiryHours} onChange={(e) => setSecurityForm(c => ({...c, submissionTokenExpiryHours: Number(e.target.value)}))} required />
+              </div>
+              <div className="flex items-center gap-3 py-2">
+                <input id="protected_delivery" type="checkbox" className="h-4 w-4 rounded border-slate-300 accent-slate-800" checked={securityForm.protectedDeliveryModeDefault} onChange={(e) => setSecurityForm(c => ({...c, protectedDeliveryModeDefault: e.target.checked}))} />
+                <label htmlFor="protected_delivery" className="text-sm font-medium text-slate-600">Protected delivery mode default</label>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Answer sequence strictness</label>
+                <Select value={securityForm.answerSequenceStrictness} onChange={(e) => setSecurityForm(c => ({...c, answerSequenceStrictness: e.target.value as any}))}>
+                  <option value="standard">Standard</option>
+                  <option value="strict">Strict</option>
+                </Select>
+              </div>
+              <Button type="submit" disabled={isSavingSecurity}>{isSavingSecurity ? 'Saving...' : 'Save security defaults'}</Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white/80">
+          <CardHeader>
+            <CardTitle>Customer account controls</CardTitle>
+            <CardDescription>Configuration for new customer signups and initial workspace states.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleSaveAppSetting('customer_controls', controlsForm, setIsSavingControls); }}>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Default plan code</label>
+                <Input value={controlsForm.defaultPlanCode} onChange={(e) => setControlsForm(c => ({...c, defaultPlanCode: e.target.value}))} required />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Trial duration (days)</label>
+                <Input type="number" min={1} max={365} value={controlsForm.trialDurationDays} onChange={(e) => setControlsForm(c => ({...c, trialDurationDays: Number(e.target.value)}))} required />
+              </div>
+              <div className="flex items-center gap-3 py-2">
+                <input id="require_activation" type="checkbox" className="h-4 w-4 rounded border-slate-300 accent-slate-800" checked={controlsForm.requireManualActivation} onChange={(e) => setControlsForm(c => ({...c, requireManualActivation: e.target.checked}))} />
+                <label htmlFor="require_activation" className="text-sm font-medium text-slate-600">Require manual account activation</label>
+              </div>
+              <Button type="submit" disabled={isSavingControls}>{isSavingControls ? 'Saving...' : 'Save customer controls'}</Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white/80">
+          <CardHeader>
             <CardTitle>Default session template</CardTitle>
             <CardDescription>Applied as the starting point when creating a new assessment session.</CardDescription>
           </CardHeader>
@@ -221,7 +361,7 @@ export function SettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-600">Assessment purpose</label>
-                  <Select value={defaultsForm.assessmentPurpose} onChange={(event) => setDefaultsForm((current) => ({ ...current, assessmentPurpose: event.target.value }))}>
+                  <Select value={defaultsForm.assessmentPurpose} onChange={(event) => setDefaultsForm((current) => ({ ...current, assessmentPurpose: event.target.value as any }))}>
                     <option value="recruitment">Recruitment</option>
                     <option value="employee_development">Employee development</option>
                     <option value="academic_evaluation">Academic evaluation</option>
@@ -231,14 +371,14 @@ export function SettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-600">Administration mode</label>
-                  <Select value={defaultsForm.administrationMode} onChange={(event) => setDefaultsForm((current) => ({ ...current, administrationMode: event.target.value }))}>
+                  <Select value={defaultsForm.administrationMode} onChange={(event) => setDefaultsForm((current) => ({ ...current, administrationMode: event.target.value as any }))}>
                     <option value="remote_unsupervised">Remote unsupervised</option>
                     <option value="supervised">Supervised</option>
                   </Select>
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium text-slate-600">Interpretation mode</label>
-                  <Select value={defaultsForm.interpretationMode} onChange={(event) => setDefaultsForm((current) => ({ ...current, interpretationMode: event.target.value }))}>
+                  <Select value={defaultsForm.interpretationMode} onChange={(event) => setDefaultsForm((current) => ({ ...current, interpretationMode: event.target.value as any }))}>
                     <option value="professional_review">Professional review</option>
                     <option value="self_assessment">Self assessment</option>
                   </Select>

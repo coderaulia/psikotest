@@ -260,3 +260,11 @@ export async function updateCustomerBilling(id: number, payload: {
   });
 }
 
+
+
+export async function updateAppSetting(key: string, payload: unknown) {
+  return adminFetchJson(`/settings/app-settings/${key}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}

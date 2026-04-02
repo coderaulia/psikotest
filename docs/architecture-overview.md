@@ -13,12 +13,12 @@ This project is a multi-surface psychological assessment platform with two opera
 - deployed from the repository root to the main domain
 
 ### API
-- Node.js + Express + TypeScript
-- source in `apps/api`
-- deployed separately on the API domain
+- Cloudflare Workers + Hono + TypeScript
+- source in `workers/`
+- deployed to Cloudflare edge
 
 ### Database
-- MySQL
+- Cloudflare D1 (SQLite-compatible)
 - shared operational schema for:
   - admins and reviewers
   - customer workspaces
@@ -84,7 +84,7 @@ flowchart LR
 
 ## Backend module structure
 
-The API follows a modular Express structure:
+The API follows a modular Hono structure in `workers/src/routes/`:
 - `auth`
 - `site-auth`
 - `site-onboarding`
@@ -157,11 +157,11 @@ The next tenant evolution should formalize:
 - public site and authenticated UI routes
 
 ### API domain
-- Express app
+- Hono app on Cloudflare Workers
 - JSON APIs only
 
 ### Shared database
-- MySQL used only by the API
+- Cloudflare D1 used by the Workers binding (env.DB)
 
 ## Documentation links
 

@@ -93,6 +93,7 @@ const ManualPage = lazyNamed(() => import('@/pages/manual-page'), 'ManualPage');
 const WhiteLabelPage = lazyNamed(() => import('@/pages/white-label-page'), 'WhiteLabelPage');
 const CustomerSignupPage = lazyNamed(() => import('@/pages/customer/customer-signup-page'), 'CustomerSignupPage');
 const CustomerLoginPage = lazyNamed(() => import('@/pages/customer/customer-login-page'), 'CustomerLoginPage');
+const CustomerForgotPasswordPage = lazyNamed(() => import('@/pages/customer/customer-forgot-password-page'), 'CustomerForgotPasswordPage');
 const CustomerWorkspacePage = lazyNamed(() => import('@/pages/customer/customer-workspace-page'), 'CustomerWorkspacePage');
 const CustomerCompanyPage = lazyNamed(() => import('@/pages/customer/customer-company-page'), 'CustomerCompanyPage');
 const CustomerBillingPage = lazyNamed(() => import('@/pages/customer/customer-billing-page'), 'CustomerBillingPage');
@@ -114,6 +115,7 @@ const TestSessionDetailPage = lazyNamed(() => import('@/pages/admin/test-session
 const QuestionBankPage = lazyNamed(() => import('@/pages/admin/question-bank-page'), 'QuestionBankPage');
 const ResultsPage = lazyNamed(() => import('@/pages/admin/results-page'), 'ResultsPage');
 const ResultDetailPage = lazyNamed(() => import('@/pages/admin/result-detail-page'), 'ResultDetailPage');
+const ReportExportPage = lazyNamed(() => import('@/pages/admin/report-export-page'), 'ReportExportPage');
 const ReviewerQueuePage = lazyNamed(() => import('@/pages/admin/reviewer-queue-page'), 'ReviewerQueuePage');
 const ReportsPage = lazyNamed(() => import('@/pages/admin/reports-page'), 'ReportsPage');
 const SettingsPage = lazyNamed(() => import('@/pages/admin/settings-page'), 'SettingsPage');
@@ -193,6 +195,11 @@ export const router = createBrowserRouter([
     ],
   },
   {
+    path: '/admin/results/:id/export',
+    element: withSuspense(<ReportExportPage />),
+    errorElement: routeErrorElement,
+  },
+  {
     path: '/t/:token',
     element: withSuspense(<ParticipantLayout />),
     errorElement: routeErrorElement,
@@ -210,6 +217,7 @@ export const router = createBrowserRouter([
     errorElement: routeErrorElement,
   },
 ]);
+
 
 
 
