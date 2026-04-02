@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   FileText,
   ShieldCheck,
+  Sparkles,
   Stethoscope,
   Users,
   type LucideIcon,
@@ -35,7 +36,53 @@ interface ManualTrack {
   checklist: string[];
 }
 
+const publicFlowTrack: ManualTrack = {
+  id: 'public-flow',
+  label: 'Public Test Flow',
+  title: 'How anyone can start a test immediately',
+  description:
+    'The public flow is the fastest way to experience the assessment engine. It skips the workspace setup and manual invitation steps.',
+  icon: Sparkles,
+  accentClass:
+    'border-emerald-200/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.98),rgba(236,253,245,0.94)_58%,rgba(220,252,231,0.76))]',
+  steps: [
+    {
+      step: '01',
+      title: 'Visit Landing Page',
+      detail: 'Go to the homepage and browse the available public assessments.',
+    },
+    {
+      step: '02',
+      title: 'Choose Your Test',
+      detail: 'Pick between DISC, IQ, or Workload assessment based on your interest.',
+    },
+    {
+      step: '03',
+      title: 'Enter Identity',
+      detail: 'Provide your name and email. This links your progress to your identity for the final result.',
+    },
+    {
+      step: '04',
+      title: 'Answer the Assessment',
+      detail: 'Follow the instructions and complete the test within the time limit.',
+    },
+    {
+      step: '05',
+      title: 'View Your Result',
+      detail: 'Get an immediate basic summary or access a more detailed report for deeper insights.',
+    },
+  ],
+  checklist: [
+    'Available tests: DISC, IQ, Workload',
+    'Free version: Basic summary',
+    'Full version: Detailed report & interpretation',
+    'Need company features? Go to /saas',
+    'Need branding? Go to /white-label',
+  ],
+};
+
 const manualTracks: ManualTrack[] = [
+  publicFlowTrack,
   {
     id: 'super-admin',
     label: 'Platform Manager Guide',

@@ -54,51 +54,62 @@ const answersSchema = z.object({
 app.get('/session/:token', async (c) => {
   const token = c.req.param('token');
 
-  const session = await queryOne<SessionRow>(
-    c.env.DB,
-    `SELECT id, title, description, test_type, status, access_token,
-            instructions, time_limit_minutes, settings_json, starts_at, ends_at
-     FROM test_sessions
-     WHERE access_token = ?
-     LIMIT 1`,
-    [token],
-  );
+  try {
+    const session = await queryOne<SessionRow>(
+      c.env.DB,
+      `SELECT id, title, description, test_type, status, access_token,
+              instructions, time_limit_minutes, settings_json, starts_at, ends_at
+       FROM test_sessions
+       WHERE access_token = ?
+       LIMIT 1`,
+      [token],
+    );
 
-  if (!session) {
-    return c.json({ error: 'Session not found' }, 404);
+    if (!session) {
+      return c.json({
+        error: "Session not found",
+        message: `Invalid token: ${token}`
+      }, 404);
+    }
+
+    if (session.status !== 'active') {
+      return c.json({ error: 'This session is not currently active', status: session.status }, 403);
+    }
+
+    const now = new Date();
+    if (session.starts_at && new Date(session.starts_at) > now) {
+      return c.json({ error: 'Session has not started yet', startsAt: session.starts_at }, 403);
+    }
+    if (session.ends_at && new Date(session.ends_at) < now) {
+      return c.json({ error: 'Session has ended', endsAt: session.ends_at }, 403);
+    }
+
+    const instructions = (session.instructions ?? '')
+      .split(/\r?\n/)
+      .map((l: string) => l.trim())
+      .filter(Boolean);
+
+    return c.json({
+      session: {
+        id: session.id,
+        title: session.title,
+        description: session.description,
+        testType: session.test_type,
+        instructions,
+        timeLimitMinutes: session.time_limit_minutes,
+        startsAt: session.starts_at,
+        endsAt: session.ends_at,
+        settings: session.settings_json ? JSON.parse(session.settings_json) : {},
+        status: session.status,
+      },
+    });
+  } catch (err) {
+    console.error("Public session error:", err);
+    return c.json({
+      error: "Internal Server Error",
+      message: err instanceof Error ? err.message : "Unknown error"
+    }, 500);
   }
-
-  if (session.status !== 'active') {
-    return c.json({ error: 'This session is not currently active', status: session.status }, 403);
-  }
-
-  const now = new Date();
-  if (session.starts_at && new Date(session.starts_at) > now) {
-    return c.json({ error: 'Session has not started yet', startsAt: session.starts_at }, 403);
-  }
-  if (session.ends_at && new Date(session.ends_at) < now) {
-    return c.json({ error: 'Session has ended', endsAt: session.ends_at }, 403);
-  }
-
-  const instructions = (session.instructions ?? '')
-    .split(/\r?\n/)
-    .map((l: string) => l.trim())
-    .filter(Boolean);
-
-  return c.json({
-    session: {
-      id: session.id,
-      title: session.title,
-      description: session.description,
-      testType: session.test_type,
-      instructions,
-      timeLimitMinutes: session.time_limit_minutes,
-      startsAt: session.starts_at,
-      endsAt: session.ends_at,
-      settings: session.settings_json ? JSON.parse(session.settings_json) : {},
-      status: session.status,
-    },
-  });
 });
 
 // ─── POST /api/public/session/:token/start ───────────────────────────────────

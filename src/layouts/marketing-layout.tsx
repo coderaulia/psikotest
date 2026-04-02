@@ -42,7 +42,7 @@ export function MarketingLayout() {
     { label: 'SaaS', to: '/saas' },
     { label: t.nav.manual, to: '/manual' },
     { label: t.nav.whiteLabel, to: '/white-label' },
-    { label: t.nav.tryDemo, to: '/t/disc-batch-a' },
+    { label: t.nav.tryDemo, to: '/t/disc-public-001' },
     { label: t.nav.signUp, to: '/signup' },
   ];
 
@@ -61,7 +61,7 @@ export function MarketingLayout() {
                 {t.nav.manual}
               </Link>
               <a href="/saas#faq">{t.nav.faq}</a>
-              <Link to="/t/disc-batch-a" className="rounded-full px-4 py-2 transition hover:bg-white/70 hover:text-slate-950">
+              <Link to="/t/disc-public-001" className="rounded-full px-4 py-2 transition hover:bg-white/70 hover:text-slate-950">
                 {t.nav.tryDemo}
               </Link>
               <Link

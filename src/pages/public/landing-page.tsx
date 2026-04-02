@@ -22,9 +22,9 @@ import { cn } from '@/lib/cn';
 import { useLanguage } from '@/lib/language';
 
 const TEST_SESSION_MAP = {
-  disc: 'disc-batch-a',
-  iq: 'iq-screening',
-  workload: 'workload-check',
+  disc: "disc-public-001",
+  iq: "iq-public-001",
+  workload: "workload-public-001"
 } as const;
 
 type TestKey = keyof typeof TEST_SESSION_MAP;
