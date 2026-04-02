@@ -57,7 +57,14 @@ A checkout session may be:
 - `expired`
 - `failed`
 
-Dummy checkout uses the same internal contract as future provider-based checkout.`r`n`r`nThe assessment checkout page now creates a checkout session before the workspace subscription is activated, so assessment activation and billing history stay aligned.
+Dummy checkout uses the same internal contract as future provider-based checkout.
+
+The checkout flow currently implemented is:
+1. User clicks "Save workspace plan"
+2. API creates a checkout session in an `open` state via `POST /api/site-billing/checkout-session`
+3. Frontend simulates payment delay
+4. Frontend triggers `PATCH /api/site-billing/subscription` which generates an invoice and completes the dummy flow by activating the selected plan.
+This perfectly tracks the 2-step checkout requirement before any payment gateways are implemented.
 
 ## Invoice Lifecycle
 

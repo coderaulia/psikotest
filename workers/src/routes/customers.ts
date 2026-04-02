@@ -178,6 +178,21 @@ app.patch('/:id/status', async (c) => {
   return c.json({ id, status });
 });
 
+// GET /api/customers/webhooks
+app.get('/webhooks', async (c) => {
+  const payload = c.get('adminPayload');
+  if (payload.role !== 'super_admin') {
+    return c.json({ error: 'Super admin access required' }, 403);
+  }
+
+  const events = await query(
+    c.env.DB,
+    `SELECT * FROM billing_webhook_events ORDER BY created_at DESC LIMIT 50`
+  );
+
+  return c.json({ events: events.results ?? [] });
+});
+
 // GET /api/customers/:id/billing
 app.get('/:id/billing', async (c) => {
   const payload = c.get('adminPayload');
@@ -307,6 +322,48 @@ app.patch('/:id/billing', async (c) => {
       params
     );
   }
+
+  return c.json({ success: true });
+});
+
+// POST /api/customers/:id/invoices
+app.post('/:id/invoices', async (c) => {
+  const payload = c.get('adminPayload');
+  if (payload.role !== 'super_admin') {
+    return c.json({ error: 'Super admin access required' }, 403);
+  }
+
+  const id = parseInt(c.req.param('id'));
+  if (!Number.isFinite(id) || id < 1) return c.json({ error: 'Invalid customer id' }, 400);
+
+  const body = await c.req.json().catch(() => ({}));
+  const schema = z.object({
+    amount: z.number().min(0),
+    currencyCode: z.string().default('USD'),
+    status: z.enum(['draft', 'open', 'paid', 'void', 'uncollectible']).default('open'),
+  });
+
+  const data = schema.parse(body);
+
+  const subscription = await queryOne<{ id: number }>(
+    c.env.DB,
+    `SELECT id FROM workspace_subscriptions WHERE customer_account_id = ? LIMIT 1`,
+    [id]
+  );
+
+  if (!subscription) {
+    return c.json({ error: 'No subscription found for customer' }, 404);
+  }
+
+  const invoiceNumber = `INV-${Date.now()}`;
+
+  await run(
+    c.env.DB,
+    `INSERT INTO billing_invoices (
+      customer_account_id, workspace_subscription_id, invoice_number, status, currency_code, amount_subtotal, amount_total, issued_at, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    [id, subscription.id, invoiceNumber, data.status, data.currencyCode, data.amount, data.amount]
+  );
 
   return c.json({ success: true });
 });

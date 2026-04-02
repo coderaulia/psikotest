@@ -2,6 +2,19 @@
 
 This document defines the billing foundation for the Vanaila Psikotest SaaS and the shared-core white-label platform.
 
+## Live Endpoints Checklist
+
+All billing endpoints are fully migrated to Cloudflare Workers using Hono handlers in D1.
+
+- [x] **Customer Billing Overview** (`GET /api/site-billing/overview`) - `workers/src/routes/site-billing.ts`
+- [x] **Customer Invoices List** (`GET /api/site-billing/invoices`) - `workers/src/routes/site-billing.ts`
+- [x] **Customer Dummy Checkout Session** (`POST /api/site-billing/checkout-session`) - `workers/src/routes/site-billing.ts`
+- [x] **Customer Dummy Activation** (`PATCH /api/site-billing/subscription`) - `workers/src/routes/site-billing.ts`
+- [x] **Admin Workspace Billing Viewer** (`GET /api/customers/:id/billing`) - `workers/src/routes/customers.ts`
+- [x] **Admin Workspace Subscription Override** (`PATCH /api/customers/:id/billing`) - `workers/src/routes/customers.ts`
+- [x] **Admin Invoice Generator** (`POST /api/customers/:id/invoices`) - `workers/src/routes/customers.ts`
+- [x] **Admin Webhook Log Viewer** (`GET /api/customers/webhooks`) - `workers/src/routes/customers.ts`
+
 ## Principles
 
 - Billing is scoped to a workspace, not to an individual login.

@@ -71,11 +71,11 @@ The internal admin side should later expose:
 
 Whenever billing schema changes:
 
-1. update `001_init_schema.sql`
-2. add a new migration
-3. update `scripts/package-db-deploy.ps1`
-4. rebuild the database bundle
-5. update customer/admin flow docs if the UI behavior changed
+1. Add a new migration file in `workers/migrations/NNN_name.sql`
+2. Test the migration locally: `wrangler d1 execute psikotest-db --local --file="./migrations/NNN_name.sql"`
+3. Verify the changes using a local test checkout or the admin panel
+4. Run the remote migration: `wrangler d1 execute psikotest-db --file="./migrations/NNN_name.sql"`
+5. Update customer/admin flow docs if the UI behavior changed
 
 ## Risk Notes
 
