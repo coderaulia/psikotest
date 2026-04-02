@@ -216,3 +216,47 @@ export async function updateCustomerStatus(id: number, status: CustomerAccountSt
   });
 }
 
+export interface AdminCustomerBillingResponse {
+  subscription: {
+    id: number;
+    planCode: string;
+    status: string;
+    billingCycle: string;
+    trialEndsAt: string | null;
+    renewsAt: string | null;
+    cancelAtPeriodEnd: boolean;
+    assessmentLimit: number;
+    participantLimit: number;
+    teamMemberLimit: number;
+  };
+  usage: {
+    activeAssessmentCount: number;
+    participantRecordCount: number;
+    teamSeatCount: number;
+  };
+  invoices: Array<{
+    id: number;
+    status: string;
+    amountTotal: number;
+    currencyCode: string;
+    issuedAt: string | null;
+  }>;
+}
+
+export async function fetchCustomerBilling(id: number) {
+  return adminFetchJson<AdminCustomerBillingResponse>(`/customers/${id}/billing`);
+}
+
+export async function updateCustomerBilling(id: number, payload: {
+  planCode?: string;
+  status?: string;
+  trialEndsAt?: string | null;
+  cancelAtPeriodEnd?: boolean;
+  billingCycle?: string;
+}) {
+  return adminFetchJson<{ success: boolean }>(`/customers/${id}/billing`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+

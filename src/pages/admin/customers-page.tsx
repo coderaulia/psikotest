@@ -1,4 +1,4 @@
-import { Building2, Search, ShieldOff, ShieldCheck } from 'lucide-react';
+import { Building2, Search, ShieldOff, ShieldCheck, Download, Filter, X } from 'lucide-react';
 import { useDeferredValue, useEffect, useState } from 'react';
 
 import { StateCard } from '@/components/common/state-card';
@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { loadAdminSession } from '@/lib/admin-session';
 import { formatDateTime, formatTokenLabel } from '@/lib/formatters';
-import { fetchCustomers, updateCustomerStatus } from '@/services/admin-data';
+import { fetchCustomers, updateCustomerStatus, fetchCustomerBilling, updateCustomerBilling, type AdminCustomerBillingResponse } from '@/services/admin-data';
 import type { CustomerAccountStatus, CustomerListItem } from '@/types/assessment';
 
 export function CustomersPage() {
@@ -26,6 +26,69 @@ export function CustomersPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const [activeCustomer, setActiveCustomer] = useState<{ customer: CustomerListItem; mode: 'view' | 'manage' } | null>(null);
+  const [billingData, setBillingData] = useState<AdminCustomerBillingResponse | null>(null);
+  const [isBillingLoading, setIsBillingLoading] = useState(false);
+  const [billingError, setBillingError] = useState<string | null>(null);
+
+  const [manageForm, setManageForm] = useState<{
+    planCode: string;
+    status: string;
+    billingCycle: string;
+    trialEndsAt: string;
+    cancelAtPeriodEnd: boolean;
+  } | null>(null);
+  const [isSavingSub, setIsSavingSub] = useState(false);
+
+  async function handleOpenWorkspace(customer: CustomerListItem, mode: 'view' | 'manage') {
+    setActiveCustomer({ customer, mode });
+    setIsBillingLoading(true);
+    setBillingError(null);
+    try {
+      const data = await fetchCustomerBilling(customer.id);
+      setBillingData(data);
+    } catch (err) {
+      setBillingError(err instanceof Error ? err.message : 'Unable to load workspace data');
+    } finally {
+      setIsBillingLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (billingData && activeCustomer?.mode === 'manage') {
+      const tEnd = billingData.subscription.trialEndsAt 
+        ? new Date(billingData.subscription.trialEndsAt).toISOString().slice(0, 16) 
+        : '';
+      setManageForm({
+        planCode: billingData.subscription.planCode,
+        status: billingData.subscription.status,
+        billingCycle: billingData.subscription.billingCycle,
+        trialEndsAt: tEnd,
+        cancelAtPeriodEnd: billingData.subscription.cancelAtPeriodEnd,
+      });
+    }
+  }, [billingData, activeCustomer]);
+
+  async function handleSaveSubscription() {
+    if (!activeCustomer || !manageForm) return;
+    setIsSavingSub(true);
+    try {
+      await updateCustomerBilling(activeCustomer.customer.id, {
+        planCode: manageForm.planCode,
+        status: manageForm.status,
+        billingCycle: manageForm.billingCycle,
+        trialEndsAt: manageForm.trialEndsAt ? new Date(manageForm.trialEndsAt).toISOString() : null,
+        cancelAtPeriodEnd: manageForm.cancelAtPeriodEnd,
+      });
+      await handleOpenWorkspace(activeCustomer.customer, 'manage');
+    } catch(err) {
+      alert(err instanceof Error ? err.message : 'Update failed');
+    } finally {
+      setIsSavingSub(false);
+    }
+  }
 
   async function loadCustomers() {
     setIsLoading(true);
@@ -63,6 +126,37 @@ export function CustomersPage() {
       setActionError(err instanceof Error ? err.message : 'Unable to update status');
     } finally {
       setTogglingId(null);
+    }
+  }
+
+  async function handleExportCsv() {
+    if (customers.length === 0) return;
+    setIsExporting(true);
+    
+    try {
+      const headers = ['Full Name', 'Email', 'Organization Name', 'Account Type', 'Assessment Count', 'Last Login', 'Created At', 'Status'];
+      const rows = customers.map(c => [
+        `"${(c.fullName || '').replace(/"/g, '""')}"`,
+        `"${(c.email || '').replace(/"/g, '""')}"`,
+        `"${(c.organizationName || '').replace(/"/g, '""')}"`,
+        c.accountType,
+        c.assessmentCount,
+        formatDateTime(c.lastLoginAt) || '',
+        formatDateTime(c.createdAt) || '',
+        c.status,
+      ]);
+      
+      const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `customers_export_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } finally {
+      setIsExporting(false);
     }
   }
 
@@ -115,6 +209,17 @@ export function CustomersPage() {
                 <option value="inactive">Inactive</option>
               </Select>
             </div>
+          </div>
+          
+          <div className="flex items-center justify-between">
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-500">
+              <Filter className="h-4 w-4" />
+              {customers.length} customer{customers.length === 1 ? '' : 's'}
+            </div>
+            
+            <Button variant="outline" size="sm" onClick={() => void handleExportCsv()} disabled={customers.length === 0 || isExporting}>
+              <Download className="mr-2 h-4 w-4" /> {isExporting ? 'Exporting...' : 'Export CSV'}
+            </Button>
           </div>
 
           {/* Table */}
@@ -176,25 +281,33 @@ export function CustomersPage() {
                         </span>
                       </td>
                       <td className="px-4 py-4">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="gap-1.5"
-                          disabled={togglingId === customer.id}
-                          onClick={() => void handleToggleStatus(customer)}
-                        >
-                          {customer.status === 'active' ? (
-                            <>
-                              <ShieldOff className="h-3.5 w-3.5" />
-                              Deactivate
-                            </>
-                          ) : (
-                            <>
-                              <ShieldCheck className="h-3.5 w-3.5" />
-                              Activate
-                            </>
-                          )}
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button variant="outline" size="sm" onClick={() => void handleOpenWorkspace(customer, 'view')}>
+                            View workspace
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => void handleOpenWorkspace(customer, 'manage')}>
+                            Manage subscription
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="gap-1.5"
+                            disabled={togglingId === customer.id}
+                            onClick={() => void handleToggleStatus(customer)}
+                          >
+                            {customer.status === 'active' ? (
+                              <>
+                                <ShieldOff className="h-3.5 w-3.5" />
+                                Deactivate
+                              </>
+                            ) : (
+                              <>
+                                <ShieldCheck className="h-3.5 w-3.5" />
+                                Activate
+                              </>
+                            )}
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -207,6 +320,115 @@ export function CustomersPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Slide-over */}
+      {activeCustomer && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-sm print:hidden">
+          <div className="w-full max-w-md bg-white shadow-2xl flex flex-col h-full animate-in slide-in-from-right">
+             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-950">{activeCustomer.customer.organizationName}</h2>
+                  <p className="text-sm text-slate-500">{activeCustomer.mode === 'view' ? 'Workspace details' : 'Manage subscription'}</p>
+                </div>
+                <button onClick={() => setActiveCustomer(null)} className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+                  <X className="h-5 w-5" />
+                </button>
+             </div>
+             
+             <div className="flex-1 overflow-y-auto p-6 space-y-8">
+               {isBillingLoading ? (
+                 <StateCard title="Loading" description="Fetching subscription data..." />
+               ) : billingError ? (
+                 <StateCard title="Error" description={billingError} tone="danger" />
+               ) : billingData && activeCustomer.mode === 'view' ? (
+                  <div className="space-y-8">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900 mb-3">Subscription State</h3>
+                      <div className="rounded-xl border p-4 space-y-3 text-sm">
+                         <div className="flex justify-between"><span className="text-slate-500">Plan</span><span className="font-medium">{billingData.subscription.planCode} / {billingData.subscription.billingCycle}</span></div>
+                         <div className="flex justify-between"><span className="text-slate-500">Status</span><span className="font-medium">{billingData.subscription.status}</span></div>
+                         <div className="flex justify-between"><span className="text-slate-500">Trial ends</span><span className="font-medium">{billingData.subscription.trialEndsAt ? formatDateTime(billingData.subscription.trialEndsAt) : '-'}</span></div>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900 mb-3">Usage vs Limits</h3>
+                      <div className="rounded-xl border p-4 space-y-3 text-sm">
+                         <div className="flex justify-between"><span className="text-slate-500">Assessments</span><span className="font-medium">{billingData.usage.activeAssessmentCount} / {billingData.subscription.assessmentLimit}</span></div>
+                         <div className="flex justify-between"><span className="text-slate-500">Participants</span><span className="font-medium">{billingData.usage.participantRecordCount} / {billingData.subscription.participantLimit}</span></div>
+                         <div className="flex justify-between"><span className="text-slate-500">Team seats</span><span className="font-medium">{billingData.usage.teamSeatCount} / {billingData.subscription.teamMemberLimit}</span></div>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900 mb-3">Account Info</h3>
+                      <div className="rounded-xl border p-4 space-y-3 text-sm">
+                         <div className="flex justify-between"><span className="text-slate-500">Created</span><span className="font-medium">{activeCustomer.customer.createdAt ? formatDateTime(activeCustomer.customer.createdAt) : '-'}</span></div>
+                         <div className="flex justify-between"><span className="text-slate-500">Last login</span><span className="font-medium">{activeCustomer.customer.lastLoginAt ? formatDateTime(activeCustomer.customer.lastLoginAt) : '-'}</span></div>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900 mb-3">Recent Invoices</h3>
+                      {billingData.invoices.length > 0 ? (
+                        <div className="space-y-2">
+                          {billingData.invoices.map(inv => (
+                            <div key={inv.id} className="rounded-xl border p-3 flex items-center justify-between text-sm">
+                              <div>
+                                <p className="font-medium">{inv.currencyCode} {inv.amountTotal}</p>
+                                <p className="text-xs text-slate-500">{inv.issuedAt ? formatDateTime(inv.issuedAt) : '-'}</p>
+                              </div>
+                              <Badge>{inv.status}</Badge>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-slate-500">No invoices found.</p>
+                      )}
+                    </div>
+                  </div>
+               ) : billingData && manageForm && activeCustomer.mode === 'manage' ? (
+                  <div className="space-y-6">
+                    <div>
+                      <p className="mb-2 text-sm font-medium">Plan code</p>
+                      <Select value={manageForm.planCode} onChange={e => setManageForm(s => s ? {...s, planCode: e.target.value} : s)}>
+                         <option value="starter">Starter</option>
+                         <option value="growth">Growth</option>
+                         <option value="research">Research</option>
+                      </Select>
+                    </div>
+                    <div>
+                      <p className="mb-2 text-sm font-medium">Billing cycle</p>
+                      <Select value={manageForm.billingCycle} onChange={e => setManageForm(s => s ? {...s, billingCycle: e.target.value} : s)}>
+                         <option value="monthly">Monthly</option>
+                         <option value="annual">Annual</option>
+                      </Select>
+                    </div>
+                    <div>
+                      <p className="mb-2 text-sm font-medium">Status</p>
+                      <Select value={manageForm.status} onChange={e => setManageForm(s => s ? {...s, status: e.target.value} : s)}>
+                         <option value="trial">Trial</option>
+                         <option value="active">Active</option>
+                         <option value="past_due">Past Due</option>
+                         <option value="suspended">Suspended</option>
+                      </Select>
+                    </div>
+                    <div>
+                      <p className="mb-2 text-sm font-medium">Trial ends at</p>
+                      <Input type="datetime-local" value={manageForm.trialEndsAt} onChange={e => setManageForm(s => s ? {...s, trialEndsAt: e.target.value} : s)} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" id="cancelPeriod" checked={manageForm.cancelAtPeriodEnd} onChange={e => setManageForm(s => s ? {...s, cancelAtPeriodEnd: e.target.checked} : s)} />
+                      <label htmlFor="cancelPeriod" className="text-sm font-medium">Cancel at period end</label>
+                    </div>
+                    <div className="pt-4 border-t border-slate-100">
+                      <Button onClick={() => void handleSaveSubscription()} disabled={isSavingSub} className="w-full">
+                        {isSavingSub ? 'Saving...' : 'Save changes'}
+                      </Button>
+                    </div>
+                  </div>
+               ) : null}
+             </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
