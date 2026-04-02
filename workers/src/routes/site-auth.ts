@@ -27,6 +27,15 @@ const acceptInviteSchema = z.object({
   password: z.string().min(8),
 });
 
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+
 // ─── Row Types ───────────────────────────────────────────────────────────────
 
 interface CustomerRow {
@@ -56,10 +65,115 @@ interface WorkspaceMemberRow {
   customer_status: 'active' | 'inactive';
 }
 
+interface PasswordResetTokenRow {
+  id: string;
+  account_id: number;
+  token_hash: string;
+  expires_at: number;
+  used_at: number | null;
+  account_status: 'active' | 'inactive' | null;
+}
+
+interface PasswordResetRateLimitRow {
+  email: string;
+  window_start: number;
+  request_count: number;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function toUnixTimestamp(date = Date.now()) {
+  return Math.floor(date / 1000);
+}
+
+function encodeHex(input: ArrayBuffer | Uint8Array) {
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function createRandomToken() {
+  return encodeHex(crypto.getRandomValues(new Uint8Array(32)));
+}
+
+async function hashResetToken(token: string) {
+  const buffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+  return encodeHex(buffer);
+}
+
+async function consumeForgotPasswordRateLimit(db: D1Database, email: string) {
+  const now = toUnixTimestamp();
+  const windowSizeSeconds = 15 * 60;
+  const existing = await queryOne<PasswordResetRateLimitRow>(
+    db,
+    'SELECT email, window_start, request_count FROM password_reset_request_limits WHERE email = ? LIMIT 1',
+    [email],
+  );
+
+  if (!existing || now - existing.window_start >= windowSizeSeconds) {
+    await run(
+      db,
+      `INSERT INTO password_reset_request_limits (email, window_start, request_count, updated_at)
+       VALUES (?, ?, 1, ?)
+       ON CONFLICT(email) DO UPDATE SET
+         window_start = excluded.window_start,
+         request_count = 1,
+         updated_at = excluded.updated_at`,
+      [email, now, now],
+    );
+    return true;
+  }
+
+  if (existing.request_count >= 3) {
+    return false;
+  }
+
+  await run(
+    db,
+    `UPDATE password_reset_request_limits
+     SET request_count = request_count + 1,
+         updated_at = ?
+     WHERE email = ?`,
+    [now, email],
+  );
+  return true;
+}
+
+async function getPasswordResetTokenRecord(db: D1Database, token: string) {
+  const tokenHash = await hashResetToken(token);
+  return queryOne<PasswordResetTokenRow>(
+    db,
+    `SELECT prt.id, prt.account_id, prt.token_hash, prt.expires_at, prt.used_at,
+            ca.status AS account_status
+     FROM password_reset_tokens prt
+     LEFT JOIN customer_accounts ca ON ca.id = prt.account_id
+     WHERE prt.token_hash = ?
+     LIMIT 1`,
+    [tokenHash],
+  );
+}
+
+function evaluatePasswordResetToken(record: PasswordResetTokenRow | null) {
+  const now = toUnixTimestamp();
+
+  if (!record || record.account_status !== 'active') {
+    return { valid: false as const, reason: 'invalid' as const };
+  }
+
+  if (record.used_at) {
+    return { valid: false as const, reason: 'used' as const };
+  }
+
+  if (record.expires_at <= now) {
+    return { valid: false as const, reason: 'expired' as const };
+  }
+
+  return { valid: true as const };
 }
 
 async function buildOwnerSessionResponse(
@@ -451,54 +565,51 @@ app.post('/invite/accept', async (c) => {
   }
 });
 
-// POST /api/site-auth/forgot-password - Request customer password reset
+// POST /api/site-auth/forgot-password
 app.post('/forgot-password', async (c) => {
   try {
     const body = await c.req.json();
-    const { email } = z.object({ email: z.string().email() }).parse(body);
+    const { email } = forgotPasswordSchema.parse(body);
     const normalizedEmail = normalizeEmail(email);
 
-    // Check if customer account exists
-    const customer = await queryOne<{ id: number; full_name: string; email: string }>(
+    const withinLimit = await consumeForgotPasswordRateLimit(c.env.DB, normalizedEmail);
+    if (!withinLimit) {
+      return c.json({ success: true });
+    }
+
+    const customer = await queryOne<{ id: number; email: string }>(
       c.env.DB,
-      "SELECT id, full_name, email FROM customer_accounts WHERE email = ? AND status = 'active' LIMIT 1",
+      "SELECT id, email FROM customer_accounts WHERE email = ? AND status = 'active' LIMIT 1",
       [normalizedEmail],
     );
 
     if (!customer) {
-      // Return success even if email not found (security best practice)
-      return c.json({ success: true, message: 'If an account exists, a reset link has been sent' });
+      return c.json({ success: true });
     }
 
-    // Generate reset token
-    const resetToken = Array.from(crypto.getRandomValues(new Uint8Array(32)))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+    const rawToken = createRandomToken();
+    const tokenHash = await hashResetToken(rawToken);
+    const expiresAt = toUnixTimestamp(Date.now() + 60 * 60 * 1000);
+    const usedAt = toUnixTimestamp();
 
-    // Token expires in 1 hour
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    await run(
+      c.env.DB,
+      'UPDATE password_reset_tokens SET used_at = ? WHERE account_id = ? AND used_at IS NULL',
+      [usedAt, customer.id],
+    );
 
-    // Save reset token
-    try {
-      await run(
-        c.env.DB,
-        `INSERT INTO password_resets (email, token, expires_at, created_at)
-         VALUES (?, ?, ?, CURRENT_TIMESTAMP)`,
-        [normalizedEmail, resetToken, expiresAt],
-      );
-    } catch (err) {
-      console.error('[site-auth] Failed to save reset token:', err);
-      return c.json({ error: 'Service temporarily unavailable' }, 503);
-    }
+    await run(
+      c.env.DB,
+      `INSERT INTO password_reset_tokens (id, account_id, token_hash, expires_at, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [crypto.randomUUID(), customer.id, tokenHash, expiresAt, toUnixTimestamp()],
+    );
 
-    console.log(`[site-auth/password-reset] Token generated for ${normalizedEmail}: ${resetToken}`);
+    const appOrigin = c.env.APP_ORIGIN ?? 'https://psikotest.vanaila.com';
+    const resetLink = `${appOrigin}/reset-password?token=${rawToken}`;
+    console.log(`[site-auth/password-reset] TODO send email to ${customer.email}: ${resetLink}`);
 
-    return c.json({
-      success: true,
-      message: 'If an account exists, a reset link has been sent',
-      // In production, send an email instead of returning
-      previewToken: resetToken,
-    });
+    return c.json({ success: true });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return c.json({ error: error.errors[0].message }, 400);
@@ -507,64 +618,63 @@ app.post('/forgot-password', async (c) => {
   }
 });
 
-// POST /api/site-auth/reset-password - Confirm customer password reset
+// GET /api/site-auth/reset-password/validate?token=xxx
+app.get('/reset-password/validate', async (c) => {
+  const token = c.req.query('token')?.trim();
+
+  if (!token) {
+    return c.json({ valid: false, reason: 'invalid' as const });
+  }
+
+  const tokenRecord = await getPasswordResetTokenRecord(c.env.DB, token);
+  const validation = evaluatePasswordResetToken(tokenRecord);
+
+  if (!validation.valid) {
+    return c.json(validation);
+  }
+
+  return c.json({ valid: true });
+});
+
+// POST /api/site-auth/reset-password
 app.post('/reset-password', async (c) => {
   try {
     const body = await c.req.json();
-    const { token, newPassword } = z.object({
-      token: z.string().min(1),
-      newPassword: z.string().min(8),
-    }).parse(body);
+    const { token, newPassword } = resetPasswordSchema.parse(body);
 
-    // Find valid reset token
-    const resetRecord = await queryOne<{ id: number; email: string; expires_at: string }>(
-      c.env.DB,
-      `SELECT id, email, expires_at FROM password_resets
-       WHERE token = ? AND used = 0 AND expires_at > CURRENT_TIMESTAMP
-       LIMIT 1`,
-      [token],
-    );
+    const tokenRecord = await getPasswordResetTokenRecord(c.env.DB, token);
+    const validation = evaluatePasswordResetToken(tokenRecord);
 
-    if (!resetRecord) {
-      return c.json({ error: 'Invalid or expired reset token' }, 400);
+    if (!validation.valid || !tokenRecord) {
+      return c.json(
+        {
+          error: 'Reset token is invalid or expired',
+          reason: validation.reason,
+        },
+        400,
+      );
     }
 
-    // Check if customer still exists and is active
-    const customer = await queryOne<{ id: number }>(
-      c.env.DB,
-      "SELECT id FROM customer_accounts WHERE email = ? AND status = 'active' LIMIT 1",
-      [resetRecord.email],
-    );
-
-    if (!customer) {
-      return c.json({ error: 'Account not found or inactive' }, 400);
-    }
-
-    // Hash new password with PBKDF2
     const passwordHash = await hashPassword(newPassword);
+    const usedAt = toUnixTimestamp();
 
-    // Update password
     await run(
       c.env.DB,
-      'UPDATE customer_accounts SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [passwordHash, customer.id],
+      `UPDATE customer_accounts
+       SET password_hash = ?, session_version = session_version + 1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND status = 'active'`,
+      [passwordHash, tokenRecord.account_id],
     );
 
-    // Mark token as used
     await run(
       c.env.DB,
-      'UPDATE password_resets SET used = 1, used_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [resetRecord.id],
+      `UPDATE password_reset_tokens
+       SET used_at = ?
+       WHERE id = ? AND used_at IS NULL`,
+      [usedAt, tokenRecord.id],
     );
 
-    // Increment session version to invalidate existing sessions
-    await run(
-      c.env.DB,
-      'UPDATE customer_accounts SET session_version = session_version + 1 WHERE id = ?',
-      [customer.id],
-    );
-
-    return c.json({ success: true, message: 'Password has been reset successfully' });
+    return c.json({ success: true });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return c.json({ error: error.errors[0].message }, 400);
