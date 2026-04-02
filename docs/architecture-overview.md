@@ -3,29 +3,31 @@
 This project is a multi-surface psychological assessment platform with two operational modes:
 
 - SaaS workspace for companies and researchers
-- future white-label adaptation on top of the same operational core and API
+- Future white-label adaptation on top of the same operational core and API
 
-## Current deployment shape
+## Technology Stack
 
 ### Frontend
-- React + TypeScript + Vite
-- source in `src/`
-- deployed from the repository root to the main domain
+- **Framework**: React 19 + TypeScript + Vite
+- **Styling**: TailwindCSS + Radix UI primitives
+- **Routing**: React Router v7
+- **Source**: `src/` directory
+- **Deployment**: Cloudflare Pages
+- **Build**: Vite static site generation
 
 ### API
-- Cloudflare Workers + Hono + TypeScript
-- source in `workers/`
-- deployed to Cloudflare edge
+- **Runtime**: Cloudflare Workers (edge)
+- **Framework**: Hono + TypeScript
+- **Validation**: Zod
+- **Source**: `workers/` directory
+- **Deployment**: `wrangler deploy`
+- **Routes**: `workers/src/routes/*.ts`
 
 ### Database
-- Cloudflare D1 (SQLite-compatible)
-- shared operational schema for:
-  - admins and reviewers
-  - customer workspaces
-  - workspace subscriptions and usage
-  - sessions and participants
-  - submissions and results
-  - question bank and scoring outputs
+- **Engine**: Cloudflare D1 (SQLite-compatible)
+- **Migrations**: `workers/migrations/*.sql`
+- **Access**: D1Database binding via `env.DB`
+- **Schema**: Single shared schema for all surfaces
 
 ## High-level system map
 
@@ -50,127 +52,172 @@ flowchart LR
 ## Main surfaces
 
 ### Public site
-- landing page
-- manual page
-- white-label page
-- signup and login entry points
+- `/` - Landing page
+- `/manual` - User manual
+- `/white-label` - White-label information page
+- `/signup` - Customer registration
+- `/login` - Customer login
+- `/admin/login` - Admin login
 
-### Customer workspace
-- workspace overview
-- workspace billing
-- workspace team
-- workspace activity
-- customer results
-- create assessment flow
-- assessment review / activation
-- participant delivery operations
-- workspace settings
+### Customer workspace (`/workspace/*`)
+- Workspace overview dashboard
+- Company settings
+- Billing and usage diagnostics
+- Team management
+- Activity feed
+- Results list and detail
+- Create assessment flow
+- Assessment review/activation
+- Participant delivery operations
+- Workspace settings
 
-### Participant flow
-- consent
-- identity
-- instructions
-- test runner
-- completion
+### Participant flow (`/t/:token/*`)
+- Consent page
+- Identity collection
+- Instructions
+- Test runner
+- Completion screen
 
-### Internal admin and reviewer workspace
-- dashboard
-- participants
-- test sessions
-- question bank
-- results
-- reports
-- settings
+### Admin workspace (`/admin/*`)
+- Dashboard with metrics
+- Participants management
+- Test sessions management
+- Question bank CRUD
+- Results list and review
+- Reviewer queue
+- Reports summary
+- Settings (profile, session defaults)
+- Customers management
 
 ## Backend module structure
 
 The API follows a modular Hono structure in `workers/src/routes/`:
-- `auth`
-- `site-auth`
-- `site-onboarding`
-- `site-billing`
-- `site-results`
-- `site-workspace`
-- `participants`
-- `test-sessions`
-- `question-bank`
-- `public-sessions`
-- `results`
-- `reports`
-- `settings`
 
-Each module is expected to own its routes, service logic, and repository access.
+| Module | Routes Prefix | Purpose |
+|--------|---------------|---------|
+| `auth.ts` | `/api/auth/*` | Admin authentication |
+| `site-auth.ts` | `/api/site-auth/*` | Customer authentication, invites, password reset |
+| `site-workspace.ts` | `/api/site-workspace/*` | Workspace settings, team, activity |
+| `site-billing.ts` | `/api/site-billing/*` | Subscription, checkout, invoices |
+| `site-results.ts` | `/api/site-results/*` | Customer result viewing, CSV export |
+| `site-onboarding.ts` | `/api/site-onboarding/*` | Assessment CRUD, participants, invites |
+| `dashboard.ts` | `/api/dashboard/*` | Admin dashboard metrics |
+| `test-sessions.ts` | `/api/test-sessions/*` | Admin session management |
+| `participants.ts` | `/api/participants/*` | Admin participant list |
+| `question-bank.ts` | `/api/question-bank/*` | Admin question management |
+| `results.ts` | `/api/results/*` | Admin results, review queue, reviewers |
+| `reports.ts` | `/api/reports/*` | Admin reports summary |
+| `settings.ts` | `/api/settings/*` | Admin profile and platform settings |
+| `customers.ts` | `/api/customers/*` | Admin customer management |
+| `public-sessions.ts` | `/api/public/*` | Participant test delivery |
+| `health.ts` | `/api/health` | Health check endpoint |
+
+Each module owns its routes, validation schemas, and database access.
 
 ## Data ownership model
 
 ### Admin side
-- platform-level operations
-- question bank and protected session control
-- reviewer workflow and reporting
+- Platform-level operations
+- Question bank and protected session control
+- Reviewer workflow and reporting
+- Customer management
 
 ### Customer side
-- owns a workspace account
-- creates and manages customer assessments
-- controls participant-facing defaults and workspace settings
-- manages dummy subscription state, capacity, teammates, and customer-safe result access
+- Owns a workspace account
+- Creates and manages customer assessments
+- Controls participant-facing defaults and workspace settings
+- Manages subscription state, capacity, teammates, and customer-safe result access
 
 ### Participant side
-- never uses admin or customer auth
-- only uses signed session and submission access tokens
+- Never uses admin or customer auth
+- Only uses signed session and submission access tokens
+- Accesses public endpoints only
+
+## Database schema overview
+
+### Core tables
+- `admins` - Admin accounts and roles
+- `customer_accounts` - Customer workspace owners
+- `customer_workspace_members` - Team members
+- `test_sessions` - Assessment configurations
+- `participants` - Test participants
+- `submissions` - Test attempts
+- `results` - Scored results
+
+### SaaS billing tables
+- `workspace_subscriptions` - Plan and billing state
+- `billing_checkout_sessions` - Checkout tracking
+- `billing_invoices` - Invoice history
+- `workspace_usage_events` - Usage audit
+- `workspace_usage_snapshots` - Current usage
+
+### Customer workspace tables
+- `customer_assessments` - Customer-owned sessions
+- `customer_assessment_participants` - Participant lists
+
+### System tables
+- `audit_events` - Action logging
+- `question_bank` - Question storage
+- `password_resets` - Password reset tokens
+- `app_settings` - Platform configuration
 
 ## Current SaaS boundary
 
-The current SaaS model is already separated by customer workspace through:
+The current SaaS model is separated by customer workspace through:
 
 - `customer_accounts`
 - `workspace_subscriptions`
 - `customer_assessments`
 - `customer_workspace_members`
-- customer-scoped onboarding, billing, workspace, and result APIs
+- Customer-scoped onboarding, billing, workspace, and result APIs
 
-Operationally, the customer workspace now has these enforced controls:
+Operationally, the customer workspace enforces:
 
-- assessment creation counts against plan capacity
-- participant imports and manual additions count against participant capacity
-- owner and member seats count against team-seat capacity
-- customer pages receive usage diagnostics and upgrade guidance from the API
-
-## Current multi-tenant boundary
-
-The system is not yet a full enterprise tenant architecture, but it already has a customer workspace boundary through:
-- `customer_accounts`
-- `customer_assessments`
-- customer-scoped onboarding APIs
-- customer-scoped workspace settings
-- workspace-level billing and team membership
-
-The next tenant evolution should formalize:
-- role separation inside customer workspaces
-- branding and white-label boundaries
-- subscription and billing lifecycle states
-- domain-based tenant resolution for shared white-label delivery
+- Assessment creation counts against plan capacity
+- Participant imports and additions count against participant capacity
+- Owner and member seats count against team-seat capacity
+- Customer pages receive usage diagnostics and upgrade guidance from the API
 
 ## Hosting topology
 
-### Main domain
-- Vite frontend build output
-- public site and authenticated UI routes
+### Production
+```
+Frontend: Cloudflare Pages
+├── Served from repository root
+├── Build: vite build
+└── Routes: React Router v7
 
-### API domain
-- Hono app on Cloudflare Workers
-- JSON APIs only
+API: Cloudflare Workers
+├── Deployed via: wrangler deploy
+├── Routes mounted at: /api/*
+└── Edge runtime globally
 
-### Shared database
-- Cloudflare D1 used by the Workers binding (env.DB)
+Database: Cloudflare D1
+├── Binding: env.DB
+├── Migrations: workers/migrations/*.sql
+└── Remote commands: wrangler d1 execute psikotest-db --remote
+```
+
+### Local Development
+```bash
+# Frontend
+npm run dev          # Vite dev server at localhost:5173
+
+# API
+cd workers && npm run dev   # Wrangler dev at localhost:8787
+```
 
 ## Documentation links
 
 Use together with:
-- `docs/new-flow.md`
-- `docs/compliance.md`
-- `docs/development-phases.md`
-- `docs/auth-and-access.md`
-- `docs/assessment-engine.md`
+- `docs/new-flow.md` - Assessment flow details
+- `docs/compliance.md` - Compliance requirements
+- `docs/project-status.md` - Current status and backlog
+- `docs/api-endpoints.md` - Full API documentation
+- `docs/auth-and-access.md` - Authentication architecture
+- `docs/assessment-engine.md` - Scoring and delivery
+- `docs/billing-operations.md` - Billing maintenance
+- `docs/commit-log.md` - Change history
 
 ## White-label principle
 
@@ -178,15 +225,14 @@ White-label should run on the same API and assessment engine as the SaaS product
 
 ## Billing Foundation
 
-The SaaS platform now treats billing as a workspace-level subsystem.
+The SaaS platform treats billing as a workspace-level subsystem.
 
 Core persistence includes:
-
-- `workspace_subscriptions`
-- `billing_checkout_sessions`
-- `billing_invoices`
-- `billing_webhook_events`
-- `workspace_usage_events`
-- `workspace_usage_snapshots`
+- `workspace_subscriptions` - Plan state
+- `billing_checkout_sessions` - Checkout tracking
+- `billing_invoices` - Invoice history
+- `billing_webhook_events` - Provider webhooks
+- `workspace_usage_events` - Usage tracking
+- `workspace_usage_snapshots` - Current usage counts
 
 This keeps the current dummy checkout compatible with later provider-backed billing without redesigning the workspace contract.
