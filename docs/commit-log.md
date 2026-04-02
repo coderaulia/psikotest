@@ -4,6 +4,27 @@ A running log of meaningful commits with deployment status.
 
 ---
 
+## [2026-04-02] — Assessment Creation test_type_id FK Fix
+
+### What Changed
+- Fixed NOT NULL constraint failure on test_sessions.test_type_id
+- Added test_type string → test_type_id resolution before INSERT
+- Added proper error handling with 400 response for invalid test types
+- Updated both CREATE and PATCH assessment endpoints
+
+### Root Cause
+The test_sessions table has test_type_id INTEGER NOT NULL (FK to test_types)
+but the code was only inserting test_type TEXT string. The test_type_id
+column requires a resolved foreign key reference.
+
+### Files Affected
+- `workers/src/routes/site-onboarding.ts` - Added test_type_id resolution
+
+### Deployed
+- ✅ Workers deployed to production
+
+---
+
 ## [2026-04-02] — Assessment Creation 500 Fix
 
 ### What Changed
