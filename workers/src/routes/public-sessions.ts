@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { query, queryOne, run } from '../lib/db';
+import { scoreIQ, scoreDISC, scoreWorkload, createScoringResult, type ScoredQuestion, type SubmissionAnswer } from '../lib/scoring';
 import type { Env } from '../types';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -38,7 +39,11 @@ const startSchema = z.object({
 const answersSchema = z.object({
   answers: z.array(z.object({
     questionId: z.number().int(),
-    answer: z.union([z.string(), z.number(), z.null()]),
+    selectedOptionId: z.number().int().optional(),
+    mostOptionId: z.number().int().optional(),
+    leastOptionId: z.number().int().optional(),
+    likertValue: z.number().int().min(1).max(7).optional(),
+    answer: z.union([z.string(), z.number(), z.null()]).optional(),
   })),
   groupIndex: z.number().int().optional(),
 });
@@ -197,10 +202,10 @@ app.get('/submissions/:id/questions', async (c) => {
     return c.json({ error: 'Submission already completed' }, 409);
   }
 
-  // Get session test type to filter questions
-  const session = await queryOne<{ test_type: string }>(
+  // Get session test type
+  const session = await queryOne<{ id: number; test_type: string }>(
     c.env.DB,
-    'SELECT test_type FROM test_sessions WHERE id = ? LIMIT 1',
+    'SELECT id, test_type FROM test_sessions WHERE id = ? LIMIT 1',
     [submission.session_id],
   );
 
@@ -208,46 +213,90 @@ app.get('/submissions/:id/questions', async (c) => {
     return c.json({ submissionId, groupIndex, questions: [] });
   }
 
-  // Fetch active questions for this test type
-  const questions = await query(
+  // Get test_type_id
+  const testType = await queryOne<{ id: number }>(
     c.env.DB,
-    `SELECT
-      id,
-      test_type,
-      question_text,
-      question_type,
-      options_json,
-      category,
-      subcategory,
-      difficulty,
-      time_estimate_seconds,
-      order_index
-    FROM question_bank
-    WHERE test_type = ? AND status = 'active'
-    ORDER BY order_index ASC, id ASC`,
+    'SELECT id FROM test_types WHERE code = ? LIMIT 1',
     [session.test_type],
   );
 
-  const questionItems = (questions.results ?? []).map((r) => {
-    const row = r as Record<string, unknown>;
-    return {
-      id: Number(row.id),
-      testType: row.test_type as string,
-      questionText: String(row.question_text ?? ''),
-      questionType: row.question_type as string,
-      options: row.options_json ? JSON.parse(String(row.options_json)) : [],
-      category: row.category ? String(row.category) : null,
-      subcategory: row.subcategory ? String(row.subcategory) : null,
-      difficulty: row.difficulty as string | null,
-      timeEstimateSeconds: row.time_estimate_seconds ? Number(row.time_estimate_seconds) : null,
-      orderIndex: Number(row.order_index ?? 0),
-    };
-  });
+  if (!testType) {
+    return c.json({ submissionId, groupIndex, questions: [] });
+  }
+
+  // Fetch active questions from proper tables
+  const questionRows = await query(
+    c.env.DB,
+    `SELECT
+      q.id,
+      q.test_type_id,
+      q.question_code,
+      q.instruction_text,
+      q.prompt,
+      q.question_group_key,
+      q.dimension_key,
+      q.question_type,
+      q.question_order,
+      q.is_required,
+      q.status
+    FROM questions q
+    WHERE q.test_type_id = ? AND q.status = 'active'
+    ORDER BY q.question_order ASC, q.id ASC`,
+    [testType.id],
+  );
+
+  // For each question, fetch its options
+  const questions = [];
+  for (const qRow of questionRows.results ?? []) {
+    const q = qRow as Record<string, unknown>;
+    
+    const optionRows = await query(
+      c.env.DB,
+      `SELECT
+        id,
+        option_key,
+        option_text,
+        dimension_key,
+        value_number,
+        is_correct,
+        option_order
+      FROM question_options
+      WHERE question_id = ?
+      ORDER BY option_order ASC`,
+      [q.id],
+    );
+
+    questions.push({
+      id: Number(q.id),
+      testTypeId: Number(q.test_type_id),
+      questionCode: String(q.question_code ?? ''),
+      instructionText: q.instruction_text ? String(q.instruction_text) : null,
+      prompt: q.prompt ? String(q.prompt) : null,
+      questionGroupKey: q.question_group_key ? String(q.question_group_key) : null,
+      dimensionKey: q.dimension_key ? String(q.dimension_key) : null,
+      questionType: String(q.question_type),
+      questionOrder: Number(q.question_order ?? 0),
+      isRequired: Boolean(q.is_required),
+      status: String(q.status),
+      options: (optionRows.results ?? []).map((o) => {
+        const opt = o as Record<string, unknown>;
+        return {
+          id: Number(opt.id),
+          optionKey: String(opt.option_key),
+          optionText: String(opt.option_text),
+          dimensionKey: opt.dimension_key ? String(opt.dimension_key) : null,
+          valueNumber: opt.value_number != null ? Number(opt.value_number) : null,
+          isCorrect: Boolean(opt.is_correct),
+          optionOrder: Number(opt.option_order ?? 0),
+        };
+      }),
+    });
+  }
 
   return c.json({
     submissionId,
     groupIndex,
-    questions: questionItems,
+    questions,
   });
 });
 
@@ -276,7 +325,7 @@ app.post('/submissions/:id/answers', async (c) => {
       return c.json({ error: 'Submission is not in progress' }, 409);
     }
 
-    // Store answers as JSON in the result_json column for now
+    // Store answers as JSON in the result_json column
     await run(
       c.env.DB,
       'UPDATE submissions SET result_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
@@ -319,7 +368,7 @@ app.post('/submissions/:id/submit', async (c) => {
     return c.json({ error: 'Submission already completed' }, 409);
   }
 
-  // Fetch session test type for scoring
+  // Fetch session test type
   const session = await queryOne<{ id: number; test_type: string }>(
     c.env.DB,
     'SELECT id, test_type FROM test_sessions WHERE id = ? LIMIT 1',
@@ -327,97 +376,114 @@ app.post('/submissions/:id/submit', async (c) => {
   );
 
   // Parse stored answers for scoring
+  let scoredQuestions: ScoredQuestion[] = [];
+  let submissionAnswers: SubmissionAnswer[] = [];
+  
+  if (submission.result_json) {
+    try {
+      const parsed = JSON.parse(submission.result_json);
+      submissionAnswers = parsed.answers ?? [];
+    } catch {
+      // Invalid JSON - continue without scoring
+    }
+  }
+
+  // Get test_type_id
+  const testType = session ? await queryOne<{ id: number }>(
+    c.env.DB,
+    'SELECT id FROM test_types WHERE code = ? LIMIT 1',
+    [session.test_type],
+  ) : null;
+
+  // Fetch questions with options for scoring
+  if (testType && submissionAnswers.length > 0) {
+    const questionRows = await query(
+      c.env.DB,
+      `SELECT
+        q.id,
+        q.test_type_id,
+        q.question_code,
+        q.dimension_key,
+        q.question_type
+      FROM questions q
+      WHERE q.test_type_id = ? AND q.status = 'active'
+      ORDER BY q.question_order ASC, q.id ASC`,
+      [testType.id],
+    );
+
+    for (const qRow of questionRows.results ?? []) {
+      const q = qRow as Record<string, unknown>;
+      
+      const optionRows = await query(
+        c.env.DB,
+        `SELECT
+          id,
+          option_key,
+          option_text,
+          dimension_key,
+          value_number,
+          is_correct,
+          option_order
+        FROM question_options
+        WHERE question_id = ?
+        ORDER BY option_order ASC`,
+        [q.id],
+      );
+
+      scoredQuestions.push({
+        id: Number(q.id),
+        testTypeId: Number(q.test_type_id),
+        testType: session?.test_type ?? '',
+        questionCode: String(q.question_code ?? ''),
+        dimensionKey: q.dimension_key ? String(q.dimension_key) : null,
+        questionType: String(q.question_type),
+        options: (optionRows.results ?? []).map((o) => {
+          const opt = o as Record<string, unknown>;
+          return {
+            id: Number(opt.id),
+            optionKey: String(opt.option_key),
+            optionText: String(opt.option_text),
+            dimensionKey: opt.dimension_key ? String(opt.dimension_key) : null,
+            valueNumber: opt.value_number != null ? Number(opt.value_number) : null,
+            isCorrect: Boolean(opt.is_correct),
+            optionOrder: Number(opt.option_order ?? 0),
+            scorePayload: null,
+          };
+        }),
+      });
+    }
+  }
+
+  // Calculate scores using the scoring module
   let scoreTotal: number | null = null;
   let scoreBand: string | null = null;
   let profileCode: string | null = null;
   let primaryType: string | null = null;
-  let resultPayload: Record<string, unknown> = {};
+  let resultPayload: Record<string, unknown> = { answers: submissionAnswers, submittedAt: new Date().toISOString() };
 
-  if (submission.result_json) {
+  if (session && scoredQuestions.length > 0 && submissionAnswers.length > 0) {
     try {
-      const parsed = JSON.parse(submission.result_json);
-      const answers = parsed.answers ?? [];
-      resultPayload = { answers, submittedAt: new Date().toISOString() };
+      const testTypeCode = session.test_type.toLowerCase() as 'iq' | 'disc' | 'workload';
+      
+      const scoringResult = createScoringResult(testTypeCode, scoredQuestions, submissionAnswers);
+      resultPayload = { ...resultPayload, ...scoringResult };
 
-      // Basic scoring based on test type
-      if (session?.test_type === 'iq') {
-        // For IQ: count correct answers from question bank
-        const questions = await query(
-          c.env.DB,
-          `SELECT id, options_json FROM question_bank WHERE test_type = 'iq' AND status = 'active'`,
-          [],
-        );
-
-        let correctCount = 0;
-        let totalCount = 0;
-
-        for (const q of questions.results ?? []) {
-          const row = q as Record<string, unknown>;
-          const options = row.options_json ? JSON.parse(String(row.options_json)) : [];
-          const correctOption = options.find((opt: { score?: number }) => opt.score === 1);
-          const userAnswer = answers.find((a: { questionId: number }) => a.questionId === row.id);
-
-          if (correctOption && userAnswer) {
-            totalCount += 1;
-            if (userAnswer.answer === correctOption.value) {
-              correctCount += 1;
-            }
-          }
-        }
-
-        // Calculate approximate IQ score (100 base + deviation)
-        if (totalCount > 0) {
-          const percentage = (correctCount / totalCount) * 100;
-          scoreTotal = Math.round(100 + (percentage - 50) * 0.8); // Simplified scoring
-          scoreBand = scoreTotal >= 130 ? 'very_high' : scoreTotal >= 110 ? 'high' : scoreTotal >= 90 ? 'average' : scoreTotal >= 70 ? 'below_average' : 'low';
-        }
-
-        resultPayload = { ...resultPayload, correctCount, totalCount, percentage: totalCount > 0 ? (correctCount / totalCount) * 100 : 0 };
-      } else if (session?.test_type === 'disc') {
-        // For DISC: count type frequencies
-        const typeCounts: Record<string, number> = { D: 0, I: 0, S: 0, C: 0 };
-        
-        for (const answer of answers) {
-          const value = String(answer.answer).toUpperCase();
-          if (typeCounts[value] !== undefined) {
-            typeCounts[value] += 1;
-          }
-        }
-
-        // Find primary type with highest count
-        let maxCount = 0;
-        let maxType = 'D';
-        for (const [type, count] of Object.entries(typeCounts)) {
-          if (count > maxCount) {
-            maxCount = count;
-            maxType = type;
-          }
-        }
-
-        primaryType = maxType;
-        profileCode = maxType; // Simplified - could be combination like 'DI', 'SC', etc.
-        resultPayload = { ...resultPayload, typeCounts, primaryType: maxType };
-      } else if (session?.test_type === 'workload') {
-        // For Workload: sum Likert scale responses
-        let totalScore = 0;
-        let count = 0;
-
-        for (const answer of answers) {
-          if (typeof answer.answer === 'number') {
-            totalScore += answer.answer;
-            count += 1;
-          }
-        }
-
-        if (count > 0) {
-          const avgScore = totalScore / count;
-          scoreTotal = Math.round(totalScore);
-          scoreBand = avgScore <= 2 ? 'low_workload' : avgScore <= 3 ? 'moderate_workload' : 'high_workload';
-          resultPayload = { ...resultPayload, averageScore: avgScore, totalQuestions: count };
-        }
+      if (scoringResult.testType === 'iq' && scoringResult.iqResult) {
+        scoreTotal = scoringResult.iqResult.totalScore;
+        scoreBand = scoringResult.iqResult.band;
+        resultPayload = { ...resultPayload, iqResult: scoringResult.iqResult };
+      } else if (scoringResult.testType === 'disc' && scoringResult.discResult) {
+        primaryType = scoringResult.discResult.primaryType;
+        profileCode = scoringResult.discResult.profilePattern;
+        resultPayload = { ...resultPayload, discResult: scoringResult.discResult };
+      } else if (scoringResult.testType === 'workload' && scoringResult.workloadResult) {
+        scoreTotal = Math.round(scoringResult.workloadResult.overallScore * 10);
+        scoreBand = scoringResult.workloadResult.band;
+        resultPayload = { ...resultPayload, workloadResult: scoringResult.workloadResult };
       }
-    } catch {
-      // Invalid JSON - continue without scoring
+    } catch (scoringError) {
+      console.error('[scoring] Error during scoring:', scoringError);
+      // Continue without scores
     }
   }
 
@@ -438,18 +504,18 @@ app.post('/submissions/:id/submit', async (c) => {
   // Create result record
   let resultId: number | null = null;
 
-  if (session) {
+  if (session && testType) {
     const resultInsert = await run(
       c.env.DB,
       `INSERT INTO results (
-        submission_id, participant_id, session_id, test_type,
+        submission_id, participant_id, test_type_id, test_type,
         score_total, score_band, profile_code, primary_type,
         result_payload_json, review_status, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'scored_preliminary', CURRENT_TIMESTAMP)`,
       [
         submissionId,
         submission.participant_id,
-        session.id,
+        testType.id,
         session.test_type,
         scoreTotal,
         scoreBand,
@@ -459,6 +525,65 @@ app.post('/submissions/:id/submit', async (c) => {
       ],
     );
     resultId = resultInsert.meta.last_row_id as number;
+
+    // Insert result_summaries for dimension breakdowns
+    if (resultPayload.iqResult && resultId) {
+      const iq = resultPayload.iqResult as Record<string, unknown>;
+      const dims = iq.dimensions as Record<string, { correct: number; total: number; percentage: number }>;
+      
+      if (dims) {
+        for (const [dim, data] of Object.entries(dims)) {
+          await run(
+            c.env.DB,
+            `INSERT INTO result_summaries (result_id, metric_key, metric_label, metric_type, score, band, sort_order)
+             VALUES (?, ?, ?, 'dimension', ?, ?, ?)`,
+            [resultId, dim, dim.charAt(0).toUpperCase() + dim.slice(1), data.percentage, null, 1],
+          );
+        }
+      }
+    }
+
+    if (resultPayload.discResult && resultId) {
+      const disc = resultPayload.discResult as Record<string, unknown>;
+      const scores = disc.scores as Record<string, number>;
+      
+      if (scores) {
+        const dims = ['D', 'I', 'S', 'C'];
+        for (let i = 0; i < dims.length; i++) {
+          await run(
+            c.env.DB,
+            `INSERT INTO result_summaries (result_id, metric_key, metric_label, metric_type, score, band, sort_order)
+             VALUES (?, ?, ?, 'dimension', ?, null, ?)`,
+            [resultId, dims[i].toLowerCase(), dims[i], scores[dims[i]] ?? 0, i + 1],
+          );
+        }
+      }
+    }
+
+    if (resultPayload.workloadResult && resultId) {
+      const workload = resultPayload.workloadResult as Record<string, unknown>;
+      const dims = workload.dimensions as Record<string, number>;
+      
+      if (dims) {
+        const dimLabels: Record<string, string> = {
+          mental_demand: 'Mental Demand',
+          physical_demand: 'Physical Demand',
+          temporal_demand: 'Temporal Demand',
+          performance: 'Performance',
+          effort: 'Effort',
+          frustration: 'Frustration',
+        };
+        let order = 1;
+        for (const [key, value] of Object.entries(dims)) {
+          await run(
+            c.env.DB,
+            `INSERT INTO result_summaries (result_id, metric_key, metric_label, metric_type, score, band, sort_order)
+             VALUES (?, ?, ?, 'dimension', ?, null, ?)`,
+            [resultId, key, dimLabels[key] || key, value, order++],
+          );
+        }
+      }
+    }
 
     // Mark submission as scored
     await run(
@@ -480,6 +605,10 @@ app.post('/submissions/:id/submit', async (c) => {
     status: 'submitted',
     testType: session?.test_type ?? null,
     resultId,
+    scoreTotal,
+    scoreBand,
+    primaryType,
+    profileCode,
     message: 'Test submitted successfully. Your results have been processed.',
   });
 });
