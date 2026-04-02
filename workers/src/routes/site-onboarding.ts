@@ -438,13 +438,13 @@ app.post('/assessments', async (c) => {
     protectedDeliveryMode: body.protectedDeliveryMode,
   });
 
-  const sessionInsert = await run(
+const sessionInsert = await run(
     c.env.DB,
     `INSERT INTO test_sessions (
-       title, description, test_type, status, access_token, participant_count, completed_count,
-       starts_at, ends_at, time_limit_minutes, settings_json, created_by, instructions, created_by_admin_id,
+       title, description, test_type, status, access_token,
+       starts_at, ends_at, time_limit_minutes, settings_json, instructions,
        created_at, updated_at
-     ) VALUES (?, ?, ?, 'draft', ?, 0, 0, NULL, NULL, ?, ?, ?, ?, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+     ) VALUES (?, ?, ?, 'draft', ?, NULL, NULL, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     [
       body.title.trim(),
       `Draft ${body.testType.toUpperCase()} assessment for ${body.organizationName.trim()} (${body.purpose.replace(/_/g, ' ')}).`,
@@ -452,7 +452,6 @@ app.post('/assessments', async (c) => {
       generateToken(12),
       body.timeLimitMinutes ?? defaults.defaultTimeLimitMinutes ?? getDefaultTimeLimit(body.testType),
       JSON.stringify(settings),
-      payload.accountId,
       getParticipantInstructions(body.testType, body.purpose).join('\n'),
     ],
   );
