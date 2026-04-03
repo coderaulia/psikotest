@@ -37,10 +37,43 @@ const questionSchema = z.object({
 
 app.use('*', requireAdmin);
 
+const CSV_EXPORT_HEADERS = [
+  'id',
+  'question_text',
+  'question_type',
+  'category',
+  'test_type',
+  'dimension',
+  'difficulty',
+  'is_active',
+  'order_index',
+  'option_1_text',
+  'option_1_value',
+  'option_1_is_correct',
+  'option_2_text',
+  'option_2_value',
+  'option_2_is_correct',
+  'option_3_text',
+  'option_3_value',
+  'option_3_is_correct',
+  'option_4_text',
+  'option_4_value',
+  'option_4_is_correct',
+  'option_5_text',
+  'option_5_value',
+  'option_5_is_correct',
+] as const;
+
 function parseSafe(val: any) {
   if (!val) return {};
   if (typeof val !== 'string') return val;
   try { return JSON.parse(val); } catch { return {}; }
+}
+
+function csvEscape(value: unknown) {
+  const serialized = value == null ? '' : String(value);
+  const escaped = serialized.replace(/"/g, '""');
+  return `"${escaped}"`;
 }
 
 async function getQuestionById(db: any, id: number) {
@@ -179,6 +212,109 @@ app.get('/questions', async (c) => {
     console.error('Error fetching questions:', error);
     return c.json({ items: [] });
   }
+});
+
+app.get('/questions/export', async (c) => {
+  const rows = await query(
+    c.env.DB,
+    `SELECT
+      q.id,
+      q.prompt,
+      q.question_type,
+      q.dimension_key,
+      q.question_order,
+      q.status,
+      q.question_meta_json,
+      tt.code AS test_type,
+      qo.option_text,
+      qo.value_number,
+      qo.is_correct,
+      qo.option_order
+     FROM questions q
+     INNER JOIN test_types tt ON tt.id = q.test_type_id
+     LEFT JOIN question_options qo ON qo.question_id = q.id
+     ORDER BY q.id ASC, qo.option_order ASC`
+  );
+
+  const grouped = new Map<number, {
+    id: number;
+    questionText: string;
+    questionType: string;
+    category: string;
+    testType: string;
+    dimension: string;
+    difficulty: string;
+    isActive: string;
+    orderIndex: number;
+    options: Array<{ text: string; value: string; isCorrect: string }>;
+  }>();
+
+  for (const entry of rows.results ?? []) {
+    const row = entry as Record<string, unknown>;
+    const id = Number(row.id);
+    const current = grouped.get(id) ?? {
+      id,
+      questionText: String(row.prompt ?? ''),
+      questionType: String(row.question_type ?? ''),
+      category: String(row.test_type ?? ''),
+      testType: String(row.test_type ?? ''),
+      dimension: String(row.dimension_key ?? ''),
+      difficulty: '',
+      isActive: String(row.status) === 'active' ? '1' : '0',
+      orderIndex: Number(row.question_order ?? 0),
+      options: [],
+    };
+
+    if (current.difficulty === '' && row.question_meta_json) {
+      const meta = parseSafe(row.question_meta_json);
+      if (meta && typeof meta === 'object' && 'difficulty' in meta && meta.difficulty != null) {
+        current.difficulty = String(meta.difficulty);
+      }
+    }
+
+    if (row.option_text != null && current.options.length < 5) {
+      current.options.push({
+        text: String(row.option_text),
+        value: row.value_number == null ? '' : String(row.value_number),
+        isCorrect: Number(row.is_correct ?? 0) > 0 ? '1' : '0',
+      });
+    }
+
+    grouped.set(id, current);
+  }
+
+  const lines: string[] = [CSV_EXPORT_HEADERS.join(',')];
+  for (const question of grouped.values()) {
+    const flatRow: string[] = [
+      String(question.id),
+      question.questionText,
+      question.questionType,
+      question.category,
+      question.testType,
+      question.dimension,
+      question.difficulty,
+      question.isActive,
+      String(question.orderIndex),
+    ];
+
+    for (let index = 0; index < 5; index += 1) {
+      const option = question.options[index];
+      flatRow.push(option?.text ?? '');
+      flatRow.push(option?.value ?? '');
+      flatRow.push(option?.isCorrect ?? '');
+    }
+
+    lines.push(flatRow.map(csvEscape).join(','));
+  }
+
+  const csv = `${lines.join('\n')}\n`;
+  return new Response(csv, {
+    headers: {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="questions-export.csv"',
+      'Cache-Control': 'no-store',
+    },
+  });
 });
 
 app.get('/questions/:id', async (c) => {

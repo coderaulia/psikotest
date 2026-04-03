@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import {
   createQuestionBankQuestion,
+  downloadQuestionBankCsv,
   fetchQuestionBank,
   fetchQuestionBankQuestion,
   updateQuestionBankQuestion,
@@ -97,6 +98,7 @@ export function QuestionBankPage() {
   const [metaText, setMetaText] = useState('{}');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -285,6 +287,29 @@ export function QuestionBankPage() {
     });
   }
 
+  async function handleExportCsv() {
+    setError(null);
+    setSuccessMessage(null);
+    setIsExporting(true);
+
+    try {
+      const blob = await downloadQuestionBankCsv();
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = 'questions-export.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+      setSuccessMessage('Question bank CSV exported.');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to export CSV');
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   if (isLoading && items.length === 0 && !isCreating) {
     return <StateCard title="Loading question bank" description="Pulling secured question content and option structures." />;
   }
@@ -295,7 +320,14 @@ export function QuestionBankPage() {
         eyebrow="Question Bank"
         title="Assessment item management"
         description="Create and maintain item content inside the protected admin workspace. Questions are never exposed through public admin-free endpoints."
-        actions={<Button onClick={handleCreateNew}>New question</Button>}
+        actions={(
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="button" variant="secondary" onClick={handleExportCsv} disabled={isExporting}>
+              {isExporting ? 'Exporting...' : 'Export CSV'}
+            </Button>
+            <Button type="button" onClick={handleCreateNew}>New question</Button>
+          </div>
+        )}
       />
 
       {error ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">{error}</div> : null}

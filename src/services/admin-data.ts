@@ -1,4 +1,4 @@
-import { adminFetchJson } from './admin-api';
+import { adminFetch, adminFetchJson } from './admin-api';
 import type {
   AdminTestSessionDetail,
   AdminTestSessionListItem,
@@ -175,6 +175,11 @@ export async function updateQuestionBankQuestion(id: number, payload: QuestionBa
     method: 'PATCH',
     body: JSON.stringify(payload),
   });
+}
+
+export async function downloadQuestionBankCsv() {
+  const response = await adminFetch('/question-bank/questions/export');
+  return response.blob();
 }
 
 export async function fetchSettingsOverview() {
