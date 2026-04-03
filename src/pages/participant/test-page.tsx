@@ -7,8 +7,10 @@ import {
   updateParticipantSession,
 } from '@/lib/participant-session';
 import {
+  fetchNextSubmissionGroup,
   fetchPublicSession,
   fetchSubmissionQuestionWindow,
+  savePublicAnswers,
   submitPublicSubmission,
 } from '@/services/public-sessions';
 import type {
@@ -61,10 +63,14 @@ const copy = {
     estimatedWord: 'Estimated',
     minutesWord: 'minutes',
     protectedMessage: 'Protected delivery is enabled. You are completing group {current} of {total}.',
+    sectionLabel: 'Section {current} of {total}',
+    sectionAnswered: '{answered} of {total} questions answered in this section',
+    sectionProgress: '{progress}% section progress',
     questionWord: 'Question',
     most: 'Most',
     least: 'Least',
     previousSection: 'Previous section',
+    loadingNextSection: 'Loading next section...',
     saving: 'Saving...',
     saveContinue: 'Save and continue',
     submitting: 'Submitting...',
@@ -86,10 +92,14 @@ const copy = {
     estimatedWord: 'Estimasi',
     minutesWord: 'menit',
     protectedMessage: 'Mode terlindungi aktif. Kamu sedang mengerjakan grup {current} dari {total}.',
+    sectionLabel: 'Bagian {current} dari {total}',
+    sectionAnswered: '{answered} dari {total} pertanyaan terjawab di bagian ini',
+    sectionProgress: 'Progres bagian {progress}%',
     questionWord: 'Pertanyaan',
     most: 'Paling menggambarkan',
     least: 'Paling tidak menggambarkan',
     previousSection: 'Bagian sebelumnya',
+    loadingNextSection: 'Memuat bagian berikutnya...',
     saving: 'Menyimpan...',
     saveContinue: 'Simpan dan lanjut',
     submitting: 'Mengirim...',
@@ -139,7 +149,6 @@ export function ParticipantTestPage() {
           const initialWindow = await fetchSubmissionQuestionWindow(
             storedSession.submissionId,
             storedSession.submissionAccessToken,
-            0,
           );
           if (!isMounted) {
             return;
@@ -235,32 +244,7 @@ export function ParticipantTestPage() {
     });
   }
 
-  async function loadGroup(groupIndex: number) {
-    if (!submissionId || !submissionAccessToken) {
-      return;
-    }
-
-    setIsLoadingWindow(true);
-    try {
-      const nextWindow = await fetchSubmissionQuestionWindow(submissionId, submissionAccessToken, groupIndex);
-      setQuestionWindow(nextWindow);
-      setAnswerSequence(nextWindow.answerSequence);
-      updateParticipantSession(token, { answerSequence: nextWindow.answerSequence });
-      setAnswers((current) => {
-        const next = { ...current };
-        for (const answer of nextWindow.savedAnswers) {
-          next[answer.questionId] = answer;
-        }
-        return next;
-      });
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : t.loadNextGroupError);
-    } finally {
-      setIsLoadingWindow(false);
-    }
-  }
-
-  async function saveCurrentGroupAndMove(targetGroupIndex: number) {
+  async function saveCurrentGroupAndMove() {
     if (!questionWindow || !submissionId || !submissionAccessToken) {
       return;
     }
@@ -269,10 +253,9 @@ export function ParticipantTestPage() {
       .map((question) => answers[question.id])
       .filter((answer): answer is SubmissionAnswerInput => Boolean(answer));
 
-    const movingForward = targetGroupIndex > questionWindow.groupIndex;
     const allGroupAnswered = questionWindow.questions.every((question) => isQuestionAnswered(question, answers[question.id]));
 
-    if (movingForward && !allGroupAnswered) {
+    if (!allGroupAnswered) {
       setError(t.answerSectionRequired);
       return;
     }
@@ -283,14 +266,32 @@ export function ParticipantTestPage() {
     try {
       if (groupAnswers.length > 0) {
         const nextSequence = answerSequence + 1;
-        const saveResponse = await import('@/services/public-sessions').then(({ savePublicAnswers }) =>
-          savePublicAnswers(submissionId, submissionAccessToken, nextSequence, groupAnswers),
-        );
+        const saveResponse = await savePublicAnswers(submissionId, submissionAccessToken, nextSequence, groupAnswers);
         setAnswerSequence(saveResponse.answerSequence);
         updateParticipantSession(token, { answerSequence: saveResponse.answerSequence });
       }
 
-      await loadGroup(targetGroupIndex);
+      const nextWindow = await fetchNextSubmissionGroup(submissionId, submissionAccessToken);
+      if (nextWindow.complete) {
+        await handleSubmit();
+        return;
+      }
+
+      setQuestionWindow(nextWindow);
+      setAnswerSequence(nextWindow.answerSequence);
+      updateParticipantSession(token, { answerSequence: nextWindow.answerSequence });
+      setAnswers((current) => {
+        const next = { ...current };
+        for (const answer of nextWindow.savedAnswers) {
+          next[answer.questionId] = answer;
+        }
+        return next;
+      });
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : t.loadNextGroupError);
     } finally {
       setIsLoadingWindow(false);
     }
@@ -364,7 +365,7 @@ export function ParticipantTestPage() {
     );
   }
 
-  if (!session || !questionWindow || isLoadingWindow) {
+  if (!session || !questionWindow) {
     return (
       <Card className="bg-white/82">
         <CardContent className="p-8 text-sm text-slate-500">{t.loadingAssessment}</CardContent>
@@ -372,18 +373,15 @@ export function ParticipantTestPage() {
     );
   }
 
-  const answeredCount = isProtectedMode && questionWindow
-    ? (() => {
-        const savedInCurrentGroup = questionWindow.savedAnswers.filter((answer) => {
-          const question = questionWindow.questions.find((item) => item.id === answer.questionId);
-          return question ? isQuestionAnswered(question, answer) : false;
-        }).length;
-        const localInCurrentGroup = questionWindow.questions.filter((question) => isQuestionAnswered(question, answers[question.id])).length;
-        return questionWindow.answeredQuestionCount - savedInCurrentGroup + localInCurrentGroup;
-      })()
-    : questionWindow.questions.filter((question) => isQuestionAnswered(question, answers[question.id])).length;
+  const currentGroupAnswered = activeQuestions.filter((question) => isQuestionAnswered(question, answers[question.id])).length;
+  const answeredCount = isProtectedMode
+    ? Math.max(questionWindow.answeredQuestionCount, currentGroupAnswered)
+    : currentGroupAnswered;
   const totalQuestions = session.session.delivery.totalQuestions || questionWindow.totalQuestions || questionWindow.questions.length;
   const progressValue = totalQuestions === 0 ? 0 : (answeredCount / totalQuestions) * 100;
+  const sectionProgressValue = isProtectedMode
+    ? ((questionWindow.currentGroup + 1) / Math.max(1, questionWindow.totalGroups)) * 100
+    : progressValue;
   const allVisibleAnswered = activeQuestions.every((question) => isQuestionAnswered(question, answers[question.id]));
 
   return (
@@ -396,24 +394,39 @@ export function ParticipantTestPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Progress value={progressValue} />
+          <Progress value={isProtectedMode ? sectionProgressValue : progressValue} />
           <div className="flex flex-col gap-2 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-            <span>{Math.round(progressValue)}% {t.completeWord}</span>
+            <span>
+              {isProtectedMode
+                ? t.sectionProgress.replace('{progress}', String(Math.round(sectionProgressValue)))
+                : `${Math.round(progressValue)}% ${t.completeWord}`}
+            </span>
             <span>{t.estimatedWord} {session.session.estimatedMinutes} {t.minutesWord}</span>
           </div>
           {isProtectedMode && questionWindow ? (
             <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
               {t.protectedMessage.replace('{current}', String(questionWindow.groupIndex + 1)).replace('{total}', String(questionWindow.totalGroups))}
+              <div className="mt-2 text-xs">
+                {t.sectionAnswered
+                  .replace('{answered}', String(currentGroupAnswered))
+                  .replace('{total}', String(questionWindow.questions.length))}
+              </div>
             </div>
           ) : null}
         </CardContent>
       </Card>
 
+      {isProtectedMode ? (
+        <div className="rounded-2xl border border-slate-200 bg-white/82 px-4 py-3 text-sm font-medium text-slate-700">
+          {t.sectionLabel
+            .replace('{current}', String(questionWindow.currentGroup + 1))
+            .replace('{total}', String(questionWindow.totalGroups))}
+        </div>
+      ) : null}
+
       {activeQuestions.map((question, index) => {
         const answer = answers[question.id];
-        const displayIndex = isProtectedMode && questionWindow
-          ? questionWindow.groupIndex + index + 1
-          : index + 1;
+        const displayIndex = index + 1;
 
         return (
           <Card key={question.id} className="bg-white/82">
@@ -502,15 +515,16 @@ export function ParticipantTestPage() {
         </div>
       ) : null}
 
+      {isLoadingWindow && questionWindow ? (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          {t.loadingNextSection}
+        </div>
+      ) : null}
+
       <div className="sticky bottom-4 flex flex-wrap justify-end gap-3">
-        {isProtectedMode && questionWindow && questionWindow.groupIndex > 0 ? (
-          <Button variant="outline" size="lg" disabled={isLoadingWindow || isSubmitting} onClick={() => void saveCurrentGroupAndMove(questionWindow.groupIndex - 1)}>
-            {t.previousSection}
-          </Button>
-        ) : null}
         {isProtectedMode && questionWindow && questionWindow.groupIndex < questionWindow.totalGroups - 1 ? (
-          <Button size="lg" className="shadow-panel" disabled={isLoadingWindow || isSubmitting || !allVisibleAnswered} onClick={() => void saveCurrentGroupAndMove(questionWindow.groupIndex + 1)}>
-            {isLoadingWindow ? t.saving : t.saveContinue}
+          <Button size="lg" className="shadow-panel" disabled={isLoadingWindow || isSubmitting || !allVisibleAnswered} onClick={() => void saveCurrentGroupAndMove()}>
+            {isLoadingWindow ? t.loadingNextSection : t.saveContinue}
           </Button>
         ) : (
           <Button size="lg" className="shadow-panel" disabled={isSubmitting || !allVisibleAnswered} onClick={handleSubmit}>

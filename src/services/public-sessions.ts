@@ -4,6 +4,7 @@ import type {
   ParticipantIdentityPayload,
   ParticipantResultAccess,
   ParticipantResultMode,
+  NextSubmissionGroupResponse,
   ProgressiveQuestionWindow,
   PublicSessionResponse,
   SaveSubmissionAnswersResponse,
@@ -118,13 +119,24 @@ export async function startPublicSubmission(token: string, payload: ParticipantI
 export async function fetchSubmissionQuestionWindow(
   submissionId: number,
   submissionAccessToken: string,
-  groupIndex: number,
 ) {
-  const response = await fetch(`${apiBaseUrl}/public/submissions/${submissionId}/questions?groupIndex=${groupIndex}`, {
+  const response = await fetch(`${apiBaseUrl}/public/submissions/${submissionId}/questions`, {
     headers: createSubmissionHeaders(submissionAccessToken),
   });
 
   return readJson<ProgressiveQuestionWindow>(response);
+}
+
+export async function fetchNextSubmissionGroup(
+  submissionId: number,
+  submissionAccessToken: string,
+) {
+  const response = await fetch(`${apiBaseUrl}/public/submissions/${submissionId}/next-group`, {
+    method: 'POST',
+    headers: createSubmissionHeaders(submissionAccessToken),
+  });
+
+  return readJson<NextSubmissionGroupResponse>(response);
 }
 
 export async function savePublicAnswers(

@@ -121,7 +121,10 @@ export interface ProgressiveQuestionWindow {
   status: 'in_progress';
   answerSequence: number;
   groupIndex: number;
+  currentGroup: number;
   totalGroups: number;
+  groupSize?: number;
+  isLastGroup: boolean;
   totalQuestions: number;
   answeredQuestionCount: number;
   groupKey: string;
@@ -139,6 +142,13 @@ export interface StartSubmissionResponse {
   status: 'in_progress';
   testType: TestTypeCode;
   participantResultMode: ParticipantResultMode;
+  protectedDelivery?: boolean;
+  totalGroups?: number;
+  groupSize?: number;
+}
+
+export interface NextSubmissionGroupResponse extends ProgressiveQuestionWindow {
+  complete?: boolean;
 }
 
 export interface SaveSubmissionAnswersResponse {
