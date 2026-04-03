@@ -19,8 +19,8 @@ describe('ParticipantCompletedPage', () => {
         testType: 'disc',
         participantResultMode: 'review_required',
         participant: {
-          fullName: 'Nadia Pratama',
-          email: 'nadia@example.com',
+          fullName: 'Participant 01',
+          email: 'participant01@example.com',
           consentAccepted: true,
           consentAcceptedAt: new Date().toISOString(),
         },
@@ -28,8 +28,8 @@ describe('ParticipantCompletedPage', () => {
           id: 99,
           submissionId: 1,
           participantId: 2,
-          participantName: 'Nadia Pratama',
-          participantEmail: 'nadia@example.com',
+          participantName: 'Participant 01',
+          participantEmail: 'participant01@example.com',
           department: null,
           positionTitle: null,
           sessionId: 10,
@@ -84,8 +84,8 @@ describe('ParticipantCompletedPage', () => {
         testType: 'disc',
         participantResultMode: 'review_required',
         participant: {
-          fullName: 'Nadia Pratama',
-          email: 'nadia@example.com',
+          fullName: 'Participant 01',
+          email: 'participant01@example.com',
           consentAccepted: true,
           consentAcceptedAt: new Date().toISOString(),
         },
@@ -93,8 +93,8 @@ describe('ParticipantCompletedPage', () => {
           id: 99,
           submissionId: 1,
           participantId: 2,
-          participantName: 'Nadia Pratama',
-          participantEmail: 'nadia@example.com',
+          participantName: 'Participant 01',
+          participantEmail: 'participant01@example.com',
           department: null,
           positionTitle: null,
           sessionId: 10,
@@ -137,3 +137,4 @@ describe('ParticipantCompletedPage', () => {
     expect(screen.getByText('Suitable for collaborative leadership roles.')).toBeInTheDocument();
   });
 });
+
