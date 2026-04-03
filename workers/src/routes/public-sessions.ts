@@ -31,10 +31,13 @@ interface SubmissionAccessRow {
   test_session_id: number | null;
   session_id: number | null;
   answer_sequence: number;
+  current_group: number | null;
+  total_groups: number | null;
   started_at: string | null;
   created_at: string;
   session_status: string;
   settings_json: string | null;
+  protected_delivery_mode: number | null;
   test_type_id: number;
   test_type_code: string;
 }
@@ -174,10 +177,13 @@ async function loadSubmissionForAccess(db: D1Database, submissionId: number, acc
       s.test_session_id,
       s.session_id,
       s.answer_sequence,
+      s.current_group,
+      s.total_groups,
       s.started_at,
       s.created_at,
       ts.status AS session_status,
       ts.settings_json,
+      ts.protected_delivery_mode,
       ts.test_type_id,
       tt.code AS test_type_code
     FROM submissions s
@@ -187,6 +193,31 @@ async function loadSubmissionForAccess(db: D1Database, submissionId: number, acc
     LIMIT 1`,
     [submissionId, accessToken],
   );
+}
+
+function getGroupSizeForTestType(testTypeCode: string, totalQuestions: number): number {
+  const normalizedType = testTypeCode.toLowerCase();
+  if (normalizedType === 'iq') return 10;
+  if (normalizedType === 'disc') return Math.max(1, totalQuestions);
+  if (normalizedType === 'workload') return Math.max(1, totalQuestions);
+  return 10;
+}
+
+function computeTotalGroups(totalQuestions: number, groupSize: number): number {
+  if (totalQuestions <= 0) return 1;
+  return Math.max(1, Math.ceil(totalQuestions / Math.max(1, groupSize)));
+}
+
+function getQuestionSliceForGroup<T>(questions: T[], groupIndex: number, groupSize: number): T[] {
+  const safeSize = Math.max(1, groupSize);
+  const safeGroupIndex = Math.max(0, groupIndex);
+  const offset = safeGroupIndex * safeSize;
+  return questions.slice(offset, offset + safeSize);
+}
+
+function clampGroupIndex(groupIndex: number, totalGroups: number): number {
+  if (!Number.isFinite(groupIndex)) return 0;
+  return Math.max(0, Math.min(groupIndex, Math.max(0, totalGroups - 1)));
 }
 
 async function fetchQuestionsWithOptions(db: D1Database, testTypeId: number) {
@@ -688,18 +719,17 @@ async function handleGetSession(c: { req: { param: (name: string) => string }; e
     }
 
     const settings = parseSettings(session.settings_json);
-    const countRow = await queryOne<{ total: number; groups: number }>(
+    const countRow = await queryOne<{ total: number }>(
       c.env.DB,
-      `SELECT
-        COUNT(*) AS total,
-        COUNT(DISTINCT COALESCE(question_group_key, 'default')) AS groups
+      `SELECT COUNT(*) AS total
        FROM questions
        WHERE test_type_id = ? AND status = 'active'`,
       [session.test_type_id],
     );
 
     const totalQuestions = Number(countRow?.total ?? 0);
-    const totalGroups = Math.max(1, Number(countRow?.groups ?? 1));
+    const groupSize = getGroupSizeForTestType(session.test_type_code, totalQuestions);
+    const totalGroups = computeTotalGroups(totalQuestions, groupSize);
     const deliveryMode = settings.protectedDeliveryMode ? 'progressive' : 'full';
 
     return c.json({
@@ -815,17 +845,32 @@ async function handleStartSession(c: { req: { param: (name: string) => string; j
     const submissionAccessToken = generateToken(20);
     const submissionAccessExpiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
 
+    const settings = parseSettings(session.settings_json);
+    const questionCountRow = await queryOne<{ total: number }>(
+      c.env.DB,
+      `SELECT COUNT(*) AS total
+       FROM questions
+       WHERE test_type_id = ? AND status = 'active'`,
+      [session.test_type_id],
+    );
+    const totalQuestionCount = Number(questionCountRow?.total ?? 0);
+    const groupSize = getGroupSizeForTestType(session.test_type_code, totalQuestionCount);
+    const totalGroups = settings.protectedDeliveryMode
+      ? computeTotalGroups(totalQuestionCount, groupSize)
+      : 1;
+
     const submissionInsert = await run(
       c.env.DB,
       `INSERT INTO submissions
-        (test_session_id, session_id, participant_id, attempt_no, status, answer_sequence, token, access_token, started_at, created_at)
-       VALUES (?, ?, ?, ?, 'in_progress', 0, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-      [session.id, session.id, participantId, attemptNo, submissionToken, submissionAccessToken],
+        (test_session_id, session_id, participant_id, attempt_no, status, answer_sequence, current_group, total_groups, token, access_token, started_at, created_at)
+       VALUES (?, ?, ?, ?, 'in_progress', 0, 0, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [session.id, session.id, participantId, attemptNo, totalGroups, submissionToken, submissionAccessToken],
     );
+    const submissionId = Number(submissionInsert.meta.last_row_id);
 
     return c.json(
       {
-        submissionId: Number(submissionInsert.meta.last_row_id),
+        submissionId,
         participantId,
         token: submissionToken,
         submissionAccessToken,
@@ -833,7 +878,10 @@ async function handleStartSession(c: { req: { param: (name: string) => string; j
         answerSequence: 0,
         status: 'in_progress',
         testType: session.test_type_code,
-        participantResultMode: parseSettings(session.settings_json).participantResultMode,
+        participantResultMode: settings.participantResultMode,
+        protectedDelivery: settings.protectedDeliveryMode,
+        totalGroups: settings.protectedDeliveryMode ? totalGroups : undefined,
+        groupSize: settings.protectedDeliveryMode ? groupSize : undefined,
       },
       201,
     );
@@ -858,8 +906,6 @@ app.post('/sessions/:token/start', startLimiter, handleStartSession);
 app.get('/submissions/:id/questions', async (c) => {
   const submissionId = Number(c.req.param('id'));
   const accessToken = parseSubmissionToken(c);
-  const rawGroupIndex = Number.parseInt(c.req.query('groupIndex') ?? '0', 10);
-  const requestedGroupIndex = Number.isFinite(rawGroupIndex) && rawGroupIndex >= 0 ? rawGroupIndex : 0;
 
   if (!Number.isFinite(submissionId) || submissionId < 1) {
     return c.json({ error: 'Invalid submission id' }, 400);
@@ -884,15 +930,18 @@ app.get('/submissions/:id/questions', async (c) => {
     }
 
     const settings = parseSettings(submission.settings_json);
+    const protectedMode = Boolean(submission.protected_delivery_mode) || settings.protectedDeliveryMode;
     const allQuestions = await fetchQuestionsWithOptions(c.env.DB, submission.test_type_id);
-
-    const groupKeys = Array.from(new Set(allQuestions.map((question) => question.questionGroupKey ?? 'default')));
-    const totalGroups = Math.max(1, groupKeys.length);
-    const groupIndex = Math.min(requestedGroupIndex, totalGroups - 1);
-    const protectedMode = settings.protectedDeliveryMode;
+    const groupSize = getGroupSizeForTestType(submission.test_type_code, allQuestions.length);
+    const computedTotalGroups = computeTotalGroups(allQuestions.length, groupSize);
+    const totalGroups = Math.max(1, Number(submission.total_groups ?? computedTotalGroups));
+    const currentGroup = protectedMode
+      ? clampGroupIndex(Number(submission.current_group ?? 0), totalGroups)
+      : 0;
+    const isLastGroup = currentGroup >= totalGroups - 1;
 
     const visibleQuestions = protectedMode
-      ? allQuestions.filter((question) => (question.questionGroupKey ?? 'default') === groupKeys[groupIndex])
+      ? getQuestionSliceForGroup(allQuestions, currentGroup, groupSize)
       : allQuestions;
 
     const savedAnswers = await loadSavedAnswers(c.env.DB, submission.id);
@@ -901,16 +950,122 @@ app.get('/submissions/:id/questions', async (c) => {
       submissionId: submission.id,
       status: 'in_progress',
       answerSequence: submission.answer_sequence,
-      groupIndex: protectedMode ? groupIndex : 0,
+      groupIndex: currentGroup,
+      currentGroup,
       totalGroups: protectedMode ? totalGroups : 1,
+      groupSize: protectedMode ? groupSize : allQuestions.length,
+      isLastGroup: protectedMode ? isLastGroup : true,
       totalQuestions: allQuestions.length,
       answeredQuestionCount: countAnsweredItems(savedAnswers),
-      groupKey: protectedMode ? groupKeys[groupIndex] : 'all',
+      groupKey: protectedMode ? `group-${currentGroup + 1}` : 'all',
       questions: visibleQuestions,
       savedAnswers,
     });
   } catch (error) {
     console.error('[public/submissions/questions] error', error);
+    return c.json({ error: 'Internal Server Error', message: String(error) }, 500);
+  }
+});
+
+const nextGroupLimiter = rateLimit({
+  windowSeconds: 300,
+  maxRequests: 30,
+  keyFn: (c) => {
+    const token = c.req.header('Authorization') ?? c.req.header('X-Submission-Token') ?? c.req.query('token');
+    return token ? `next-group:${token}` : 'unknown';
+  },
+  message: 'Too many section advance attempts. Please wait before trying again.',
+});
+
+app.post('/submissions/:id/next-group', nextGroupLimiter, async (c) => {
+  const submissionId = Number(c.req.param('id'));
+  const accessToken = parseSubmissionToken(c);
+
+  if (!Number.isFinite(submissionId) || submissionId < 1) {
+    return c.json({ error: 'Invalid submission id' }, 400);
+  }
+  if (!accessToken) {
+    return c.json({ error: 'Submission access token required' }, 401);
+  }
+
+  try {
+    const submission = await loadSubmissionForAccess(c.env.DB, submissionId, accessToken);
+    if (!submission) return c.json({ error: 'Submission not found' }, 404);
+    if (submission.status !== 'in_progress') return c.json({ error: 'Submission is not in progress' }, 409);
+    if (submission.session_status !== 'active') return c.json({ error: 'Session is no longer active' }, 403);
+    if (submissionIsExpired(submission)) return c.json({ error: 'Submission token expired' }, 401);
+
+    const settings = parseSettings(submission.settings_json);
+    const protectedMode = Boolean(submission.protected_delivery_mode) || settings.protectedDeliveryMode;
+    if (!protectedMode) {
+      return c.json({ error: 'Protected delivery is not enabled for this session' }, 400);
+    }
+
+    const allQuestions = await fetchQuestionsWithOptions(c.env.DB, submission.test_type_id);
+    const groupSize = getGroupSizeForTestType(submission.test_type_code, allQuestions.length);
+    const computedTotalGroups = computeTotalGroups(allQuestions.length, groupSize);
+    const totalGroups = Math.max(1, Number(submission.total_groups ?? computedTotalGroups));
+    const currentGroup = clampGroupIndex(Number(submission.current_group ?? 0), totalGroups);
+    const currentGroupQuestions = getQuestionSliceForGroup(allQuestions, currentGroup, groupSize);
+    const currentQuestionIds = currentGroupQuestions.map((question) => question.id);
+
+    if (currentQuestionIds.length > 0) {
+      const answeredRow = await queryOne<{ answered: number }>(
+        c.env.DB,
+        `SELECT COUNT(DISTINCT question_id) AS answered
+         FROM answers
+         WHERE submission_id = ? AND question_id IN (${makeInClause(currentQuestionIds.length)})`,
+        [submission.id, ...currentQuestionIds],
+      );
+      const answeredCount = Number(answeredRow?.answered ?? 0);
+      if (answeredCount < currentQuestionIds.length) {
+        return c.json({ error: 'Complete all questions before advancing' }, 400);
+      }
+    }
+
+    if (currentGroup >= totalGroups - 1) {
+      return c.json({
+        submissionId: submission.id,
+        complete: true,
+        currentGroup,
+        totalGroups,
+        isLastGroup: true,
+      });
+    }
+
+    const nextGroup = currentGroup + 1;
+    await run(
+      c.env.DB,
+      `UPDATE submissions
+       SET current_group = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [nextGroup, submission.id],
+    );
+
+    const nextQuestions = getQuestionSliceForGroup(allQuestions, nextGroup, groupSize);
+    const savedAnswers = await loadSavedAnswers(c.env.DB, submission.id);
+
+    return c.json({
+      submissionId: submission.id,
+      status: 'in_progress',
+      answerSequence: submission.answer_sequence,
+      groupIndex: nextGroup,
+      currentGroup: nextGroup,
+      totalGroups,
+      groupSize,
+      isLastGroup: nextGroup >= totalGroups - 1,
+      totalQuestions: allQuestions.length,
+      answeredQuestionCount: countAnsweredItems(savedAnswers),
+      groupKey: `group-${nextGroup + 1}`,
+      questions: nextQuestions,
+      savedAnswers,
+      complete: false,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: error.errors[0]?.message ?? 'Invalid request payload' }, 400);
+    }
+    console.error('[public/submissions/next-group] error', error);
     return c.json({ error: 'Internal Server Error', message: String(error) }, 500);
   }
 });
