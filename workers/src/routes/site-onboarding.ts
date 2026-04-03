@@ -456,9 +456,9 @@ const timeLimit = body.timeLimitMinutes ?? defaults.defaultTimeLimitMinutes ?? g
     c.env.DB,
     `INSERT INTO test_sessions (
        title, description, test_type_id, test_type, status, access_token,
-       time_limit_minutes, settings_json, instructions,
+       time_limit_minutes, settings_json, protected_delivery_mode, instructions,
        created_at, updated_at
-     ) VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+     ) VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     [
       body.title.trim(),
       `Draft ${body.testType.toUpperCase()} assessment for ${body.organizationName.trim()} (${body.purpose.replace(/_/g, ' ')}).`,
@@ -467,6 +467,7 @@ const timeLimit = body.timeLimitMinutes ?? defaults.defaultTimeLimitMinutes ?? g
       generateToken(12),
       timeLimit,
       JSON.stringify(settings),
+      body.protectedDeliveryMode ? 1 : 0,
       instructions,
     ],
   );
@@ -542,7 +543,7 @@ app.patch('/assessments/:id', async (c) => {
   await run(
     c.env.DB,
     `UPDATE test_sessions
-     SET title = ?, description = ?, test_type_id = ?, test_type = ?, time_limit_minutes = ?, settings_json = ?, instructions = ?, updated_at = CURRENT_TIMESTAMP
+     SET title = ?, description = ?, test_type_id = ?, test_type = ?, time_limit_minutes = ?, settings_json = ?, protected_delivery_mode = ?, instructions = ?, updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
     [
       body.title.trim(),
@@ -551,6 +552,7 @@ app.patch('/assessments/:id', async (c) => {
       body.testType,
       timeLimit,
       JSON.stringify(settings),
+      body.protectedDeliveryMode ? 1 : 0,
       instructions,
       Number(existing.session_id),
     ],
