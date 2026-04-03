@@ -1,6 +1,6 @@
 # Project Status
 
-**Last Updated:** 2026-04-02
+**Last Updated:** 2026-04-03
 
 ## Live and Working
 
@@ -225,7 +225,7 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | Admin login → dashboard | ✅ Verified | 2026-04-01 |
 | Customer signup → workspace | ✅ Verified | 2026-04-01 |
 | Create assessment → activate → invite | ✅ Verified | 2026-04-01 |
-| Participant consent → test → submit | ✅ Verified | 2026-04-01 |
+| Participant consent → test → submit | ✅ Verified | 2026-04-03 |
 | Result creation → review → release | ✅ Verified | 2026-04-01 |
 | Result detail → print report (admin) | ✅ Verified | 2026-04-02 |
 | Result detail → print report (customer) | ✅ Verified | 2026-04-02 |

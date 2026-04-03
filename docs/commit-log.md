@@ -4,6 +4,30 @@ A running log of meaningful commits with deployment status.
 
 ---
 
+## [2026-04-03] - Participant Question Loading and Submit Flow Fix
+
+### What Changed
+- Fixed participant test page to always load questions from submission questions endpoint, including full delivery mode
+- Added Bearer `Authorization` header support in frontend submission requests for compatibility with submission-auth middleware
+- Improved participant test page error handling and loading guards to avoid silent empty question state
+- Re-verified production participant API flow against live D1 schema (session start, load questions, save answers, submit)
+
+### Files Affected
+- `src/pages/participant/test-page.tsx` - Use question window data for full/progressive flows
+- `src/services/public-sessions.ts` - Send `Authorization: Bearer <token>` for submission routes
+
+### Deployed
+- Frontend auto-deploy from `main`
+- No new Workers deploy required for this frontend mapping fix
+
+### Verified
+- ✅ Production D1 schema reconfirmed (`questions`, `question_options`, `test_sessions`, `submissions`)
+- ✅ `GET /api/public/submissions/:id/questions` returns populated question payloads
+- ✅ `npm run typecheck`
+- ✅ `npm test -- test-page.test.tsx consent-page.test.tsx completed-page.test.tsx`
+
+---
+
 ## [2026-04-02] - B2C Landing Split
 
 ### What Changed
