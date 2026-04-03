@@ -1,6 +1,12 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { query, queryOne, run } from '../lib/db';
+import {
+  FLAT_QUESTION_BANK_CSV_HEADERS,
+  parseCsvText,
+  validateCsvHeaders,
+  validateQuestionImportRows,
+} from '../lib/question-bank-csv';
 import { requireAdmin } from '../middleware/auth';
 import type { AdminJwtPayload, Env } from '../types';
 
@@ -37,32 +43,7 @@ const questionSchema = z.object({
 
 app.use('*', requireAdmin);
 
-const CSV_EXPORT_HEADERS = [
-  'id',
-  'question_text',
-  'question_type',
-  'category',
-  'test_type',
-  'dimension',
-  'difficulty',
-  'is_active',
-  'order_index',
-  'option_1_text',
-  'option_1_value',
-  'option_1_is_correct',
-  'option_2_text',
-  'option_2_value',
-  'option_2_is_correct',
-  'option_3_text',
-  'option_3_value',
-  'option_3_is_correct',
-  'option_4_text',
-  'option_4_value',
-  'option_4_is_correct',
-  'option_5_text',
-  'option_5_value',
-  'option_5_is_correct',
-] as const;
+const CSV_EXPORT_HEADERS = FLAT_QUESTION_BANK_CSV_HEADERS;
 
 function parseSafe(val: any) {
   if (!val) return {};
@@ -75,6 +56,12 @@ function csvEscape(value: unknown) {
   const escaped = serialized.replace(/"/g, '""');
   return `"${escaped}"`;
 }
+
+const importPayloadSchema = z.object({
+  csv: z.string().min(1, 'CSV content is required'),
+  dryRun: z.boolean().optional().default(false),
+  replaceAll: z.boolean().optional().default(false),
+});
 
 async function getQuestionById(db: any, id: number) {
   const qRows = await query(
@@ -314,6 +301,50 @@ app.get('/questions/export', async (c) => {
       'Content-Disposition': 'attachment; filename="questions-export.csv"',
       'Cache-Control': 'no-store',
     },
+  });
+});
+
+app.post('/questions/import', async (c) => {
+  const payload = importPayloadSchema.parse(await c.req.json());
+  const parsed = parseCsvText(payload.csv);
+
+  if (parsed.headers.length === 0) {
+    return c.json({ success: false, imported: 0, errors: [{ row: 1, field: 'csv', message: 'CSV is empty' }] }, 400);
+  }
+
+  const headerValidation = validateCsvHeaders(parsed.headers);
+  if (!headerValidation.valid) {
+    return c.json({
+      success: false,
+      imported: 0,
+      errors: headerValidation.missingHeaders.map((header) => ({
+        row: 1,
+        field: header,
+        message: `Missing required header: ${header}`,
+      })),
+    }, 400);
+  }
+
+  const { validRows, issues } = validateQuestionImportRows(parsed.rows);
+  if (issues.length > 0) {
+    return c.json({ success: false, imported: 0, errors: issues }, 400);
+  }
+
+  if (!payload.dryRun) {
+    return c.json({
+      success: false,
+      imported: 0,
+      errors: [{ row: 0, field: 'dryRun', message: 'Write mode is not enabled yet. Use dryRun=true for validation preview.' }],
+    }, 400);
+  }
+
+  const categories = Array.from(new Set(validRows.map((row) => row.test_type)));
+  return c.json({
+    success: true,
+    preview: validRows.length,
+    categories,
+    replaceAll: payload.replaceAll,
+    dryRun: true,
   });
 });
 
