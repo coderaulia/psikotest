@@ -4,6 +4,42 @@ A running log of meaningful commits with deployment status.
 
 ---
 
+## [2026-04-03] - Question Bank CSV Import and Export
+
+### What Changed
+- Added CSV export endpoint for admin question bank (`GET /api/question-bank/questions/export`)
+- Added CSV import endpoint with validation (`POST /api/question-bank/questions/import`)
+  with `dryRun` preview and `replaceAll` support
+- Added CSV import template endpoint (`GET /api/question-bank/questions/import/template`)
+- Added admin UI controls for Export CSV, Import CSV modal workflow, dry-run preview, and template download
+- Added Workers-safe CSV parser and import validation utility for quoted CSV parsing and row-level errors
+
+### Files Affected
+- `workers/src/routes/question-bank.ts` - Added export/import/template endpoints
+- `workers/src/lib/question-bank-csv.ts` - NEW - CSV parser + validation helpers
+- `src/pages/admin/question-bank-page.tsx` - Added CSV import/export UI
+- `src/services/admin-data.ts` - Added CSV import/export API client helpers
+- `src/services/admin-api.ts` - Added structured error payload propagation for row-level import errors
+- `docs/question-bank-schema.md` - Updated flat CSV contract and endpoint behavior
+- `docs/api-endpoints.md` - Added question-bank CSV endpoints
+- `docs/project-status.md` - Marked question import/export as working
+
+### Deployed
+- ✅ Workers deployed to production (three progressive deploy checkpoints during implementation)
+- Frontend auto-deploy from `main`
+
+### Verified
+- ✅ Frontend typecheck (`npm run typecheck`)
+- ✅ Workers typecheck (`npm run typecheck` in `workers/`)
+- ✅ Endpoint reachability checks on production
+- ✅ Category distribution check via D1:
+  - custom: 5
+  - disc: 48
+  - iq: 45
+  - workload: 34
+
+---
+
 ## [2026-04-03] - Question Bank Schema Contract Alignment
 
 ### What Changed

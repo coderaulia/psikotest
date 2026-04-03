@@ -64,7 +64,7 @@
 | Manual | /manual | ✅ Working |
 | White Label | /white-label | ✅ Working |
 
-### API Endpoints (80 total)
+### API Endpoints (83 total)
 
 All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 
@@ -91,6 +91,7 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | Scoring result to result_summaries | ✅ Working |
 | Rate limiting (auth & submission routes) | ✅ Working |
 | Security headers | ✅ Working |
+| Question bank CSV import/export (admin) | ✅ Working |
 | Dummy billing | ✅ Working |
 
 ---
@@ -127,7 +128,6 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 ### Phase 1 — Fix Now (Critical for MVP)
 | Task | Description | Effort |
 |------|-------------|--------|
-| Question bank schema | Add missing columns to match frontend | 2 days |
 | Email delivery | Gmail SMTP integration for invites/reminders | 3 days |
 | Validated questions | Import professional psychometric questions | 1 day (after receiving content) |
 
@@ -138,7 +138,6 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | Email delivery | Gmail SMTP integration for invites/reminders | 3 days |
 | Validated questions | Import professional psychometric questions | 1 day (after receiving content) |
 | Stripe integration | Replace dummy billing with Stripe | 5 days |
-| Question import/export | Admin bulk question management | 2 days |
 
 ### Phase 3 — Growth Features
 | Task | Description | Effort |
@@ -197,7 +196,7 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 ### Last Deployments
 | Component | Date | Commit |
 |-----------|------|--------|
-| Workers API | 2026-04-02 | `d742428` (scoring + seeds) |
+| Workers API | 2026-04-03 | `7ac81ad` (question bank CSV import/export) |
 | Migrations | 2026-04-01 | All migrations applied |
 | Frontend | Continuous | Auto-deploy from main |
 

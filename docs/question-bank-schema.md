@@ -150,29 +150,74 @@ Body:
 
 Body: same shape as create, partial updates allowed.
 
-## CSV Mapping Contract (for Prompt 2)
+## CSV Endpoints
 
-Expected CSV columns for question import:
-- `test_type`
-- `question_code`
-- `instruction_text`
-- `prompt`
-- `question_group_key`
-- `dimension_key`
+### `GET /questions/export`
+- Auth: Admin Bearer
+- Response: `text/csv`
+- Purpose: Export current question bank in a flat Excel-friendly format (one row per question, up to five option slots).
+
+### `POST /questions/import`
+- Auth: Admin Bearer
+- Content-Type: `application/json`
+- Request body:
+  - `csv: string` (required)
+  - `dryRun?: boolean` (default `false`)
+  - `replaceAll?: boolean` (default `false`)
+- Behavior:
+  - Validates all rows first.
+  - Returns `400` with row-level `errors[]` if any row is invalid.
+  - `dryRun: true` performs validation only (no writes).
+  - `dryRun: false` writes inserts (and applies `replaceAll` when requested).
+
+### `GET /questions/import/template`
+- Auth: Admin Bearer
+- Response: `text/csv`
+- Purpose: Download import template with headers and sample rows.
+
+## Flat CSV Contract (Prompt 2 reference)
+
+CSV columns (ordered):
+- `id`
+- `question_text`
 - `question_type`
-- `question_order`
-- `is_required`
-- `status`
-- `question_meta_json`
-- `option_key`
-- `option_text`
-- `option_dimension_key`
-- `value_number`
-- `is_correct`
-- `option_order`
-- `score_payload_json`
+- `category`
+- `test_type`
+- `dimension`
+- `difficulty`
+- `is_active`
+- `order_index`
+- `option_1_text`
+- `option_1_value`
+- `option_1_is_correct`
+- `option_2_text`
+- `option_2_value`
+- `option_2_is_correct`
+- `option_3_text`
+- `option_3_value`
+- `option_3_is_correct`
+- `option_4_text`
+- `option_4_value`
+- `option_4_is_correct`
+- `option_5_text`
+- `option_5_value`
+- `option_5_is_correct`
 
-Notes:
-- `test_type` maps to `test_types.code`, then stored as `questions.test_type_id`.
-- One question can span multiple rows when multiple options exist.
-- `id`, `created_at`, and `updated_at` are system-managed and must not be supplied by CSV import.
+### CSV-to-DB mapping
+- `question_text` → `questions.prompt`
+- `question_type` → `questions.question_type`
+- `category`/`test_type` → `test_types.code` → `questions.test_type_id`
+- `dimension` → `questions.dimension_key`
+- `difficulty` → `questions.question_meta_json.difficulty` (stored as JSON)
+- `is_active` (`1`/`0`) → `questions.status` (`active`/`archived`)
+- `order_index` → `questions.question_order`
+- `option_n_text` → `question_options.option_text`
+- `option_n_value` → `question_options.value_number`
+- `option_n_is_correct` (`1`/`0`) → `question_options.is_correct`
+- Option order is derived from `n` and stored in `question_options.option_order`
+
+### Import notes
+- `id` is ignored during import; IDs are database-managed.
+- At least two option text columns must be provided per row.
+- Duplicate detection is based on `(test_type_id, prompt)` and duplicates are skipped when `replaceAll=false`.
+- `replaceAll=true` deletes existing questions/options for categories present in the CSV before insert.

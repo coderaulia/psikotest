@@ -1,6 +1,6 @@
 # API Endpoints Documentation
 
-**Last Updated:** 2026-04-01
+**Last Updated:** 2026-04-03
 **API Version:** 2.2.0
 **Base URL:** `https://psikotest-api.coderaulia.workers.dev/api`
 
@@ -275,6 +275,30 @@ Response: { "items": [...] }
 - **Handler:** `question-bank.ts`
 - **Status:** ✅ Working
 - **Description:** Update question
+
+#### GET /api/question-bank/questions/export
+- **Auth:** Admin Bearer
+- **Handler:** `question-bank.ts`
+- **Status:** ✅ Working
+- **Description:** Export question bank as flat CSV (one row per question with option slots)
+
+#### POST /api/question-bank/questions/import
+- **Auth:** Admin Bearer
+- **Handler:** `question-bank.ts`
+- **Status:** ✅ Working
+- **Description:** Import question bank from CSV string payload (`dryRun` and write mode supported)
+
+```json
+Request: { "csv": "...", "dryRun": true, "replaceAll": false }
+Response (dry run): { "success": true, "preview": 24, "categories": ["iq"], "dryRun": true }
+Response (write): { "success": true, "imported": 20, "skipped": 4, "dryRun": false }
+```
+
+#### GET /api/question-bank/questions/import/template
+- **Auth:** Admin Bearer
+- **Handler:** `question-bank.ts`
+- **Status:** ✅ Working
+- **Description:** Download CSV import template with headers and sample rows
 
 ---
 
@@ -816,8 +840,6 @@ Currently, there are no rate limits implemented. This is technical debt that sho
 | `POST /api/site-email/send-invite` | Send actual email invites | Phase 1 |
 | `POST /api/site-email/send-reminder` | Send actual email reminders | Phase 1 |
 | `GET /api/site-email/templates` | Manage email templates | Phase 2 |
-| `POST /api/admin/question-bank/import` | Bulk import questions | Phase 2 |
-| `GET /api/admin/question-bank/export` | Export questions | Phase 2 |
 | `POST /api/site-billing/webhooks/stripe` | Stripe webhook handler | Phase 2 |
 | `GET /api/site-billing/portal` | Stripe customer portal | Phase 2 |
 | `GET /api/results/:id/report.pdf` | PDF report download | Phase 2 |
