@@ -312,13 +312,13 @@ Response: { "items": [...] }
 - **Auth:** Admin Bearer
 - **Handler:** `question-bank.ts`
 - **Status:** ✅ Working
-- **Description:** Export question bank as flat CSV (one row per question with option slots)
+- **Description:** Export question bank as validated CSV v2 (one row per question with scoring metadata and up to five option slots)
 
 #### POST /api/question-bank/questions/import
 - **Auth:** Admin Bearer
 - **Handler:** `question-bank.ts`
 - **Status:** ✅ Working
-- **Description:** Import question bank from CSV string payload (`dryRun` and write mode supported)
+- **Description:** Import validated question content from CSV string payload (`dryRun` and write mode supported, atomic validation)
 
 ```json
 Request: { "csv": "...", "dryRun": true, "replaceAll": false }
@@ -326,11 +326,19 @@ Response (dry run): { "success": true, "preview": 24, "categories": ["iq"], "dry
 Response (write): { "success": true, "imported": 20, "skipped": 4, "dryRun": false }
 ```
 
+Validation guarantees:
+- row-level errors with `{ row, field, message }`
+- strict headers for validated CSV v2
+- `question_code` uniqueness within `test_type` (payload scope)
+- `question_order` uniqueness within `test_type` (payload scope)
+- reverse/weight parsing and numeric option score checks
+- no partial writes when any row is invalid
+
 #### GET /api/question-bank/questions/import/template
 - **Auth:** Admin Bearer
 - **Handler:** `question-bank.ts`
 - **Status:** ✅ Working
-- **Description:** Download CSV import template with headers and sample rows
+- **Description:** Download validated CSV v2 import template with sample rows
 
 ---
 

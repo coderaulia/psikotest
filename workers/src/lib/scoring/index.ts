@@ -44,7 +44,9 @@ export interface QuestionOption {
   optionText: string;
   dimensionKey: string | null;
   valueNumber: number | null;
+  scoreValue: number | null;
   isCorrect: boolean;
+  isActive: boolean;
   optionOrder: number;
   scorePayload: Record<string, unknown> | null;
 }
@@ -55,6 +57,10 @@ export interface ScoredQuestion {
   testType: string;
   questionCode: string;
   dimensionKey: string | null;
+  categoryKey: string | null;
+  scoringKey: string | null;
+  isReverseScored: boolean;
+  weight: number;
   questionType: string;
   options: QuestionOption[];
 }
@@ -65,6 +71,77 @@ export interface SubmissionAnswer {
   mostOptionId?: number;   // For forced-choice DISC
   leastOptionId?: number;  // For forced-choice DISC
   likertValue?: number;    // For likert scale
+}
+
+interface ScoreBounds {
+  min: number;
+  max: number;
+}
+
+function safeWeight(weight: number | null | undefined): number {
+  if (!Number.isFinite(weight ?? NaN) || (weight ?? 0) <= 0) {
+    return 1;
+  }
+  return Number(weight);
+}
+
+function activeOptions(question: ScoredQuestion): QuestionOption[] {
+  const active = question.options.filter((option) => option.isActive !== false);
+  return active.length > 0 ? active : question.options;
+}
+
+function resolveOptionScore(option: QuestionOption, fallback = 0): number {
+  if (option.scoreValue != null && Number.isFinite(option.scoreValue)) {
+    return Number(option.scoreValue);
+  }
+  if (option.valueNumber != null && Number.isFinite(option.valueNumber)) {
+    return Number(option.valueNumber);
+  }
+  if (option.isCorrect) {
+    return 1;
+  }
+  return fallback;
+}
+
+function resolveQuestionScoreBounds(question: ScoredQuestion): ScoreBounds {
+  const values = activeOptions(question)
+    .map((option) => resolveOptionScore(option, NaN))
+    .filter((value) => Number.isFinite(value));
+
+  if (values.length === 0) {
+    return { min: 0, max: 1 };
+  }
+
+  return {
+    min: Math.min(...values),
+    max: Math.max(...values),
+  };
+}
+
+function applyReverseScore(question: ScoredQuestion, value: number, bounds: ScoreBounds): number {
+  if (!question.isReverseScored) {
+    return value;
+  }
+  return bounds.max + bounds.min - value;
+}
+
+function normalizeToPercentage(value: number, max: number): number {
+  if (!Number.isFinite(max) || max <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((value / max) * 100)));
+}
+
+function resolveAnswerLikertValue(question: ScoredQuestion, answer: SubmissionAnswer): number | null {
+  if (typeof answer.likertValue === 'number' && Number.isFinite(answer.likertValue)) {
+    return answer.likertValue;
+  }
+
+  if (typeof answer.selectedOptionId !== 'number') {
+    return null;
+  }
+
+  const option = activeOptions(question).find((item) => item.id === answer.selectedOptionId);
+  if (!option) return null;
+  return resolveOptionScore(option, NaN);
 }
 
 // ─── IQ Scoring ─────────────────────────────────────────────────────────────
@@ -89,14 +166,15 @@ export function scoreIQ(
   questions: ScoredQuestion[],
   answers: SubmissionAnswer[]
 ): IQScoreResult {
-  const dimensionScores: Record<string, { correct: number; total: number }> = {
-    pattern: { correct: 0, total: 0 },
-    numerical: { correct: 0, total: 0 },
-    verbal: { correct: 0, total: 0 },
-    spatial: { correct: 0, total: 0 },
+  const dimensionScores: Record<string, { weightedScore: number; weightedMax: number }> = {
+    pattern: { weightedScore: 0, weightedMax: 0 },
+    numerical: { weightedScore: 0, weightedMax: 0 },
+    verbal: { weightedScore: 0, weightedMax: 0 },
+    spatial: { weightedScore: 0, weightedMax: 0 },
   };
 
-  let correctCount = 0;
+  let weightedScoreTotal = 0;
+  let weightedMaxTotal = 0;
   let totalCount = 0;
 
   for (const question of questions) {
@@ -104,72 +182,77 @@ export function scoreIQ(
     if (!answer) continue;
 
     totalCount += 1;
+    const weight = safeWeight(question.weight);
+    const options = activeOptions(question);
+    const bounds = resolveQuestionScoreBounds(question);
+    const selectedOption = options.find(option => option.id === answer.selectedOptionId);
+    const correctOption = options.find(option => option.isCorrect);
 
-    const correctOption = question.options.find(o => o.isCorrect);
-    if (!correctOption) continue;
-
-    const isCorrect = answer.selectedOptionId === correctOption.id;
-    if (isCorrect) {
-      correctCount += 1;
+    let rawScore = 0;
+    if (correctOption) {
+      rawScore = answer.selectedOptionId === correctOption.id ? 1 : 0;
+    } else if (selectedOption) {
+      rawScore = resolveOptionScore(selectedOption, 0);
     }
+
+    const transformedScore = applyReverseScore(question, rawScore, bounds);
+    const maxBaseScore = correctOption ? 1 : Math.max(1, bounds.max);
+    const weightedScore = transformedScore * weight;
+    const weightedMax = maxBaseScore * weight;
+
+    weightedScoreTotal += weightedScore;
+    weightedMaxTotal += weightedMax;
 
     // Track dimension scores
     const dimension = question.dimensionKey?.toLowerCase();
     if (dimension && dimensionScores[dimension]) {
-      dimensionScores[dimension].total += 1;
-      if (isCorrect) {
-        dimensionScores[dimension].correct += 1;
-      }
+      dimensionScores[dimension].weightedScore += weightedScore;
+      dimensionScores[dimension].weightedMax += weightedMax;
     }
   }
 
-  // Calculate IQ score from raw score
-  const percentage = totalCount > 0 ? (correctCount / totalCount) * 100 : 0;
+  const normalizedCorrectCount = totalCount > 0 && weightedMaxTotal > 0
+    ? Math.round((weightedScoreTotal / weightedMaxTotal) * totalCount)
+    : 0;
   
   // Find matching band
-  const bandInfo = IQ_BANDS.find(b => correctCount >= b.min && correctCount <= b.max) || IQ_BANDS[2];
+  const bandInfo = IQ_BANDS.find(b => normalizedCorrectCount >= b.min && normalizedCorrectCount <= b.max) || IQ_BANDS[2];
   
   // Interpolate IQ within band range
   const bandRange = bandInfo.iqMax - bandInfo.iqMin;
-  const positionInBand = totalCount > 0 ? (correctCount - bandInfo.min) / Math.max(1, (bandInfo.max - bandInfo.min)) : 0.5;
+  const positionInBand = totalCount > 0
+    ? (normalizedCorrectCount - bandInfo.min) / Math.max(1, (bandInfo.max - bandInfo.min))
+    : 0.5;
   const iqScore = Math.round(bandInfo.iqMin + (bandRange * positionInBand));
 
   // Calculate dimension percentages
   const dimensions: IQScoreResult['dimensions'] = {
     pattern: {
-      correct: dimensionScores.pattern.correct,
-      total: dimensionScores.pattern.total,
-      percentage: dimensionScores.pattern.total > 0 
-        ? Math.round((dimensionScores.pattern.correct / dimensionScores.pattern.total) * 100) 
-        : 0,
+      correct: Math.round(dimensionScores.pattern.weightedScore),
+      total: Math.round(dimensionScores.pattern.weightedMax),
+      percentage: normalizeToPercentage(dimensionScores.pattern.weightedScore, dimensionScores.pattern.weightedMax),
     },
     numerical: {
-      correct: dimensionScores.numerical.correct,
-      total: dimensionScores.numerical.total,
-      percentage: dimensionScores.numerical.total > 0 
-        ? Math.round((dimensionScores.numerical.correct / dimensionScores.numerical.total) * 100) 
-        : 0,
+      correct: Math.round(dimensionScores.numerical.weightedScore),
+      total: Math.round(dimensionScores.numerical.weightedMax),
+      percentage: normalizeToPercentage(dimensionScores.numerical.weightedScore, dimensionScores.numerical.weightedMax),
     },
     verbal: {
-      correct: dimensionScores.verbal.correct,
-      total: dimensionScores.verbal.total,
-      percentage: dimensionScores.verbal.total > 0 
-        ? Math.round((dimensionScores.verbal.correct / dimensionScores.verbal.total) * 100) 
-        : 0,
+      correct: Math.round(dimensionScores.verbal.weightedScore),
+      total: Math.round(dimensionScores.verbal.weightedMax),
+      percentage: normalizeToPercentage(dimensionScores.verbal.weightedScore, dimensionScores.verbal.weightedMax),
     },
     spatial: {
-      correct: dimensionScores.spatial.correct,
-      total: dimensionScores.spatial.total,
-      percentage: dimensionScores.spatial.total > 0 
-        ? Math.round((dimensionScores.spatial.correct / dimensionScores.spatial.total) * 100) 
-        : 0,
+      correct: Math.round(dimensionScores.spatial.weightedScore),
+      total: Math.round(dimensionScores.spatial.weightedMax),
+      percentage: normalizeToPercentage(dimensionScores.spatial.weightedScore, dimensionScores.spatial.weightedMax),
     },
   };
 
   return {
     totalScore: iqScore,
     band: bandInfo.band as IQScoreResult['band'],
-    rawScore: correctCount,
+    rawScore: normalizedCorrectCount,
     maxScore: totalCount,
     percentile: bandInfo.percentile,
     dimensions,
@@ -201,14 +284,22 @@ export function scoreDISC(
   for (const question of questions) {
     const answer = answers.find(a => a.questionId === question.id);
     if (!answer) continue;
+    const weight = safeWeight(question.weight);
+    const options = activeOptions(question);
+    const bounds = resolveQuestionScoreBounds(question);
+    const resolveDimension = (option: QuestionOption) => (option.dimensionKey ?? question.dimensionKey ?? '').toUpperCase();
+    const resolveScore = (option: QuestionOption) => {
+      const baseScore = resolveOptionScore(option, 1);
+      return applyReverseScore(question, baseScore, bounds) * weight;
+    };
 
     // For single-choice DISC questions
     if (question.questionType === 'single_choice' && answer.selectedOptionId) {
-      const selectedOption = question.options.find(o => o.id === answer.selectedOptionId);
-      if (selectedOption?.dimensionKey) {
-        const dim = selectedOption.dimensionKey.toUpperCase() as 'D' | 'I' | 'S' | 'C';
+      const selectedOption = options.find(o => o.id === answer.selectedOptionId);
+      if (selectedOption) {
+        const dim = resolveDimension(selectedOption) as 'D' | 'I' | 'S' | 'C';
         if (scores.hasOwnProperty(dim)) {
-          scores[dim] += 1;
+          scores[dim] += resolveScore(selectedOption);
         }
       }
     }
@@ -217,21 +308,21 @@ export function scoreDISC(
     if (question.questionType === 'forced_choice') {
       // Most selection adds to the dimension
       if (answer.mostOptionId) {
-        const mostOption = question.options.find(o => o.id === answer.mostOptionId);
-        if (mostOption?.dimensionKey) {
-          const dim = mostOption.dimensionKey.toUpperCase() as 'D' | 'I' | 'S' | 'C';
+        const mostOption = options.find(o => o.id === answer.mostOptionId);
+        if (mostOption) {
+          const dim = resolveDimension(mostOption) as 'D' | 'I' | 'S' | 'C';
           if (scores.hasOwnProperty(dim)) {
-            scores[dim] += 1;
+            scores[dim] += resolveScore(mostOption);
           }
         }
       }
       // Least selection subtracts from the dimension (optional)
       if (answer.leastOptionId) {
-        const leastOption = question.options.find(o => o.id === answer.leastOptionId);
-        if (leastOption?.dimensionKey) {
-          const dim = leastOption.dimensionKey.toUpperCase() as 'D' | 'I' | 'S' | 'C';
+        const leastOption = options.find(o => o.id === answer.leastOptionId);
+        if (leastOption) {
+          const dim = resolveDimension(leastOption) as 'D' | 'I' | 'S' | 'C';
           if (scores.hasOwnProperty(dim)) {
-            scores[dim] = Math.max(0, scores[dim] - 0.5);
+            scores[dim] = Math.max(0, scores[dim] - (resolveScore(leastOption) * 0.5));
           }
         }
       }
@@ -294,22 +385,31 @@ export function scoreWorkload(
   questions: ScoredQuestion[],
   answers: SubmissionAnswer[]
 ): WorkloadScoreResult {
-  const dimensionScores: Record<string, number[]> = {
-    mental_demand: [],
-    physical_demand: [],
-    temporal_demand: [],
-    performance: [],
-    effort: [],
-    frustration: [],
+  const dimensionScores: Record<string, { weightedSum: number; weightTotal: number }> = {
+    mental_demand: { weightedSum: 0, weightTotal: 0 },
+    physical_demand: { weightedSum: 0, weightTotal: 0 },
+    temporal_demand: { weightedSum: 0, weightTotal: 0 },
+    performance: { weightedSum: 0, weightTotal: 0 },
+    effort: { weightedSum: 0, weightTotal: 0 },
+    frustration: { weightedSum: 0, weightTotal: 0 },
   };
 
   for (const question of questions) {
     const answer = answers.find(a => a.questionId === question.id);
-    if (!answer || answer.likertValue === undefined) continue;
+    if (!answer) continue;
+
+    const rawLikertValue = resolveAnswerLikertValue(question, answer);
+    if (rawLikertValue == null) continue;
+
+    const weight = safeWeight(question.weight);
+    const bounds = resolveQuestionScoreBounds(question);
+    const transformedValue = applyReverseScore(question, rawLikertValue, bounds);
 
     const dimension = question.dimensionKey?.toLowerCase();
     if (dimension && dimensionScores.hasOwnProperty(dimension)) {
-      dimensionScores[dimension as keyof typeof dimensionScores].push(answer.likertValue);
+      const target = dimensionScores[dimension as keyof typeof dimensionScores];
+      target.weightedSum += transformedValue * weight;
+      target.weightTotal += weight;
     }
   }
 
@@ -326,9 +426,9 @@ export function scoreWorkload(
   let totalScore = 0;
   let dimensionCount = 0;
 
-  for (const [key, values] of Object.entries(dimensionScores)) {
-    if (values.length > 0) {
-      const avg = values.reduce((sum, v) => sum + v, 0) / values.length;
+  for (const [key, bucket] of Object.entries(dimensionScores)) {
+    if (bucket.weightTotal > 0) {
+      const avg = bucket.weightedSum / bucket.weightTotal;
       dimensions[key as keyof typeof dimensions] = Math.round(avg * 10) / 10;
       totalScore += avg;
       dimensionCount += 1;

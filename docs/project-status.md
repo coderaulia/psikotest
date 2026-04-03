@@ -92,6 +92,7 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | Rate limiting (auth & submission routes) | ✅ Working |
 | Security headers | ✅ Working |
 | Question bank CSV import/export (admin) | ✅ Working |
+| Validated content CSV contract + scoring metadata | ✅ Working |
 | Progressive delivery (protected multi-group) | ✅ Working |
 | Manual payment flow (customer + admin verification) | ✅ Working |
 | Dummy billing | ✅ Working |
@@ -121,6 +122,7 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 - [x] Scoring results to result_summaries table
 - [x] Rate limiting implementation
 - [x] Security response headers
+- [x] Validated question content contract + scoring metadata support
 - [ ] Gmail SMTP integration for email delivery
 
 ---
@@ -131,14 +133,14 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | Task | Description | Effort |
 |------|-------------|--------|
 | Email delivery | Gmail SMTP integration for invites/reminders | 3 days |
-| Validated questions | Import professional psychometric questions | 1 day (after receiving content) |
+| Validated questions | Import licensed psychometric question sets using validated CSV v2 contract | 1 day (after receiving content) |
 
 ### Phase 2 — High Value (Post-MVP)
 | Task | Description | Effort |
 |------|-------------|--------|
 | External PDF service | Gotenberg or Browserless for automated PDFs | 3 days |
 | Email delivery | Gmail SMTP integration for invites/reminders | 3 days |
-| Validated questions | Import professional psychometric questions | 1 day (after receiving content) |
+| Validated questions | Import licensed psychometric question sets (contract ready) | 1 day (after receiving content) |
 | Payment gateway integration | Replace manual verification flow with automated gateway | 5 days |
 
 ### Phase 3 — Growth Features
@@ -218,6 +220,7 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | 009_question_bank_expansion | Question bank schema alignment | ✅ Remote |
 | 010_progressive_delivery | Progressive submission group tracking | ✅ Remote |
 | 011_manual_payments | Manual payment records + verification | ✅ Remote |
+| 012_validated_question_metadata | Scoring metadata fields + validated content indexes | ✅ Remote |
 
 ---
 

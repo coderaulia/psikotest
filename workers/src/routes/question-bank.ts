@@ -2,10 +2,15 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { query, queryOne, run } from '../lib/db';
 import {
+  booleanToCsvFlag,
+  csvEscape,
+  ensureNumericOrEmpty,
   FLAT_QUESTION_BANK_CSV_HEADERS,
+  formatQuestionImportTemplateRows,
+  normalizeNullableString,
   parseCsvText,
-  validateCsvHeaders,
-  validateQuestionImportRows,
+  validateCanonicalCsvRows,
+  validateHeaderContract,
 } from '../lib/question-bank-csv';
 import { requireAdmin } from '../middleware/auth';
 import type { AdminJwtPayload, Env } from '../types';
@@ -21,7 +26,9 @@ const optionSchema = z.object({
   optionText: z.string(),
   dimensionKey: z.string().nullable().optional(),
   valueNumber: z.number().nullable().optional(),
+  scoreValue: z.number().nullable().optional(),
   isCorrect: z.boolean().optional(),
+  isActive: z.boolean().optional(),
   optionOrder: z.number(),
   scorePayload: z.record(z.unknown()).nullable().optional(),
 });
@@ -33,6 +40,10 @@ const questionSchema = z.object({
   prompt: z.string().nullable().optional(),
   questionGroupKey: z.string().nullable().optional(),
   dimensionKey: z.string().nullable().optional(),
+  categoryKey: z.string().nullable().optional(),
+  scoringKey: z.string().nullable().optional(),
+  isReverseScored: z.boolean().optional().default(false),
+  weight: z.number().positive().optional().default(1),
   questionType: z.enum(['single_choice', 'forced_choice', 'likert']),
   questionOrder: z.number().int(),
   isRequired: z.boolean(),
@@ -49,12 +60,6 @@ function parseSafe(val: any) {
   if (!val) return {};
   if (typeof val !== 'string') return val;
   try { return JSON.parse(val); } catch { return {}; }
-}
-
-function csvEscape(value: unknown) {
-  const serialized = value == null ? '' : String(value);
-  const escaped = serialized.replace(/"/g, '""');
-  return `"${escaped}"`;
 }
 
 const importPayloadSchema = z.object({
@@ -74,6 +79,10 @@ async function getQuestionById(db: any, id: number) {
       q.prompt,
       q.question_group_key,
       q.dimension_key,
+      q.category_key,
+      q.scoring_key,
+      q.is_reverse_scored,
+      q.weight,
       q.question_type,
       q.question_order,
       q.is_required,
@@ -107,6 +116,10 @@ async function getQuestionById(db: any, id: number) {
     instructionText: row.instruction_text,
     questionGroupKey: row.question_group_key,
     dimensionKey: row.dimension_key,
+    categoryKey: row.category_key,
+    scoringKey: row.scoring_key,
+    isReverseScored: Boolean(row.is_reverse_scored),
+    weight: row.weight == null ? 1 : Number(row.weight),
     questionType: row.question_type,
     questionOrder: Number(row.question_order ?? 0),
     isRequired: Boolean(row.is_required),
@@ -120,7 +133,9 @@ async function getQuestionById(db: any, id: number) {
       optionText: o.option_text,
       dimensionKey: o.dimension_key,
       valueNumber: o.value_number == null ? null : Number(o.value_number),
+      scoreValue: o.score_value == null ? (o.value_number == null ? null : Number(o.value_number)) : Number(o.score_value),
       isCorrect: Boolean(o.is_correct),
+      isActive: o.is_active == null ? true : Boolean(o.is_active),
       optionOrder: o.option_order,
       scorePayload: o.score_payload_json ? parseSafe(o.score_payload_json) : {},
     })),
@@ -162,6 +177,10 @@ app.get('/questions', async (c) => {
         q.prompt,
         q.question_group_key,
         q.dimension_key,
+        q.category_key,
+        q.scoring_key,
+        q.is_reverse_scored,
+        q.weight,
         q.question_type,
         q.question_order,
         q.is_required,
@@ -186,6 +205,10 @@ app.get('/questions', async (c) => {
       instructionText: r.instruction_text,
       questionGroupKey: r.question_group_key,
       dimensionKey: r.dimension_key,
+      categoryKey: r.category_key,
+      scoringKey: r.scoring_key,
+      isReverseScored: Boolean(r.is_reverse_scored),
+      weight: r.weight == null ? 1 : Number(r.weight),
       questionType: r.question_type,
       questionOrder: Number(r.question_order ?? 0),
       isRequired: Boolean(r.is_required),
@@ -206,16 +229,24 @@ app.get('/questions/export', async (c) => {
     c.env.DB,
     `SELECT
       q.id,
+      q.question_code,
       q.prompt,
       q.question_type,
       q.dimension_key,
+      q.category_key,
+      q.scoring_key,
+      q.is_reverse_scored,
+      q.weight,
       q.question_order,
       q.status,
-      q.question_meta_json,
       tt.code AS test_type,
+      qo.option_key,
       qo.option_text,
+      qo.dimension_key AS option_dimension_key,
       qo.value_number,
+      qo.score_value,
       qo.is_correct,
+      qo.is_active,
       qo.option_order
      FROM questions q
      INNER JOIN test_types tt ON tt.id = q.test_type_id
@@ -224,46 +255,46 @@ app.get('/questions/export', async (c) => {
   );
 
   const grouped = new Map<number, {
-    id: number;
-    questionText: string;
-    questionType: string;
-    category: string;
     testType: string;
-    dimension: string;
-    difficulty: string;
-    isActive: string;
-    orderIndex: number;
-    options: Array<{ text: string; value: string; isCorrect: string }>;
+    questionCode: string;
+    questionType: string;
+    questionOrder: number;
+    prompt: string;
+    dimensionKey: string;
+    categoryKey: string;
+    scoringKey: string;
+    isReverseScored: string;
+    weight: string;
+    status: string;
+    options: Array<{ order: number; label: string; score: string; isCorrect: string; dimensionKey: string }>;
   }>();
 
   for (const entry of rows.results ?? []) {
     const row = entry as Record<string, unknown>;
     const id = Number(row.id);
     const current = grouped.get(id) ?? {
-      id,
-      questionText: String(row.prompt ?? ''),
-      questionType: String(row.question_type ?? ''),
-      category: String(row.test_type ?? ''),
       testType: String(row.test_type ?? ''),
-      dimension: String(row.dimension_key ?? ''),
-      difficulty: '',
-      isActive: String(row.status) === 'active' ? '1' : '0',
-      orderIndex: Number(row.question_order ?? 0),
+      questionCode: String(row.question_code ?? ''),
+      questionType: String(row.question_type ?? ''),
+      questionOrder: Number(row.question_order ?? 0),
+      prompt: String(row.prompt ?? ''),
+      dimensionKey: normalizeNullableString(row.dimension_key),
+      categoryKey: normalizeNullableString(row.category_key),
+      scoringKey: normalizeNullableString(row.scoring_key),
+      isReverseScored: booleanToCsvFlag(row.is_reverse_scored as number | boolean | null | undefined),
+      weight: ensureNumericOrEmpty(row.weight),
+      status: normalizeNullableString(row.status || 'active') || 'active',
       options: [],
     };
 
-    if (current.difficulty === '' && row.question_meta_json) {
-      const meta = parseSafe(row.question_meta_json);
-      if (meta && typeof meta === 'object' && 'difficulty' in meta && meta.difficulty != null) {
-        current.difficulty = String(meta.difficulty);
-      }
-    }
-
-    if (row.option_text != null && current.options.length < 5) {
+    if (row.option_text != null) {
+      const optionOrder = Number(row.option_order ?? current.options.length + 1);
       current.options.push({
-        text: String(row.option_text),
-        value: row.value_number == null ? '' : String(row.value_number),
-        isCorrect: Number(row.is_correct ?? 0) > 0 ? '1' : '0',
+        order: optionOrder,
+        label: String(row.option_text),
+        score: ensureNumericOrEmpty(row.score_value ?? row.value_number),
+        isCorrect: booleanToCsvFlag(Number(row.is_correct ?? 0) > 0),
+        dimensionKey: normalizeNullableString(row.option_dimension_key),
       });
     }
 
@@ -273,22 +304,26 @@ app.get('/questions/export', async (c) => {
   const lines: string[] = [CSV_EXPORT_HEADERS.join(',')];
   for (const question of grouped.values()) {
     const flatRow: string[] = [
-      String(question.id),
-      question.questionText,
-      question.questionType,
-      question.category,
       question.testType,
-      question.dimension,
-      question.difficulty,
-      question.isActive,
-      String(question.orderIndex),
+      question.questionCode,
+      question.questionType,
+      String(question.questionOrder),
+      question.prompt,
+      question.dimensionKey,
+      question.categoryKey,
+      question.scoringKey,
+      question.isReverseScored,
+      question.weight || '1',
+      question.status,
     ];
 
     for (let index = 0; index < 5; index += 1) {
-      const option = question.options[index];
-      flatRow.push(option?.text ?? '');
-      flatRow.push(option?.value ?? '');
+      const slot = index + 1;
+      const option = question.options.find((item) => item.order === slot) ?? question.options[index];
+      flatRow.push(option?.label ?? '');
+      flatRow.push(option?.score ?? '');
       flatRow.push(option?.isCorrect ?? '');
+      flatRow.push(option?.dimensionKey ?? '');
     }
 
     lines.push(flatRow.map(csvEscape).join(','));
@@ -312,20 +347,30 @@ app.post('/questions/import', async (c) => {
     return c.json({ success: false, imported: 0, errors: [{ row: 1, field: 'csv', message: 'CSV is empty' }] }, 400);
   }
 
-  const headerValidation = validateCsvHeaders(parsed.headers);
+  const headerValidation = validateHeaderContract(parsed.headers);
   if (!headerValidation.valid) {
+    const headerIssues = headerValidation.missingHeaders.map((header) => ({
+      row: 1,
+      field: header,
+      message: `Missing required header: ${header}`,
+    }));
+
+    if (headerValidation.legacyDetected) {
+      headerIssues.unshift({
+        row: 1,
+        field: 'csv',
+        message: 'Legacy CSV contract detected. Download the validated template before importing.',
+      });
+    }
+
     return c.json({
       success: false,
       imported: 0,
-      errors: headerValidation.missingHeaders.map((header) => ({
-        row: 1,
-        field: header,
-        message: `Missing required header: ${header}`,
-      })),
+      errors: headerIssues,
     }, 400);
   }
 
-  const { validRows, issues } = validateQuestionImportRows(parsed.rows);
+  const { validRows, issues } = validateCanonicalCsvRows(parsed.rows);
   if (issues.length > 0) {
     return c.json({ success: false, imported: 0, errors: issues }, 400);
   }
@@ -338,9 +383,7 @@ app.post('/questions/import', async (c) => {
     }, 400);
   }
 
-  const categories = Array.from(new Set(validRows.map((row) => row.test_type ?? row.category ?? ''))).filter(
-    (value): value is 'iq' | 'disc' | 'workload' | 'custom' => value !== '',
-  );
+  const categories = Array.from(new Set(validRows.map((row) => row.testType)));
 
   if (payload.dryRun) {
     return c.json({
@@ -407,19 +450,16 @@ app.post('/questions/import', async (c) => {
       );
     }
 
-    const importBatchId = `${Date.now()}`;
-    let codeOffset = 1;
-
     for (const row of validRows) {
-      const testTypeId = testTypeMap.get(row.test_type ?? '');
+      const testTypeId = testTypeMap.get(row.testType ?? '');
       if (!testTypeId) {
         continue;
       }
 
       const existing = await queryOne<{ id: number }>(
         c.env.DB,
-        `SELECT id FROM questions WHERE test_type_id = ? AND COALESCE(prompt, '') = ? LIMIT 1`,
-        [testTypeId, row.question_text],
+        `SELECT id FROM questions WHERE test_type_id = ? AND question_code = ? LIMIT 1`,
+        [testTypeId, row.questionCode],
       );
 
       if (existing) {
@@ -427,18 +467,12 @@ app.post('/questions/import', async (c) => {
         continue;
       }
 
-      const optionInputs = [
-        { text: row.option_1_text ?? '', value: row.option_1_value ?? '', isCorrect: row.option_1_is_correct ?? 0 },
-        { text: row.option_2_text ?? '', value: row.option_2_value ?? '', isCorrect: row.option_2_is_correct ?? 0 },
-        { text: row.option_3_text ?? '', value: row.option_3_value ?? '', isCorrect: row.option_3_is_correct ?? 0 },
-        { text: row.option_4_text ?? '', value: row.option_4_value ?? '', isCorrect: row.option_4_is_correct ?? 0 },
-        { text: row.option_5_text ?? '', value: row.option_5_value ?? '', isCorrect: row.option_5_is_correct ?? 0 },
-      ].filter((option) => option.text.trim().length > 0);
-
-      const difficulty = row.difficulty ?? 2;
       const questionMeta = JSON.stringify({
-        source: 'csv_import',
-        difficulty,
+        source: 'validated_csv_import',
+        categoryKey: row.categoryKey,
+        scoringKey: row.scoringKey,
+        isReverseScored: row.isReverseScored,
+        weight: row.weight,
       });
 
       const questionInsert = await run(
@@ -450,35 +484,41 @@ app.post('/questions/import', async (c) => {
           prompt,
           question_group_key,
           dimension_key,
+          category_key,
+          scoring_key,
+          is_reverse_scored,
+          weight,
           question_type,
           question_order,
           is_required,
           status,
           question_meta_json
-        ) VALUES (?, ?, NULL, ?, NULL, ?, ?, ?, 1, ?, ?)`,
+        ) VALUES (?, ?, NULL, ?, NULL, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
         [
           testTypeId,
-          `${String(row.test_type).toUpperCase()}_IMP_${importBatchId}_${codeOffset}`,
-          row.question_text,
-          row.dimension?.trim() || null,
-          row.question_type,
-          row.order_index ?? codeOffset,
-          row.is_active === 0 ? 'archived' : 'active',
+          row.questionCode,
+          row.prompt,
+          row.dimensionKey,
+          row.categoryKey,
+          row.scoringKey,
+          row.isReverseScored ? 1 : 0,
+          row.weight,
+          row.questionType,
+          row.questionOrder,
+          row.status,
           questionMeta,
         ],
       );
 
       const questionId = Number(questionInsert.meta.last_row_id ?? 0);
-      codeOffset += 1;
 
       if (!questionId) {
         skipped += 1;
         continue;
       }
 
-      for (let optionIndex = 0; optionIndex < optionInputs.length; optionIndex += 1) {
-        const option = optionInputs[optionIndex];
-        const parsedValue = option.value.trim() === '' ? null : Number(option.value);
+      for (let optionIndex = 0; optionIndex < row.options.length; optionIndex += 1) {
+        const option = row.options[optionIndex];
         await run(
           c.env.DB,
           `INSERT INTO question_options (
@@ -487,18 +527,28 @@ app.post('/questions/import', async (c) => {
             option_text,
             dimension_key,
             value_number,
+            score_value,
             is_correct,
+            is_active,
             option_order,
-            score_payload_json
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
+            score_payload_json,
+            created_at,
+            updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
           [
             questionId,
-            String.fromCharCode(65 + optionIndex),
-            option.text.trim(),
-            row.dimension?.trim() || null,
-            Number.isFinite(parsedValue) ? parsedValue : null,
-            option.isCorrect ? 1 : 0,
-            optionIndex + 1,
+            option.optionKey,
+            option.optionLabel,
+            option.dimensionKey ?? row.dimensionKey,
+            option.scoreValue,
+            option.scoreValue,
+            option.isCorrect,
+            1,
+            option.optionOrder,
+            JSON.stringify({
+              source: 'validated_csv_import',
+              scoreValue: option.scoreValue,
+            }),
           ],
         );
       }
@@ -525,60 +575,7 @@ app.post('/questions/import', async (c) => {
 });
 
 app.get('/questions/import/template', async () => {
-  const sampleRows: string[][] = [
-    [
-      '',
-      'Deret angka berikutnya adalah? 2, 4, 8, 16, ...',
-      'single_choice',
-      'iq',
-      'iq',
-      'pattern',
-      '2',
-      '1',
-      '1',
-      '32',
-      '32',
-      '1',
-      '24',
-      '24',
-      '0',
-      '20',
-      '20',
-      '0',
-      '18',
-      '18',
-      '0',
-      '',
-      '',
-      '',
-    ],
-    [
-      '',
-      'Saya menikmati memulai percakapan dengan orang baru.',
-      'forced_choice',
-      'disc',
-      'disc',
-      'I',
-      '2',
-      '1',
-      '1',
-      'Sangat tidak sesuai',
-      '1',
-      '0',
-      'Tidak sesuai',
-      '2',
-      '0',
-      'Netral',
-      '3',
-      '0',
-      'Sesuai',
-      '4',
-      '0',
-      'Sangat sesuai',
-      '5',
-      '0',
-    ],
-  ];
+  const sampleRows = formatQuestionImportTemplateRows();
 
   const lines = [CSV_EXPORT_HEADERS.join(',')];
   for (const row of sampleRows) {
@@ -612,10 +609,39 @@ app.post('/questions', async (c) => {
 
     const res = await run(
       c.env.DB,
-      `INSERT INTO questions (test_type_id, question_code, instruction_text, prompt, question_group_key, dimension_key, question_type, question_order, is_required, status, question_meta_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO questions (
+        test_type_id,
+        question_code,
+        instruction_text,
+        prompt,
+        question_group_key,
+        dimension_key,
+        category_key,
+        scoring_key,
+        is_reverse_scored,
+        weight,
+        question_type,
+        question_order,
+        is_required,
+        status,
+        question_meta_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        tt.id, data.questionCode, data.instructionText || null, data.prompt || null, data.questionGroupKey || null, data.dimensionKey || null, data.questionType, data.questionOrder, data.isRequired ? 1 : 0, data.status, data.questionMeta ? JSON.stringify(data.questionMeta) : null
+        tt.id,
+        data.questionCode,
+        data.instructionText || null,
+        data.prompt || null,
+        data.questionGroupKey || null,
+        data.dimensionKey || null,
+        data.categoryKey || null,
+        data.scoringKey || null,
+        data.isReverseScored ? 1 : 0,
+        data.weight ?? 1,
+        data.questionType,
+        data.questionOrder,
+        data.isRequired ? 1 : 0,
+        data.status,
+        data.questionMeta ? JSON.stringify(data.questionMeta) : null,
       ]
     );
     
@@ -624,9 +650,30 @@ app.post('/questions', async (c) => {
     for (const opt of data.options) {
       await run(
         c.env.DB,
-        `INSERT INTO question_options (question_id, option_key, option_text, dimension_key, value_number, is_correct, option_order, score_payload_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [newId, opt.optionKey, opt.optionText, opt.dimensionKey || null, opt.valueNumber ?? null, opt.isCorrect ? 1 : 0, opt.optionOrder, opt.scorePayload ? JSON.stringify(opt.scorePayload) : null]
+        `INSERT INTO question_options (
+          question_id,
+          option_key,
+          option_text,
+          dimension_key,
+          value_number,
+          score_value,
+          is_correct,
+          is_active,
+          option_order,
+          score_payload_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          newId,
+          opt.optionKey,
+          opt.optionText,
+          opt.dimensionKey || null,
+          opt.valueNumber ?? null,
+          opt.scoreValue ?? opt.valueNumber ?? null,
+          opt.isCorrect ? 1 : 0,
+          opt.isActive === false ? 0 : 1,
+          opt.optionOrder,
+          opt.scorePayload ? JSON.stringify(opt.scorePayload) : null,
+        ]
       );
     }
 
@@ -653,12 +700,15 @@ app.patch('/questions/:id', async (c) => {
     ttId = tt.id;
   }
 
-  const testTypeId = ttId !== null ? ttId : existing.testType;
   const questionCode = data.questionCode !== undefined ? data.questionCode : existing.questionCode;
   const instructionText = data.instructionText !== undefined ? data.instructionText : existing.instructionText;
   const prompt = data.prompt !== undefined ? data.prompt : existing.prompt;
   const questionGroupKey = data.questionGroupKey !== undefined ? data.questionGroupKey : existing.questionGroupKey;
   const dimensionKey = data.dimensionKey !== undefined ? data.dimensionKey : existing.dimensionKey;
+  const categoryKey = data.categoryKey !== undefined ? data.categoryKey : existing.categoryKey;
+  const scoringKey = data.scoringKey !== undefined ? data.scoringKey : existing.scoringKey;
+  const isReverseScored = data.isReverseScored !== undefined ? data.isReverseScored : existing.isReverseScored;
+  const weight = data.weight !== undefined ? data.weight : existing.weight;
   const questionType = data.questionType !== undefined ? data.questionType : existing.questionType;
   const questionOrder = data.questionOrder !== undefined ? data.questionOrder : existing.questionOrder;
   const isRequired = data.isRequired !== undefined ? data.isRequired : existing.isRequired;
@@ -668,10 +718,40 @@ app.patch('/questions/:id', async (c) => {
   await run(
     c.env.DB,
     `UPDATE questions SET
-      test_type_id = COALESCE(?, test_type_id), question_code = ?, instruction_text = ?, prompt = ?, question_group_key = ?, dimension_key = ?, question_type = ?, question_order = ?, is_required = ?, status = ?, question_meta_json = ?, updated_at = CURRENT_TIMESTAMP
+      test_type_id = COALESCE(?, test_type_id),
+      question_code = ?,
+      instruction_text = ?,
+      prompt = ?,
+      question_group_key = ?,
+      dimension_key = ?,
+      category_key = ?,
+      scoring_key = ?,
+      is_reverse_scored = ?,
+      weight = ?,
+      question_type = ?,
+      question_order = ?,
+      is_required = ?,
+      status = ?,
+      question_meta_json = ?,
+      updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
     [
-      ttId, questionCode, instructionText || null, prompt || null, questionGroupKey || null, dimensionKey || null, questionType, questionOrder, isRequired ? 1 : 0, status, questionMeta ? JSON.stringify(questionMeta) : null, id
+      ttId,
+      questionCode,
+      instructionText || null,
+      prompt || null,
+      questionGroupKey || null,
+      dimensionKey || null,
+      categoryKey || null,
+      scoringKey || null,
+      isReverseScored ? 1 : 0,
+      weight ?? 1,
+      questionType,
+      questionOrder,
+      isRequired ? 1 : 0,
+      status,
+      questionMeta ? JSON.stringify(questionMeta) : null,
+      id,
     ]
   );
   
@@ -681,9 +761,30 @@ app.patch('/questions/:id', async (c) => {
     for (const opt of data.options) {
       await run(
         c.env.DB,
-        `INSERT INTO question_options (question_id, option_key, option_text, dimension_key, value_number, is_correct, option_order, score_payload_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, opt.optionKey, opt.optionText, opt.dimensionKey || null, opt.valueNumber ?? null, opt.isCorrect ? 1 : 0, opt.optionOrder, opt.scorePayload ? JSON.stringify(opt.scorePayload) : null]
+        `INSERT INTO question_options (
+          question_id,
+          option_key,
+          option_text,
+          dimension_key,
+          value_number,
+          score_value,
+          is_correct,
+          is_active,
+          option_order,
+          score_payload_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          opt.optionKey,
+          opt.optionText,
+          opt.dimensionKey || null,
+          opt.valueNumber ?? null,
+          opt.scoreValue ?? opt.valueNumber ?? null,
+          opt.isCorrect ? 1 : 0,
+          opt.isActive === false ? 0 : 1,
+          opt.optionOrder,
+          opt.scorePayload ? JSON.stringify(opt.scorePayload) : null,
+        ]
       );
     }
   }

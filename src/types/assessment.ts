@@ -948,7 +948,9 @@ export interface QuestionBankOptionPayload {
   optionText: string;
   dimensionKey?: string | null;
   valueNumber?: number | null;
+  scoreValue?: number | null;
   isCorrect?: boolean;
+  isActive?: boolean;
   optionOrder: number;
   scorePayload?: Record<string, unknown> | null;
 }
@@ -961,6 +963,10 @@ export interface QuestionBankQuestionListItem {
   instructionText: string | null;
   questionGroupKey: string | null;
   dimensionKey: string | null;
+  categoryKey?: string | null;
+  scoringKey?: string | null;
+  isReverseScored?: boolean;
+  weight?: number;
   questionType: QuestionType;
   questionOrder: number;
   isRequired: boolean;
@@ -981,6 +987,10 @@ export interface QuestionBankQuestionPayload {
   prompt?: string | null;
   questionGroupKey?: string | null;
   dimensionKey?: string | null;
+  categoryKey?: string | null;
+  scoringKey?: string | null;
+  isReverseScored?: boolean;
+  weight?: number;
   questionType: QuestionType;
   questionOrder: number;
   isRequired: boolean;

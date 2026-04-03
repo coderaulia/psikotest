@@ -488,10 +488,48 @@ function toSubmissionAnswers(savedAnswers: PublicAnswerInput[]): SubmissionAnswe
   }));
 }
 
+function parseJsonObject(value: unknown): Record<string, unknown> | null {
+  if (value == null) return null;
+  if (typeof value === 'object') return value as Record<string, unknown>;
+  if (typeof value !== 'string' || value.trim().length === 0) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseBooleanLike(value: unknown, fallback = false): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value > 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'y'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'n'].includes(normalized)) return false;
+  }
+  return fallback;
+}
+
+function parsePositiveNumber(value: unknown, fallback: number): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return fallback;
+  return numeric;
+}
+
 async function buildScoredQuestions(db: D1Database, testTypeId: number, testTypeCode: string): Promise<ScoredQuestion[]> {
   const questions = await query(
     db,
-    `SELECT id, question_code, dimension_key, question_type
+    `SELECT
+      id,
+      question_code,
+      dimension_key,
+      category_key,
+      scoring_key,
+      question_type,
+      question_meta_json,
+      is_reverse_scored,
+      weight
      FROM questions
      WHERE test_type_id = ? AND status = 'active'
      ORDER BY question_order ASC, id ASC`,
@@ -501,9 +539,33 @@ async function buildScoredQuestions(db: D1Database, testTypeId: number, testType
   const scoredQuestions: ScoredQuestion[] = [];
   for (const questionRow of questions.results ?? []) {
     const question = questionRow as Record<string, unknown>;
+    const questionMeta = parseJsonObject(question.question_meta_json);
+    const metaReverseScored = questionMeta && 'isReverseScored' in questionMeta
+      ? parseBooleanLike(questionMeta.isReverseScored, false)
+      : false;
+    const metaWeight = questionMeta && 'weight' in questionMeta
+      ? parsePositiveNumber(questionMeta.weight, 1)
+      : 1;
+    const metaCategoryKey = questionMeta && 'categoryKey' in questionMeta
+      ? String(questionMeta.categoryKey ?? '')
+      : null;
+    const metaScoringKey = questionMeta && 'scoringKey' in questionMeta
+      ? String(questionMeta.scoringKey ?? '')
+      : null;
+
     const optionRows = await query(
       db,
-      `SELECT id, option_key, option_text, dimension_key, value_number, is_correct, option_order
+      `SELECT
+        id,
+        option_key,
+        option_text,
+        dimension_key,
+        value_number,
+        score_value,
+        is_correct,
+        is_active,
+        option_order,
+        score_payload_json
        FROM question_options
        WHERE question_id = ?
        ORDER BY option_order ASC, id ASC`,
@@ -516,18 +578,33 @@ async function buildScoredQuestions(db: D1Database, testTypeId: number, testType
       testType: testTypeCode,
       questionCode: String(question.question_code ?? ''),
       dimensionKey: question.dimension_key ? String(question.dimension_key) : null,
+      categoryKey: question.category_key
+        ? String(question.category_key)
+        : (metaCategoryKey && metaCategoryKey.length > 0 ? metaCategoryKey : null),
+      scoringKey: question.scoring_key
+        ? String(question.scoring_key)
+        : (metaScoringKey && metaScoringKey.length > 0 ? metaScoringKey : null),
+      isReverseScored: parseBooleanLike(question.is_reverse_scored, metaReverseScored),
+      weight: parsePositiveNumber(question.weight, metaWeight),
       questionType: String(question.question_type ?? 'single_choice'),
       options: (optionRows.results ?? []).map((optionRow) => {
         const option = optionRow as Record<string, unknown>;
+        const scorePayload = parseJsonObject(option.score_payload_json);
+        const payloadScore = scorePayload && 'scoreValue' in scorePayload ? Number(scorePayload.scoreValue) : null;
+        const normalizedScore = option.score_value != null
+          ? Number(option.score_value)
+          : (Number.isFinite(payloadScore) ? Number(payloadScore) : null);
         return {
           id: Number(option.id),
           optionKey: String(option.option_key ?? ''),
           optionText: String(option.option_text ?? ''),
           dimensionKey: option.dimension_key ? String(option.dimension_key) : null,
           valueNumber: option.value_number != null ? Number(option.value_number) : null,
+          scoreValue: normalizedScore,
           isCorrect: Boolean(option.is_correct),
+          isActive: option.is_active == null ? true : Boolean(option.is_active),
           optionOrder: Number(option.option_order ?? 0),
-          scorePayload: null,
+          scorePayload,
         };
       }),
     });

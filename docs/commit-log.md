@@ -45,6 +45,52 @@ A running log of meaningful commits with deployment status.
 
 ---
 
+## [2026-04-03] - Validated Content Contract and Scoring-Safe Question Import
+
+### What Changed
+- Added validated question metadata migration (`012`) for scoring-critical fields:
+  - `questions.category_key`, `questions.scoring_key`, `questions.is_reverse_scored`, `questions.weight`
+  - `question_options.score_value`, `question_options.is_active`
+- Added unique/index constraints for stable question identity and ordering
+- Upgraded question bank CSV contract to validated v2 format with strict headers
+- Added strict row-level CSV validation:
+  - `question_code` uniqueness per test type
+  - `question_order` uniqueness per test type
+  - boolean-like reverse scoring validation
+  - positive weight validation
+  - option score completeness and numeric checks
+- Updated import template/export to use validated v2 columns
+- Updated scorer compatibility:
+  - reverse-scored items supported
+  - weighted items supported
+  - option `score_value` support with legacy fallback from existing metadata
+- Added canonical documentation for content contract and updated API/schema docs
+
+### Files Affected
+- `workers/migrations/012_validated_question_metadata.sql` - NEW migration
+- `workers/src/lib/question-bank-csv.ts` - validated CSV v2 parser + validator
+- `workers/src/routes/question-bank.ts` - CSV import/export/template + metadata-aware CRUD
+- `workers/src/routes/public-sessions.ts` - scored question loader metadata mapping
+- `workers/src/lib/scoring/index.ts` - reverse/weight-aware scoring logic
+- `src/types/assessment.ts` - question bank metadata typing updates
+- `docs/question-content-contract.md` - NEW canonical content contract
+- `docs/question-bank-schema.md` - updated schema + CSV v2 contract
+- `docs/api-endpoints.md` - updated question-bank import/export endpoint docs
+- `docs/project-status.md` - feature/migration updates
+
+### Deployed
+- ✅ D1 migration `012_validated_question_metadata.sql` applied (local and remote)
+- ✅ Workers deployed to production
+- Frontend not required for this backend-first integrity phase
+
+### Verified
+- ✅ Workers typecheck
+- ✅ Frontend typecheck
+- ✅ CSV dry-run validation returns row-level errors for malformed rows
+- ✅ Existing scoring flow remains operational with metadata fallback
+
+---
+
 ## [2026-04-03] - Progressive Delivery (Protected Multi-Group)
 
 ### What Changed
