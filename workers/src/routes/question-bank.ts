@@ -330,21 +330,197 @@ app.post('/questions/import', async (c) => {
     return c.json({ success: false, imported: 0, errors: issues }, 400);
   }
 
-  if (!payload.dryRun) {
+  if (validRows.length === 0) {
     return c.json({
       success: false,
       imported: 0,
-      errors: [{ row: 0, field: 'dryRun', message: 'Write mode is not enabled yet. Use dryRun=true for validation preview.' }],
+      errors: [{ row: 2, field: 'csv', message: 'No valid data rows found in CSV file' }],
     }, 400);
   }
 
-  const categories = Array.from(new Set(validRows.map((row) => row.test_type)));
+  const categories = Array.from(new Set(validRows.map((row) => row.test_type ?? row.category ?? ''))).filter(
+    (value): value is 'iq' | 'disc' | 'workload' | 'custom' => value !== '',
+  );
+
+  if (payload.dryRun) {
+    return c.json({
+      success: true,
+      preview: validRows.length,
+      categories,
+      replaceAll: payload.replaceAll,
+      dryRun: true,
+    });
+  }
+
+  const testTypeRows = await query(
+    c.env.DB,
+    `SELECT id, code FROM test_types WHERE code IN (${categories.map(() => '?').join(', ')})`,
+    categories,
+  );
+
+  const testTypeMap = new Map<string, number>();
+  for (const entry of testTypeRows.results ?? []) {
+    const row = entry as Record<string, unknown>;
+    testTypeMap.set(String(row.code), Number(row.id));
+  }
+
+  const unknownCategories = categories.filter((category) => !testTypeMap.has(category));
+  if (unknownCategories.length > 0) {
+    return c.json({
+      success: false,
+      imported: 0,
+      errors: unknownCategories.map((category) => ({
+        row: 1,
+        field: 'test_type',
+        message: `Unknown test type in database: ${category}`,
+      })),
+    }, 400);
+  }
+
+  let imported = 0;
+  let skipped = 0;
+
+  await run(c.env.DB, 'BEGIN IMMEDIATE TRANSACTION');
+
+  try {
+    if (payload.replaceAll && categories.length > 0) {
+      const placeholders = categories.map(() => '?').join(', ');
+      await run(
+        c.env.DB,
+        `DELETE FROM question_options
+         WHERE question_id IN (
+           SELECT q.id
+           FROM questions q
+           INNER JOIN test_types tt ON tt.id = q.test_type_id
+           WHERE tt.code IN (${placeholders})
+         )`,
+        categories,
+      );
+
+      await run(
+        c.env.DB,
+        `DELETE FROM questions
+         WHERE test_type_id IN (
+           SELECT id FROM test_types WHERE code IN (${placeholders})
+         )`,
+        categories,
+      );
+    }
+
+    const importBatchId = `${Date.now()}`;
+    let codeOffset = 1;
+
+    for (const row of validRows) {
+      const testTypeId = testTypeMap.get(row.test_type ?? '');
+      if (!testTypeId) {
+        continue;
+      }
+
+      const existing = await queryOne<{ id: number }>(
+        c.env.DB,
+        `SELECT id FROM questions WHERE test_type_id = ? AND COALESCE(prompt, '') = ? LIMIT 1`,
+        [testTypeId, row.question_text],
+      );
+
+      if (existing) {
+        skipped += 1;
+        continue;
+      }
+
+      const optionInputs = [
+        { text: row.option_1_text ?? '', value: row.option_1_value ?? '', isCorrect: row.option_1_is_correct ?? 0 },
+        { text: row.option_2_text ?? '', value: row.option_2_value ?? '', isCorrect: row.option_2_is_correct ?? 0 },
+        { text: row.option_3_text ?? '', value: row.option_3_value ?? '', isCorrect: row.option_3_is_correct ?? 0 },
+        { text: row.option_4_text ?? '', value: row.option_4_value ?? '', isCorrect: row.option_4_is_correct ?? 0 },
+        { text: row.option_5_text ?? '', value: row.option_5_value ?? '', isCorrect: row.option_5_is_correct ?? 0 },
+      ].filter((option) => option.text.trim().length > 0);
+
+      const difficulty = row.difficulty ?? 2;
+      const questionMeta = JSON.stringify({
+        source: 'csv_import',
+        difficulty,
+      });
+
+      const questionInsert = await run(
+        c.env.DB,
+        `INSERT INTO questions (
+          test_type_id,
+          question_code,
+          instruction_text,
+          prompt,
+          question_group_key,
+          dimension_key,
+          question_type,
+          question_order,
+          is_required,
+          status,
+          question_meta_json
+        ) VALUES (?, ?, NULL, ?, NULL, ?, ?, ?, 1, ?, ?)`,
+        [
+          testTypeId,
+          `${String(row.test_type).toUpperCase()}_IMP_${importBatchId}_${codeOffset}`,
+          row.question_text,
+          row.dimension?.trim() || null,
+          row.question_type,
+          row.order_index ?? codeOffset,
+          row.is_active === 0 ? 'archived' : 'active',
+          questionMeta,
+        ],
+      );
+
+      const questionId = Number(questionInsert.meta.last_row_id ?? 0);
+      codeOffset += 1;
+
+      if (!questionId) {
+        skipped += 1;
+        continue;
+      }
+
+      for (let optionIndex = 0; optionIndex < optionInputs.length; optionIndex += 1) {
+        const option = optionInputs[optionIndex];
+        const parsedValue = option.value.trim() === '' ? null : Number(option.value);
+        await run(
+          c.env.DB,
+          `INSERT INTO question_options (
+            question_id,
+            option_key,
+            option_text,
+            dimension_key,
+            value_number,
+            is_correct,
+            option_order,
+            score_payload_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
+          [
+            questionId,
+            String.fromCharCode(65 + optionIndex),
+            option.text.trim(),
+            row.dimension?.trim() || null,
+            Number.isFinite(parsedValue) ? parsedValue : null,
+            option.isCorrect ? 1 : 0,
+            optionIndex + 1,
+          ],
+        );
+      }
+
+      imported += 1;
+    }
+
+    await run(c.env.DB, 'COMMIT');
+  } catch (error) {
+    await run(c.env.DB, 'ROLLBACK');
+    throw error;
+  }
+
   return c.json({
     success: true,
     preview: validRows.length,
+    imported,
+    skipped,
+    totalRows: validRows.length,
     categories,
     replaceAll: payload.replaceAll,
-    dryRun: true,
+    dryRun: false,
   });
 });
 

@@ -182,6 +182,24 @@ export async function downloadQuestionBankCsv() {
   return response.blob();
 }
 
+export interface QuestionBankCsvImportResponse {
+  success: boolean;
+  dryRun: boolean;
+  replaceAll: boolean;
+  categories: string[];
+  preview: number;
+  imported?: number;
+  skipped?: number;
+  totalRows?: number;
+}
+
+export async function importQuestionBankCsv(payload: { csv: string; dryRun?: boolean; replaceAll?: boolean }) {
+  return adminFetchJson<QuestionBankCsvImportResponse>('/question-bank/questions/import', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function fetchSettingsOverview() {
   return adminFetchJson<SettingsOverviewResponse>('/settings');
 }
