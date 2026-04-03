@@ -63,7 +63,7 @@ This makes it possible to:
 
 - answers are stored against `submissions` and `answers`
 - write access is limited to active in-progress submissions
-- protected sessions fetch question groups through a dedicated window endpoint
+- protected sessions fetch question groups through `GET /api/public/submissions/:id/questions`
 - each protected save must send the next `answerSequence`
 - replayed or out-of-order answer sequences are rejected
 
@@ -80,10 +80,17 @@ Protected delivery is intended for more sensitive assessments where the system s
 
 When enabled:
 
-- the public session definition returns delivery metadata but no full question list
-- the client requests each question group using the signed submission token
-- saved answers are written per group
-- the current answer sequence is tracked in the submission record
+- the start endpoint (`POST /api/public/session/:token/start`) returns `protectedDelivery`, `groupSize`, and `totalGroups`
+- the questions endpoint returns only the active group and group metadata (`currentGroup`, `totalGroups`, `isLastGroup`)
+- group sizes are enforced by test type:
+  - IQ: 10 questions per group
+  - DISC: all questions in one group
+  - Workload: all questions in one group
+  - Custom: default 10 questions per group
+- the client advances via `POST /api/public/submissions/:id/next-group`
+- `submissions.current_group` and `submissions.total_groups` track delivery progress
+- answers are still saved through `POST /api/public/submissions/:id/answers`
+- `answer_sequence` remains enforced to reject replayed or out-of-order writes
 
 ## Scoring architecture
 

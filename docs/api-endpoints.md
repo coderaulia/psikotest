@@ -11,7 +11,7 @@
 | None | Public endpoint | No auth required |
 | Admin Bearer | Admin JWT token | `Authorization: Bearer <token>` |
 | Customer Bearer | Customer JWT token | `Authorization: Bearer <token>` |
-| Submission Token | Participant access | `X-Submission-Token: <token>` |
+| Submission Token | Participant access | `Authorization: Bearer <token>` (preferred) or `X-Submission-Token: <token>` |
 
 ---
 
@@ -70,26 +70,58 @@ Response: {
   "participantId": 456,
   "token": "...",
   "submissionAccessToken": "...",
-  "status": "in_progress"
+  "status": "in_progress",
+  "protectedDelivery": true,
+  "totalGroups": 5,
+  "groupSize": 10
 }
 ```
 
 #### GET /api/public/submissions/:id/questions
-- **Auth:** Submission Token (`X-Submission-Token`)
+- **Auth:** Submission Token (`Authorization: Bearer <token>` or `X-Submission-Token`)
 - **Handler:** `public-sessions.ts`
 - **Status:** ✅ Working
-- **Description:** Get questions for a submission
+- **Description:** Get submission questions. Returns all questions in standard mode, or current group slice in protected mode.
 
 ```json
 Response: {
   "submissionId": 123,
+  "currentGroup": 0,
   "groupIndex": 0,
+  "totalGroups": 5,
+  "groupSize": 10,
+  "isLastGroup": false,
   "questions": [...]
 }
 ```
 
+#### POST /api/public/submissions/:id/next-group
+- **Auth:** Submission Token (`Authorization: Bearer <token>` or `X-Submission-Token`)
+- **Handler:** `public-sessions.ts`
+- **Status:** ✅ Working
+- **Description:** Advance protected delivery to the next question group. Requires all current-group questions answered.
+
+```json
+Response (next group): {
+  "submissionId": 123,
+  "currentGroup": 1,
+  "groupIndex": 1,
+  "totalGroups": 5,
+  "groupSize": 10,
+  "isLastGroup": false,
+  "questions": [...]
+}
+Response (already last group): {
+  "submissionId": 123,
+  "complete": true,
+  "currentGroup": 4,
+  "totalGroups": 5,
+  "isLastGroup": true
+}
+```
+
 #### POST /api/public/submissions/:id/answers
-- **Auth:** Submission Token (`X-Submission-Token`)
+- **Auth:** Submission Token (`Authorization: Bearer <token>` or `X-Submission-Token`)
 - **Handler:** `public-sessions.ts`
 - **Status:** ✅ Working
 - **Description:** Save answers during test
@@ -100,7 +132,7 @@ Response: { "submissionId": 123, "saved": true }
 ```
 
 #### POST /api/public/submissions/:id/submit
-- **Auth:** Submission Token (`X-Submission-Token`)
+- **Auth:** Submission Token (`Authorization: Bearer <token>` or `X-Submission-Token`)
 - **Handler:** `public-sessions.ts`
 - **Status:** ✅ Working
 - **Description:** Submit completed test
@@ -829,7 +861,17 @@ Common status codes:
 
 ## Rate Limits
 
-Currently, there are no rate limits implemented. This is technical debt that should be addressed in Phase 3.
+Rate limiting is active in production for key auth and participant routes.
+
+- Admin login: 5 requests / 15 minutes per IP
+- Customer login: 10 requests / 15 minutes per IP
+- Signup: 5 requests / hour per IP
+- Forgot password: 3 requests / 15 minutes per IP
+- Reset password: 5 requests / 15 minutes per IP
+- Public session start: 3 requests / 5 minutes per IP
+- Public answers save: 60 requests / 5 minutes per submission token
+- Public submit: 3 requests / 5 minutes per submission token
+- Public next-group: 30 requests / 5 minutes per submission token
 
 ---
 

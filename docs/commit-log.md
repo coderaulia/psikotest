@@ -4,6 +4,43 @@ A running log of meaningful commits with deployment status.
 
 ---
 
+## [2026-04-03] - Progressive Delivery (Protected Multi-Group)
+
+### What Changed
+- Added progressive delivery branching to public participant endpoints while preserving full-delivery behavior
+- Updated session start response to include protected delivery metadata (`protectedDelivery`, `groupSize`, `totalGroups`)
+- Updated questions endpoint to return current-group slices for protected sessions
+- Added `POST /api/public/submissions/:id/next-group` endpoint with "must-answer-current-group-first" enforcement
+- Added per-submission token rate limit for next-group progression
+- Updated participant test page to support section-by-section loading with "Save and continue" flow
+- Ensured customer assessment setup toggle persists `protected_delivery_mode` to `test_sessions`
+
+### Files Affected
+- `workers/src/routes/public-sessions.ts` - Progressive delivery metadata, grouped questions, next-group endpoint
+- `workers/src/routes/site-onboarding.ts` - Persist protected delivery mode on create/update
+- `src/pages/participant/test-page.tsx` - Progressive delivery UI and state transitions
+- `src/services/public-sessions.ts` - Next-group client call and question loading alignment
+- `src/lib/participant-session.ts` - Persist protected delivery metadata
+- `src/types/assessment.ts` - Progressive delivery response typings
+- `src/pages/customer/customer-assessment-setup-page.tsx` - Helper text for protected delivery toggle
+- `docs/project-status.md` - Added progressive delivery to features and E2E verification table
+- `docs/assessment-engine.md` - Updated protected delivery model with live endpoints and group strategy
+- `docs/api-endpoints.md` - Added next-group endpoint and progressive response documentation
+
+### Deployed
+- ✅ Workers deployed to production (latest progressive deployment: `e4dbe434-1301-412a-b479-80ccf91043b0`)
+- Frontend auto-deploy from `main`
+
+### Verified
+- ✅ Remote D1 schema confirms `test_sessions.protected_delivery_mode`
+- ✅ Remote D1 schema confirms `submissions.current_group` and `submissions.total_groups`
+- ✅ Protected session start returns grouping metadata
+- ✅ Protected questions endpoint returns group-sized slice (IQ: 10)
+- ✅ Next-group blocks until current section is fully answered
+- ✅ Next-group increments `current_group` in D1 and returns next section
+
+---
+
 ## [2026-04-03] - Question Bank CSV Import and Export
 
 ### What Changed

@@ -92,6 +92,7 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | Rate limiting (auth & submission routes) | ✅ Working |
 | Security headers | ✅ Working |
 | Question bank CSV import/export (admin) | ✅ Working |
+| Progressive delivery (protected multi-group) | ✅ Working |
 | Dummy billing | ✅ Working |
 
 ---
@@ -145,7 +146,6 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | White-label branding | Tenant-specific branding | 10 days |
 | Advanced analytics | Dashboard trends and reports | 5 days |
 | Multi-language | i18n support for Indonesian | 7 days |
-| API rate limiting | Protect endpoints from abuse | 2 days |
 | 2FA authentication | Two-factor auth option | 3 days |
 
 ### Phase 4 — Technical Debt
@@ -196,7 +196,7 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 ### Last Deployments
 | Component | Date | Commit |
 |-----------|------|--------|
-| Workers API | 2026-04-03 | `7ac81ad` (question bank CSV import/export) |
+| Workers API | 2026-04-03 | `4fd0c4a` (protected delivery persistence + progressive endpoints) |
 | Migrations | 2026-04-01 | All migrations applied |
 | Frontend | Continuous | Auto-deploy from main |
 
@@ -213,6 +213,9 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | 005_password_resets | Password reset tokens | ✅ Remote |
 | 006_add_question_bank | Question bank table | ✅ Remote |
 | 007_add_app_settings | App settings table | ✅ Remote |
+| 008_rate_limiting | Rate limiting counters | ✅ Remote |
+| 009_question_bank_expansion | Question bank schema alignment | ✅ Remote |
+| 010_progressive_delivery | Progressive submission group tracking | ✅ Remote |
 
 ---
 
@@ -224,6 +227,7 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | Customer signup → workspace | ✅ Verified | 2026-04-01 |
 | Create assessment → activate → invite | ✅ Verified | 2026-04-01 |
 | Participant consent → test → submit | ✅ Verified | 2026-04-03 |
+| Protected delivery (multi-group) | ✅ Verified | 2026-04-03 |
 | Result creation → review → release | ✅ Verified | 2026-04-01 |
 | Result detail → print report (admin) | ✅ Verified | 2026-04-02 |
 | Result detail → print report (customer) | ✅ Verified | 2026-04-02 |
