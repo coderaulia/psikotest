@@ -10,6 +10,7 @@ import { Select } from '@/components/ui/select';
 import {
   createQuestionBankQuestion,
   downloadQuestionBankCsv,
+  downloadQuestionBankImportTemplate,
   fetchQuestionBank,
   fetchQuestionBankQuestion,
   importQuestionBankCsv,
@@ -106,6 +107,7 @@ export function QuestionBankPage() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isDryRunningImport, setIsDryRunningImport] = useState(false);
   const [isWritingImport, setIsWritingImport] = useState(false);
+  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
   const [importFileName, setImportFileName] = useState<string | null>(null);
   const [importCsvText, setImportCsvText] = useState('');
   const [replaceAll, setReplaceAll] = useState(false);
@@ -439,6 +441,26 @@ export function QuestionBankPage() {
     }
   }
 
+  async function handleDownloadTemplate() {
+    setError(null);
+    setIsDownloadingTemplate(true);
+    try {
+      const blob = await downloadQuestionBankImportTemplate();
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = 'question-bank-import-template.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to download CSV template');
+    } finally {
+      setIsDownloadingTemplate(false);
+    }
+  }
+
   if (isLoading && items.length === 0 && !isCreating) {
     return <StateCard title="Loading question bank" description="Pulling secured question content and option structures." />;
   }
@@ -651,6 +673,12 @@ export function QuestionBankPage() {
             </div>
 
             <div className="mt-6 space-y-4">
+              <div className="flex justify-end">
+                <Button type="button" variant="secondary" onClick={handleDownloadTemplate} disabled={isDownloadingTemplate}>
+                  {isDownloadingTemplate ? 'Preparing template...' : 'Download Template'}
+                </Button>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-600">CSV file</label>
                 <Input type="file" accept=".csv,text/csv" onChange={handleImportFileChange} />

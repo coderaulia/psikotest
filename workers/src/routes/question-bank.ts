@@ -524,6 +524,77 @@ app.post('/questions/import', async (c) => {
   });
 });
 
+app.get('/questions/import/template', async () => {
+  const sampleRows: string[][] = [
+    [
+      '',
+      'Deret angka berikutnya adalah? 2, 4, 8, 16, ...',
+      'single_choice',
+      'iq',
+      'iq',
+      'pattern',
+      '2',
+      '1',
+      '1',
+      '32',
+      '32',
+      '1',
+      '24',
+      '24',
+      '0',
+      '20',
+      '20',
+      '0',
+      '18',
+      '18',
+      '0',
+      '',
+      '',
+      '',
+    ],
+    [
+      '',
+      'Saya menikmati memulai percakapan dengan orang baru.',
+      'forced_choice',
+      'disc',
+      'disc',
+      'I',
+      '2',
+      '1',
+      '1',
+      'Sangat tidak sesuai',
+      '1',
+      '0',
+      'Tidak sesuai',
+      '2',
+      '0',
+      'Netral',
+      '3',
+      '0',
+      'Sesuai',
+      '4',
+      '0',
+      'Sangat sesuai',
+      '5',
+      '0',
+    ],
+  ];
+
+  const lines = [CSV_EXPORT_HEADERS.join(',')];
+  for (const row of sampleRows) {
+    lines.push(row.map(csvEscape).join(','));
+  }
+
+  const csv = `${lines.join('\n')}\n`;
+  return new Response(csv, {
+    headers: {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="question-bank-import-template.csv"',
+      'Cache-Control': 'no-store',
+    },
+  });
+});
+
 app.get('/questions/:id', async (c) => {
   const id = parseInt(c.req.param('id'));
   const question = await getQuestionById(c.env.DB, id);

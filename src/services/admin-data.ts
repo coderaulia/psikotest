@@ -182,6 +182,11 @@ export async function downloadQuestionBankCsv() {
   return response.blob();
 }
 
+export async function downloadQuestionBankImportTemplate() {
+  const response = await adminFetch('/question-bank/questions/import/template');
+  return response.blob();
+}
+
 export interface QuestionBankCsvImportResponse {
   success: boolean;
   dryRun: boolean;
