@@ -24,7 +24,20 @@ const app = new Hono<{ Bindings: Env }>();
 app.use('*', async (c, next) => {
   const origin = c.env.APP_ORIGIN ?? 'https://psikotest.vanaila.com';
   const corsMiddleware = cors({
-    origin: [origin, 'http://localhost:5173', 'http://localhost:3000'],
+    origin: (requestOrigin) => {
+      if (!requestOrigin) return origin;
+      if (requestOrigin === origin) return requestOrigin;
+      if (requestOrigin === 'http://localhost:5173' || requestOrigin === 'http://localhost:3000') {
+        return requestOrigin;
+      }
+
+      // Allow Cloudflare Pages domains used for production/preview frontend builds.
+      if (/^https:\/\/[a-z0-9-]+\.pages\.dev$/i.test(requestOrigin)) {
+        return requestOrigin;
+      }
+
+      return origin;
+    },
     allowHeaders: ['Content-Type', 'Authorization', 'X-Submission-Token'],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
