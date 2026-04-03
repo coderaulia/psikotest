@@ -1,12 +1,16 @@
 import { apiBaseUrl } from './api-client';
 import type {
+  DistributionPolicy,
   ParticipantIdentityPayload,
+  ParticipantResultAccess,
+  ParticipantResultMode,
   ProgressiveQuestionWindow,
   PublicSessionResponse,
   SaveSubmissionAnswersResponse,
   StartSubmissionResponse,
   SubmissionAnswerInput,
   SubmitSubmissionResponse,
+  TestSessionComplianceSettings,
 } from '@/types/assessment';
 
 async function readJson<T>(response: Response): Promise<T> {
@@ -25,9 +29,77 @@ function createSubmissionHeaders(submissionAccessToken: string) {
   };
 }
 
+function defaultCompliance(): TestSessionComplianceSettings {
+  return {
+    assessmentPurpose: 'recruitment',
+    administrationMode: 'remote_unsupervised',
+    interpretationMode: 'professional_review',
+    participantResultMode: 'instant_summary',
+    participantLimit: null,
+    consentStatement:
+      'I agree to participate in this psychological assessment and understand that my responses will be used for the stated assessment purpose.',
+    privacyStatement:
+      'Your personal information and responses will be treated as confidential assessment data and accessed only by authorized reviewers.',
+    contactPerson: 'HR Assessment Desk',
+    distributionPolicy: 'participant_summary',
+    protectedDeliveryMode: false,
+    participantResultAccess: 'summary',
+    hrResultAccess: 'full',
+  };
+}
+
+function normalizeCompliance(input: unknown): TestSessionComplianceSettings {
+  const defaults = defaultCompliance();
+  const value = (input && typeof input === 'object' ? input : {}) as Partial<TestSessionComplianceSettings>;
+
+  return {
+    ...defaults,
+    ...value,
+    participantResultMode: (value.participantResultMode ?? defaults.participantResultMode) as ParticipantResultMode,
+    distributionPolicy: (value.distributionPolicy ?? defaults.distributionPolicy) as DistributionPolicy,
+    participantResultAccess: (value.participantResultAccess ?? defaults.participantResultAccess) as ParticipantResultAccess,
+    hrResultAccess: value.hrResultAccess ?? defaults.hrResultAccess,
+  };
+}
+
+function normalizePublicSession(payload: unknown): PublicSessionResponse {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Invalid public session response');
+  }
+
+  const root = payload as Record<string, unknown>;
+  const rawSession = (root.session && typeof root.session === 'object' ? root.session : {}) as Record<string, unknown>;
+  const rawQuestions = Array.isArray(root.questions) ? root.questions : [];
+  const rawCompliance = rawSession.compliance ?? rawSession.settings;
+  const compliance = normalizeCompliance(rawCompliance);
+  const rawDelivery =
+    rawSession.delivery && typeof rawSession.delivery === 'object'
+      ? (rawSession.delivery as Record<string, unknown>)
+      : {};
+
+  return {
+    session: {
+      id: Number(rawSession.id ?? 0),
+      title: String(rawSession.title ?? 'Assessment session'),
+      testType: String(rawSession.testType ?? 'disc') as PublicSessionResponse['session']['testType'],
+      instructions: Array.isArray(rawSession.instructions) ? (rawSession.instructions as string[]) : [],
+      estimatedMinutes: Number(rawSession.estimatedMinutes ?? 10),
+      status: 'active',
+      compliance,
+      delivery: {
+        mode: rawDelivery.mode === 'progressive' ? 'progressive' : 'full',
+        totalQuestions: Number(rawDelivery.totalQuestions ?? rawQuestions.length),
+        totalGroups: Number(rawDelivery.totalGroups ?? 0),
+      },
+    },
+    questions: rawQuestions as PublicSessionResponse['questions'],
+  };
+}
+
 export async function fetchPublicSession(token: string) {
   const response = await fetch(`${apiBaseUrl}/public/session/${token}`);
-  return readJson<PublicSessionResponse>(response);
+  const payload = await readJson<unknown>(response);
+  return normalizePublicSession(payload);
 }
 
 export async function startPublicSubmission(token: string, payload: ParticipantIdentityPayload) {
