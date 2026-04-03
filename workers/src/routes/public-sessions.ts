@@ -18,6 +18,7 @@ interface SessionLookupRow {
   instructions: string | null;
   time_limit_minutes: number | null;
   settings_json: string | null;
+  protected_delivery_mode: number | null;
   starts_at: string | null;
   ends_at: string | null;
   test_type_id: number;
@@ -155,6 +156,7 @@ async function loadSessionByAccessToken(db: D1Database, token: string): Promise<
       ts.instructions,
       ts.time_limit_minutes,
       ts.settings_json,
+      ts.protected_delivery_mode,
       ts.starts_at,
       ts.ends_at,
       ts.test_type_id,
@@ -730,7 +732,8 @@ async function handleGetSession(c: { req: { param: (name: string) => string }; e
     const totalQuestions = Number(countRow?.total ?? 0);
     const groupSize = getGroupSizeForTestType(session.test_type_code, totalQuestions);
     const totalGroups = computeTotalGroups(totalQuestions, groupSize);
-    const deliveryMode = settings.protectedDeliveryMode ? 'progressive' : 'full';
+    const protectedMode = Boolean(session.protected_delivery_mode) || settings.protectedDeliveryMode;
+    const deliveryMode = protectedMode ? 'progressive' : 'full';
 
     return c.json({
       session: {
@@ -748,7 +751,7 @@ async function handleGetSession(c: { req: { param: (name: string) => string }; e
         delivery: {
           mode: deliveryMode,
           totalQuestions,
-          totalGroups: deliveryMode === 'progressive' ? totalGroups : 1,
+          totalGroups: protectedMode ? totalGroups : 1,
         },
       },
       questions: [],
@@ -846,6 +849,7 @@ async function handleStartSession(c: { req: { param: (name: string) => string; j
     const submissionAccessExpiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
 
     const settings = parseSettings(session.settings_json);
+    const protectedMode = Boolean(session.protected_delivery_mode) || settings.protectedDeliveryMode;
     const questionCountRow = await queryOne<{ total: number }>(
       c.env.DB,
       `SELECT COUNT(*) AS total
@@ -855,7 +859,7 @@ async function handleStartSession(c: { req: { param: (name: string) => string; j
     );
     const totalQuestionCount = Number(questionCountRow?.total ?? 0);
     const groupSize = getGroupSizeForTestType(session.test_type_code, totalQuestionCount);
-    const totalGroups = settings.protectedDeliveryMode
+    const totalGroups = protectedMode
       ? computeTotalGroups(totalQuestionCount, groupSize)
       : 1;
 
@@ -879,9 +883,9 @@ async function handleStartSession(c: { req: { param: (name: string) => string; j
         status: 'in_progress',
         testType: session.test_type_code,
         participantResultMode: settings.participantResultMode,
-        protectedDelivery: settings.protectedDeliveryMode,
-        totalGroups: settings.protectedDeliveryMode ? totalGroups : undefined,
-        groupSize: settings.protectedDeliveryMode ? groupSize : undefined,
+        protectedDelivery: protectedMode,
+        totalGroups: protectedMode ? totalGroups : undefined,
+        groupSize: protectedMode ? groupSize : undefined,
       },
       201,
     );
