@@ -25,6 +25,7 @@ async function readJson<T>(response: Response): Promise<T> {
 function createSubmissionHeaders(submissionAccessToken: string) {
   return {
     'Content-Type': 'application/json',
+    Authorization: `Bearer ${submissionAccessToken}`,
     'X-Submission-Token': submissionAccessToken,
   };
 }

@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { formatTestTypeLabel } from '@/lib/formatters';
+import { useLanguage } from '@/lib/language';
 
 function isQuestionAnswered(question: AssessmentQuestion, answer?: SubmissionAnswerInput) {
   if (!answer) {
@@ -43,8 +44,63 @@ function renderOptionLabel(option: AssessmentOption) {
   return option.value ? `${option.value}` : option.key;
 }
 
+const copy = {
+  en: {
+    loadProtectedError: 'Unable to load protected assessment questions',
+    loadQuestionsError: 'Unable to load assessment questions',
+    loadAssessmentError: 'Unable to load assessment',
+    loadNextGroupError: 'Unable to load the next question group',
+    answerSectionRequired: 'Please answer all questions in this section before continuing.',
+    answerSectionSubmit: 'Please answer all questions in this section before submitting.',
+    answerAllSubmit: 'Please answer all questions before submitting.',
+    submitError: 'Unable to submit assessment',
+    loadingAssessment: 'Loading assessment...',
+    assessmentWord: 'assessment',
+    answeredWord: 'questions answered',
+    completeWord: 'complete',
+    estimatedWord: 'Estimated',
+    minutesWord: 'minutes',
+    protectedMessage: 'Protected delivery is enabled. You are completing group {current} of {total}.',
+    questionWord: 'Question',
+    most: 'Most',
+    least: 'Least',
+    previousSection: 'Previous section',
+    saving: 'Saving...',
+    saveContinue: 'Save and continue',
+    submitting: 'Submitting...',
+    submitResponses: 'Submit responses',
+  },
+  id: {
+    loadProtectedError: 'Pertanyaan asesmen terlindungi belum bisa dimuat',
+    loadQuestionsError: 'Pertanyaan asesmen belum bisa dimuat',
+    loadAssessmentError: 'Asesmen belum bisa dimuat',
+    loadNextGroupError: 'Grup pertanyaan berikutnya belum bisa dimuat',
+    answerSectionRequired: 'Isi semua pertanyaan di bagian ini dulu sebelum lanjut.',
+    answerSectionSubmit: 'Isi semua pertanyaan di bagian ini dulu sebelum kirim.',
+    answerAllSubmit: 'Isi semua pertanyaan dulu sebelum kirim.',
+    submitError: 'Asesmen belum bisa dikirim',
+    loadingAssessment: 'Lagi memuat asesmen...',
+    assessmentWord: 'asesmen',
+    answeredWord: 'pertanyaan terjawab',
+    completeWord: 'selesai',
+    estimatedWord: 'Estimasi',
+    minutesWord: 'menit',
+    protectedMessage: 'Mode terlindungi aktif. Kamu sedang mengerjakan grup {current} dari {total}.',
+    questionWord: 'Pertanyaan',
+    most: 'Paling menggambarkan',
+    least: 'Paling tidak menggambarkan',
+    previousSection: 'Bagian sebelumnya',
+    saving: 'Menyimpan...',
+    saveContinue: 'Simpan dan lanjut',
+    submitting: 'Mengirim...',
+    submitResponses: 'Kirim jawaban',
+  },
+} as const;
+
 export function ParticipantTestPage() {
   const { token = 'assessment-token' } = useParams();
+  const { language } = useLanguage();
+  const t = copy[language];
   const navigate = useNavigate();
   const [session, setSession] = useState<PublicSessionResponse | null>(null);
   const [questionWindow, setQuestionWindow] = useState<ProgressiveQuestionWindow | null>(null);
@@ -78,41 +134,41 @@ export function ParticipantTestPage() {
 
         setSession(payload);
 
-        if (payload.session.delivery.mode === 'progressive') {
-          setIsLoadingWindow(true);
-          try {
-            const initialWindow = await fetchSubmissionQuestionWindow(
-              storedSession.submissionId,
-              storedSession.submissionAccessToken,
-              0,
-            );
-            if (!isMounted) {
-              return;
+        setIsLoadingWindow(true);
+        try {
+          const initialWindow = await fetchSubmissionQuestionWindow(
+            storedSession.submissionId,
+            storedSession.submissionAccessToken,
+            0,
+          );
+          if (!isMounted) {
+            return;
+          }
+          setQuestionWindow(initialWindow);
+          setAnswerSequence(initialWindow.answerSequence);
+          updateParticipantSession(token, { answerSequence: initialWindow.answerSequence });
+          setAnswers((current) => {
+            const next = { ...current };
+            for (const answer of initialWindow.savedAnswers) {
+              next[answer.questionId] = answer;
             }
-            setQuestionWindow(initialWindow);
-            setAnswerSequence(initialWindow.answerSequence);
-            updateParticipantSession(token, { answerSequence: initialWindow.answerSequence });
-            setAnswers((current) => {
-              const next = { ...current };
-              for (const answer of initialWindow.savedAnswers) {
-                next[answer.questionId] = answer;
-              }
-              return next;
-            });
-          } catch (requestError) {
-            if (isMounted) {
-              setError(requestError instanceof Error ? requestError.message : 'Unable to load protected assessment questions');
-            }
-          } finally {
-            if (isMounted) {
-              setIsLoadingWindow(false);
-            }
+            return next;
+          });
+        } catch (requestError) {
+          if (isMounted) {
+            const fallbackMessage =
+              payload.session.delivery.mode === 'progressive' ? t.loadProtectedError : t.loadQuestionsError;
+            setError(requestError instanceof Error ? requestError.message : fallbackMessage);
+          }
+        } finally {
+          if (isMounted) {
+            setIsLoadingWindow(false);
           }
         }
       })
       .catch((requestError) => {
         if (isMounted) {
-          setError(requestError instanceof Error ? requestError.message : 'Unable to load assessment');
+          setError(requestError instanceof Error ? requestError.message : t.loadAssessmentError);
         }
       });
 
@@ -122,7 +178,7 @@ export function ParticipantTestPage() {
   }, [navigate, token]);
 
   const isProtectedMode = session?.session.delivery.mode === 'progressive';
-  const activeQuestions = isProtectedMode ? (questionWindow?.questions ?? []) : (session?.questions ?? []);
+  const activeQuestions = questionWindow?.questions ?? [];
 
   function upsertAnswer(questionId: number, next: Partial<SubmissionAnswerInput>) {
     setAnswers((current) => ({
@@ -198,7 +254,7 @@ export function ParticipantTestPage() {
         return next;
       });
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to load the next question group');
+      setError(requestError instanceof Error ? requestError.message : t.loadNextGroupError);
     } finally {
       setIsLoadingWindow(false);
     }
@@ -217,7 +273,7 @@ export function ParticipantTestPage() {
     const allGroupAnswered = questionWindow.questions.every((question) => isQuestionAnswered(question, answers[question.id]));
 
     if (movingForward && !allGroupAnswered) {
-      setError('Please answer all questions in this section before continuing.');
+      setError(t.answerSectionRequired);
       return;
     }
 
@@ -260,7 +316,7 @@ export function ParticipantTestPage() {
 
         const allGroupAnswered = questionWindow.questions.every((question) => isQuestionAnswered(question, answers[question.id]));
         if (!allGroupAnswered) {
-          throw new Error('Please answer all questions in this section before submitting.');
+          throw new Error(t.answerSectionSubmit);
         }
 
         const response = await submitPublicSubmission(
@@ -275,13 +331,13 @@ export function ParticipantTestPage() {
         return;
       }
 
-      const orderedAnswers = session.questions
+      const orderedAnswers = activeQuestions
         .map((question) => answers[question.id])
         .filter((answer): answer is SubmissionAnswerInput => Boolean(answer));
 
-      const allAnswered = session.questions.every((question) => isQuestionAnswered(question, answers[question.id]));
+      const allAnswered = activeQuestions.every((question) => isQuestionAnswered(question, answers[question.id]));
       if (!allAnswered) {
-        throw new Error('Please answer all questions before submitting.');
+        throw new Error(t.answerAllSubmit);
       }
 
       const response = await submitPublicSubmission(
@@ -294,13 +350,13 @@ export function ParticipantTestPage() {
       saveParticipantResult(token, response.result);
       navigate(`/t/${token}/completed`);
     } catch (submissionError) {
-      setError(submissionError instanceof Error ? submissionError.message : 'Unable to submit assessment');
+      setError(submissionError instanceof Error ? submissionError.message : t.submitError);
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  if (error && !session) {
+  if (error && !questionWindow) {
     return (
       <Card className="bg-white/82">
         <CardContent className="p-8 text-sm text-rose-600">{error}</CardContent>
@@ -308,10 +364,10 @@ export function ParticipantTestPage() {
     );
   }
 
-  if (!session || (isProtectedMode && !questionWindow && isLoadingWindow)) {
+  if (!session || !questionWindow || isLoadingWindow) {
     return (
       <Card className="bg-white/82">
-        <CardContent className="p-8 text-sm text-slate-500">Loading assessment...</CardContent>
+        <CardContent className="p-8 text-sm text-slate-500">{t.loadingAssessment}</CardContent>
       </Card>
     );
   }
@@ -325,8 +381,8 @@ export function ParticipantTestPage() {
         const localInCurrentGroup = questionWindow.questions.filter((question) => isQuestionAnswered(question, answers[question.id])).length;
         return questionWindow.answeredQuestionCount - savedInCurrentGroup + localInCurrentGroup;
       })()
-    : session.questions.filter((question) => isQuestionAnswered(question, answers[question.id])).length;
-  const totalQuestions = session.session.delivery.totalQuestions || session.questions.length;
+    : questionWindow.questions.filter((question) => isQuestionAnswered(question, answers[question.id])).length;
+  const totalQuestions = session.session.delivery.totalQuestions || questionWindow.totalQuestions || questionWindow.questions.length;
   const progressValue = totalQuestions === 0 ? 0 : (answeredCount / totalQuestions) * 100;
   const allVisibleAnswered = activeQuestions.every((question) => isQuestionAnswered(question, answers[question.id]));
 
@@ -336,18 +392,18 @@ export function ParticipantTestPage() {
         <CardHeader>
           <CardTitle>{session.session.title}</CardTitle>
           <CardDescription>
-            {formatTestTypeLabel(session.session.testType)} assessment • {answeredCount} of {totalQuestions} questions answered
+            {formatTestTypeLabel(session.session.testType)} {t.assessmentWord} • {answeredCount} / {totalQuestions} {t.answeredWord}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <Progress value={progressValue} />
           <div className="flex flex-col gap-2 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-            <span>{Math.round(progressValue)}% complete</span>
-            <span>Estimated {session.session.estimatedMinutes} minutes</span>
+            <span>{Math.round(progressValue)}% {t.completeWord}</span>
+            <span>{t.estimatedWord} {session.session.estimatedMinutes} {t.minutesWord}</span>
           </div>
           {isProtectedMode && questionWindow ? (
             <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
-              Protected delivery is enabled. You are completing group {questionWindow.groupIndex + 1} of {questionWindow.totalGroups}.
+              {t.protectedMessage.replace('{current}', String(questionWindow.groupIndex + 1)).replace('{total}', String(questionWindow.totalGroups))}
             </div>
           ) : null}
         </CardContent>
@@ -362,7 +418,7 @@ export function ParticipantTestPage() {
         return (
           <Card key={question.id} className="bg-white/82">
             <CardHeader>
-              <CardTitle>Question {displayIndex}</CardTitle>
+              <CardTitle>{t.questionWord} {displayIndex}</CardTitle>
               <CardDescription>{question.prompt ?? question.instructionText}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -449,20 +505,24 @@ export function ParticipantTestPage() {
       <div className="sticky bottom-4 flex flex-wrap justify-end gap-3">
         {isProtectedMode && questionWindow && questionWindow.groupIndex > 0 ? (
           <Button variant="outline" size="lg" disabled={isLoadingWindow || isSubmitting} onClick={() => void saveCurrentGroupAndMove(questionWindow.groupIndex - 1)}>
-            Previous section
+            {t.previousSection}
           </Button>
         ) : null}
         {isProtectedMode && questionWindow && questionWindow.groupIndex < questionWindow.totalGroups - 1 ? (
           <Button size="lg" className="shadow-panel" disabled={isLoadingWindow || isSubmitting || !allVisibleAnswered} onClick={() => void saveCurrentGroupAndMove(questionWindow.groupIndex + 1)}>
-            {isLoadingWindow ? 'Saving...' : 'Save and continue'}
+            {isLoadingWindow ? t.saving : t.saveContinue}
           </Button>
         ) : (
           <Button size="lg" className="shadow-panel" disabled={isSubmitting || !allVisibleAnswered} onClick={handleSubmit}>
-            {isSubmitting ? 'Submitting...' : 'Submit responses'}
+            {isSubmitting ? t.submitting : t.submitResponses}
           </Button>
         )}
       </div>
     </div>
   );
 }
+
+
+
+
 
