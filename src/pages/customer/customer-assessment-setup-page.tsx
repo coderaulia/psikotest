@@ -252,6 +252,9 @@ export function CustomerAssessmentSetupPage() {
                   <span className="mt-1 block leading-7 text-slate-500">
                     Deliver questions progressively and keep the participant flow tighter for higher-stakes assessments.
                   </span>
+                  <span className="mt-1 block text-xs uppercase tracking-[0.16em] text-sky-700">
+                    Recommended for IQ assessments
+                  </span>
                 </span>
               </label>
             </div>
