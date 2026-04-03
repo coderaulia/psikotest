@@ -4,6 +4,28 @@ A running log of meaningful commits with deployment status.
 
 ---
 
+## [2026-04-03] - Question Bank Schema Contract Alignment
+
+### What Changed
+- Completed schema audit for question bank against production D1 (`questions`, `question_options`)
+- Confirmed admin frontend and API already use the same normalized contract (`question_code`, `prompt`, `dimension_key`, `option_order`, etc.)
+- Added canonical schema + API + CSV mapping contract document for downstream work
+- Removed stale "frontend/backend schema mismatch" debt item from project status
+
+### Files Affected
+- `docs/question-bank-schema.md` - NEW - Canonical contract for question bank and CSV mapping
+- `docs/project-status.md` - Removed outdated question bank mismatch debt entry
+
+### Deployed
+- No deployment required (documentation-only update)
+
+### Verified
+- ✅ Remote PRAGMA confirms active schema columns
+- ✅ `src/pages/admin/question-bank-page.tsx` payload fields align with `workers/src/routes/question-bank.ts`
+- ✅ `GET /api/question-bank/questions/:id` includes nested options for edit flow
+
+---
+
 ## [2026-04-03] - Participant Question Loading and Submit Flow Fix
 
 ### What Changed

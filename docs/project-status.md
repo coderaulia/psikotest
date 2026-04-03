@@ -103,7 +103,6 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 ### Technical Debt
 | Issue | Severity | Notes |
 |-------|----------|-------|
-| Question bank frontend/backend schema mismatch | Medium | Frontend expects more fields than backend provides |
 | No email delivery | High | All invites/reminders are dummy (generate links only) |
 | External PDF service | Low | Browser print-to-PDF works; can add Gotenberg later |
 | No Stripe integration | Medium | Billing is dummy/placeholder |
