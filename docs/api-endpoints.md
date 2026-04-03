@@ -526,6 +526,38 @@ Request: { "status": "active" | "inactive" }
 
 ---
 
+### Admin Billing Verification
+
+#### GET /api/admin-billing/manual-payments
+- **Auth:** Admin Bearer (`super_admin` or `admin`)
+- **Handler:** `admin-billing.ts`
+- **Status:** ✅ Working
+- **Description:** List manual payments. Optional filter: `?status=pending|paid|rejected|expired`
+
+#### GET /api/admin-billing/manual-payments/:id
+- **Auth:** Admin Bearer (`super_admin` or `admin`)
+- **Handler:** `admin-billing.ts`
+- **Status:** ✅ Working
+- **Description:** Get manual payment detail
+
+#### POST /api/admin-billing/manual-payments/:id/approve
+- **Auth:** Admin Bearer (`super_admin` or `admin`)
+- **Handler:** `admin-billing.ts`
+- **Status:** ✅ Working
+- **Description:** Approve pending manual payment and activate workspace subscription
+
+#### POST /api/admin-billing/manual-payments/:id/reject
+- **Auth:** Admin Bearer (`super_admin` or `admin`)
+- **Handler:** `admin-billing.ts`
+- **Status:** ✅ Working
+- **Description:** Reject pending manual payment with reason
+
+```json
+Request: { "reason": "Transfer amount mismatch" }
+```
+
+---
+
 ## Customer Endpoints
 
 ### Authentication (Customer)
@@ -662,21 +694,63 @@ Request: { "fullName": "...", "email": "...", "role": "admin"|"operator"|"review
 - **Status:** ✅ Working
 - **Description:** Get invoice history
 
-#### POST /api/site-billing/checkout-session
+#### POST /api/site-billing/manual-payment
 - **Auth:** Customer Bearer (owner)
 - **Handler:** `site-billing.ts`
 - **Status:** ✅ Working
-- **Description:** Create checkout session (currently dummy)
+- **Description:** Create manual bank-transfer payment instruction. Reuses existing active pending payment for the same workspace.
 
 ```json
 Request: { "selectedPlan": "starter"|"growth"|"research", "billingCycle": "monthly"|"annual" }
+Response: {
+  "payment": {
+    "id": 1,
+    "selectedPlan": "growth",
+    "billingCycle": "monthly",
+    "currency": "IDR",
+    "baseAmount": 199000,
+    "uniqueCode": 237,
+    "totalAmount": 199237,
+    "paymentReference": "PAY-20260403-XXXX",
+    "status": "pending",
+    "expiresAt": 1719999999
+  },
+  "reused": false
+}
 ```
+
+#### GET /api/site-billing/manual-payments
+- **Auth:** Customer Bearer (owner/admin)
+- **Handler:** `site-billing.ts`
+- **Status:** ✅ Working
+- **Description:** Get manual payments for current workspace (pending + recent)
+
+#### POST /api/site-billing/manual-payments/:id/proof
+- **Auth:** Customer Bearer (owner/admin)
+- **Handler:** `site-billing.ts`
+- **Status:** ✅ Working
+- **Description:** Submit payment proof for pending manual payment
+
+```json
+Request: {
+  "proofUrl": "https://...",
+  "senderName": "Jane",
+  "senderBank": "BCA",
+  "note": "Transfer completed"
+}
+```
+
+#### POST /api/site-billing/checkout-session
+- **Auth:** Customer Bearer (owner)
+- **Handler:** `site-billing.ts`
+- **Status:** ⚠️ Deprecated / Disabled
+- **Description:** Disabled in manual-payment MVP (returns 410)
 
 #### PATCH /api/site-billing/subscription
 - **Auth:** Customer Bearer (owner)
 - **Handler:** `site-billing.ts`
-- **Status:** ✅ Working
-- **Description:** Update subscription plan (currently dummy)
+- **Status:** ⚠️ Restricted
+- **Description:** Direct customer subscription update is disabled (returns 403). Activation only via admin payment approval.
 
 ---
 

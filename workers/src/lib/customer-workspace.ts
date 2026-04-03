@@ -82,8 +82,33 @@ const workspacePlanCatalog = {
   },
 } as const;
 
+const manualPlanPricing = {
+  IDR: {
+    starter: { monthly: 99000, annual: 990000 },
+    growth: { monthly: 199000, annual: 1990000 },
+    research: { monthly: 299000, annual: 2990000 },
+  },
+  USD: {
+    starter: { monthly: 9, annual: 90 },
+    growth: { monthly: 19, annual: 190 },
+    research: { monthly: 29, annual: 290 },
+  },
+} as const;
+
 export function getPlanCatalog() {
   return workspacePlanCatalog;
+}
+
+export function getManualPlanPricing() {
+  return manualPlanPricing;
+}
+
+export function getManualPlanPrice(
+  planCode: WorkspacePlanCode,
+  billingCycle: WorkspaceBillingCycle,
+  currency: keyof typeof manualPlanPricing = 'IDR',
+) {
+  return manualPlanPricing[currency][planCode][billingCycle];
 }
 
 export function addDays(days: number) {

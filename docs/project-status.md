@@ -93,6 +93,7 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | Security headers | ✅ Working |
 | Question bank CSV import/export (admin) | ✅ Working |
 | Progressive delivery (protected multi-group) | ✅ Working |
+| Manual payment flow (customer + admin verification) | ✅ Working |
 | Dummy billing | ✅ Working |
 
 ---
@@ -138,7 +139,7 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | External PDF service | Gotenberg or Browserless for automated PDFs | 3 days |
 | Email delivery | Gmail SMTP integration for invites/reminders | 3 days |
 | Validated questions | Import professional psychometric questions | 1 day (after receiving content) |
-| Stripe integration | Replace dummy billing with Stripe | 5 days |
+| Payment gateway integration | Replace manual verification flow with automated gateway | 5 days |
 
 ### Phase 3 — Growth Features
 | Task | Description | Effort |
@@ -216,6 +217,7 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | 008_rate_limiting | Rate limiting counters | ✅ Remote |
 | 009_question_bank_expansion | Question bank schema alignment | ✅ Remote |
 | 010_progressive_delivery | Progressive submission group tracking | ✅ Remote |
+| 011_manual_payments | Manual payment records + verification | ✅ Remote |
 
 ---
 
@@ -228,6 +230,7 @@ All endpoints documented in `docs/api-endpoints.md` are confirmed working.
 | Create assessment → activate → invite | ✅ Verified | 2026-04-01 |
 | Participant consent → test → submit | ✅ Verified | 2026-04-03 |
 | Protected delivery (multi-group) | ✅ Verified | 2026-04-03 |
+| Manual payment creation → proof submit → admin approve | ✅ Verified | 2026-04-03 |
 | Result creation → review → release | ✅ Verified | 2026-04-01 |
 | Result detail → print report (admin) | ✅ Verified | 2026-04-02 |
 | Result detail → print report (customer) | ✅ Verified | 2026-04-02 |

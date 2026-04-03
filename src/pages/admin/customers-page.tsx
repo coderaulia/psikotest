@@ -10,8 +10,17 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { loadAdminSession } from '@/lib/admin-session';
 import { formatDateTime, formatTokenLabel } from '@/lib/formatters';
-import { fetchCustomers, updateCustomerStatus, fetchCustomerBilling, updateCustomerBilling, type AdminCustomerBillingResponse } from '@/services/admin-data';
-import type { CustomerAccountStatus, CustomerListItem } from '@/types/assessment';
+import {
+  fetchCustomers,
+  updateCustomerStatus,
+  fetchCustomerBilling,
+  updateCustomerBilling,
+  fetchAdminManualPayments,
+  approveAdminManualPayment,
+  rejectAdminManualPayment,
+  type AdminCustomerBillingResponse,
+} from '@/services/admin-data';
+import type { CustomerAccountStatus, CustomerListItem, ManualPaymentRecord } from '@/types/assessment';
 
 export function CustomersPage() {
   const adminSession = loadAdminSession();
@@ -27,6 +36,11 @@ export function CustomersPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [pendingPayments, setPendingPayments] = useState<ManualPaymentRecord[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [paymentActionId, setPaymentActionId] = useState<number | null>(null);
+  const [paymentActionError, setPaymentActionError] = useState<string | null>(null);
+  const [rejectReasonById, setRejectReasonById] = useState<Record<number, string>>({});
 
   const [activeCustomer, setActiveCustomer] = useState<{ customer: CustomerListItem; mode: 'view' | 'manage' } | null>(null);
   const [billingData, setBillingData] = useState<AdminCustomerBillingResponse | null>(null);
@@ -110,8 +124,61 @@ export function CustomersPage() {
   useEffect(() => {
     if (isSuperAdmin) {
       void loadCustomers();
+      void loadPendingPayments();
     }
   }, [deferredSearch, statusFilter, typeFilter]);
+
+  async function loadPendingPayments() {
+    setPaymentsLoading(true);
+    setPaymentActionError(null);
+    try {
+      const payload = await fetchAdminManualPayments('pending');
+      setPendingPayments(payload.payments ?? []);
+    } catch (err) {
+      setPaymentActionError(err instanceof Error ? err.message : 'Unable to load pending payments');
+    } finally {
+      setPaymentsLoading(false);
+    }
+  }
+
+  async function handleApprovePayment(paymentId: number) {
+    setPaymentActionId(paymentId);
+    setPaymentActionError(null);
+    try {
+      await approveAdminManualPayment(paymentId);
+      await loadPendingPayments();
+      if (activeCustomer?.customer) {
+        await handleOpenWorkspace(activeCustomer.customer, activeCustomer.mode);
+      }
+    } catch (err) {
+      setPaymentActionError(err instanceof Error ? err.message : 'Unable to approve payment');
+    } finally {
+      setPaymentActionId(null);
+    }
+  }
+
+  async function handleRejectPayment(paymentId: number) {
+    const reason = (rejectReasonById[paymentId] ?? '').trim();
+    if (reason.length < 3) {
+      setPaymentActionError('Rejection reason must be at least 3 characters');
+      return;
+    }
+
+    setPaymentActionId(paymentId);
+    setPaymentActionError(null);
+    try {
+      await rejectAdminManualPayment(paymentId, reason);
+      setRejectReasonById((prev) => ({ ...prev, [paymentId]: '' }));
+      await loadPendingPayments();
+      if (activeCustomer?.customer) {
+        await handleOpenWorkspace(activeCustomer.customer, activeCustomer.mode);
+      }
+    } catch (err) {
+      setPaymentActionError(err instanceof Error ? err.message : 'Unable to reject payment');
+    } finally {
+      setPaymentActionId(null);
+    }
+  }
 
   async function handleToggleStatus(customer: CustomerListItem) {
     const next: CustomerAccountStatus = customer.status === 'active' ? 'inactive' : 'active';
@@ -183,6 +250,93 @@ export function CustomersPage() {
           {actionError}
         </div>
       ) : null}
+      {paymentActionError ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {paymentActionError}
+        </div>
+      ) : null}
+
+      <Card className="bg-white/80">
+        <CardContent className="space-y-4 p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-950">Manual payment verification</h3>
+              <p className="text-sm text-slate-500">Approve or reject pending transfer proofs.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => void loadPendingPayments()} disabled={paymentsLoading}>
+              {paymentsLoading ? 'Refreshing...' : 'Refresh'}
+            </Button>
+          </div>
+          {paymentsLoading ? (
+            <StateCard title="Loading payments" description="Fetching pending manual payments..." />
+          ) : pendingPayments.length === 0 ? (
+            <p className="text-sm text-slate-500">No pending manual payments.</p>
+          ) : (
+            <div className="space-y-3">
+              {pendingPayments.map((payment) => (
+                <div key={payment.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-slate-950">
+                        {formatTokenLabel(payment.selectedPlan)} ({formatTokenLabel(payment.billingCycle)})
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Workspace #{payment.workspaceId} • Ref {payment.paymentReference}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-700">
+                        Amount: {payment.currency} {payment.totalAmount.toLocaleString()}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Sender: {payment.senderName ?? '-'} ({payment.senderBank ?? '-'})
+                      </p>
+                      {payment.proofUrl ? (
+                        <a
+                          className="mt-1 inline-block text-xs text-blue-600 underline"
+                          href={payment.proofUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open proof URL
+                        </a>
+                      ) : null}
+                    </div>
+                    <div className="w-full max-w-md space-y-2">
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        placeholder="Reject reason (required for reject)"
+                        value={rejectReasonById[payment.id] ?? ''}
+                        onChange={(event) =>
+                          setRejectReasonById((prev) => ({
+                            ...prev,
+                            [payment.id]: event.target.value,
+                          }))
+                        }
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => void handleApprovePayment(payment.id)}
+                          disabled={paymentActionId === payment.id}
+                        >
+                          {paymentActionId === payment.id ? 'Processing...' : 'Approve'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void handleRejectPayment(payment.id)}
+                          disabled={paymentActionId === payment.id}
+                        >
+                          {paymentActionId === payment.id ? 'Processing...' : 'Reject'}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="bg-white/80">
         <CardContent className="space-y-5 p-5">

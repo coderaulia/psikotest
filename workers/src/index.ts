@@ -18,6 +18,7 @@ import reportsRoutes from './routes/reports';
 import participantsRoutes from './routes/participants';
 import resultsRoutes from './routes/results';
 import questionBankRoutes from './routes/question-bank';
+import adminBillingRoutes from './routes/admin-billing';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -73,6 +74,7 @@ app.route('/api/participants', participantsRoutes);
 app.route('/api/results', resultsRoutes);
 app.route('/api/test-sessions', testSessionRoutes);
 app.route('/api/question-bank', questionBankRoutes);
+app.route('/api/admin-billing', adminBillingRoutes);
 
 app.notFound((c) => {
   return c.json({ error: 'Not Found', path: c.req.path }, 404);

@@ -300,6 +300,7 @@ export interface CustomerWorkspaceActivityResponse {
 export type WorkspaceBillingProvider = 'dummy' | 'manual' | 'stripe';
 export type BillingCheckoutSessionStatus = 'open' | 'completed' | 'expired' | 'failed';
 export type BillingInvoiceStatus = 'draft' | 'open' | 'paid' | 'void' | 'uncollectible';
+export type ManualPaymentStatus = 'pending' | 'paid' | 'rejected' | 'expired';
 
 export interface WorkspaceSubscriptionRecord {
   id: number;
@@ -419,6 +420,7 @@ export interface CustomerBillingOverviewResponse {
   plans: WorkspacePlanDefinition[];
   recentCheckoutSessions?: BillingCheckoutSessionRecord[];
   recentInvoices?: BillingInvoiceRecord[];
+  recentManualPayments?: ManualPaymentRecord[];
 }
 
 export interface CustomerBillingInvoicesResponse {
@@ -439,6 +441,60 @@ export interface CreateWorkspaceCheckoutSessionResponse {
 export interface UpdateWorkspaceSubscriptionPayload {
   selectedPlan: WorkspacePlanCode;
   billingCycle: WorkspaceBillingCycle;
+}
+
+export interface CreateManualPaymentPayload {
+  selectedPlan: WorkspacePlanCode;
+  billingCycle: WorkspaceBillingCycle;
+}
+
+export interface SubmitManualPaymentProofPayload {
+  proofUrl?: string;
+  senderName?: string;
+  senderBank?: string;
+  note?: string;
+  transferAt?: number;
+}
+
+export interface ManualPaymentRecord {
+  id: number;
+  workspaceId: number;
+  customerId: number | null;
+  selectedPlan: WorkspacePlanCode;
+  billingCycle: WorkspaceBillingCycle;
+  currency: string;
+  baseAmount: number;
+  uniqueCode: number;
+  totalAmount: number;
+  paymentReference: string;
+  paymentMethod: string;
+  bankName: string;
+  bankAccountNumber: string;
+  bankAccountHolder: string;
+  instructionsText: string | null;
+  proofUrl: string | null;
+  proofFilename: string | null;
+  senderName: string | null;
+  senderBank: string | null;
+  note: string | null;
+  transferAt: number | null;
+  proofSubmittedAt: number | null;
+  status: ManualPaymentStatus;
+  expiresAt: number | null;
+  verifiedAt: number | null;
+  verifiedByAdminId: number | null;
+  rejectionReason: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CreateManualPaymentResponse {
+  payment: ManualPaymentRecord;
+  reused: boolean;
+}
+
+export interface CustomerManualPaymentsResponse {
+  payments: ManualPaymentRecord[];
 }
 
 export interface UpdateCustomerWorkspaceSettingsPayload {

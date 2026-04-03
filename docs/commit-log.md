@@ -4,6 +4,47 @@ A running log of meaningful commits with deployment status.
 
 ---
 
+## [2026-04-03] - Manual Payment Billing MVP (No Gateway)
+
+### What Changed
+- Replaced customer checkout flow with manual bank-transfer payment creation
+- Added payment instruction payload (bank account, exact transfer amount, unique code, payment reference, expiry)
+- Added customer proof submission endpoint for pending payments
+- Added admin verification endpoints to approve/reject manual payments
+- Enforced activation rule: workspace subscription is activated only when admin approves payment
+- Added duplicate-pending guard: active pending payment is reused instead of creating duplicates
+- Added migration for `manual_payments` table with indexes
+- Added customer billing UI for manual-payment instructions + proof submission
+- Added admin UI section for pending payment review with approve/reject actions
+- Added placeholder “Coming Soon” options for DOKU and Midtrans in customer UI (no integration yet)
+
+### Files Affected
+- `workers/migrations/011_manual_payments.sql` - NEW manual payment table
+- `workers/src/routes/site-billing.ts` - Manual payment customer endpoints
+- `workers/src/routes/admin-billing.ts` - NEW admin verification endpoints
+- `workers/src/lib/customer-workspace.ts` - Manual pricing source of truth
+- `workers/src/index.ts` - Registered admin billing route
+- `src/pages/customer/customer-billing-page.tsx` - Manual payment/proof UI
+- `src/pages/admin/customers-page.tsx` - Admin payment review actions
+- `src/services/customer-billing.ts` - Manual payment API client
+- `src/services/admin-data.ts` - Admin verification API client
+- `src/types/assessment.ts` - Manual payment types
+- `docs/api-endpoints.md` - Added manual payment + admin verification endpoints
+- `docs/project-status.md` - Updated feature and migration status
+
+### Deployed
+- ✅ D1 migration `011_manual_payments.sql` applied (local and remote)
+- ✅ Workers deployed to production
+- Frontend auto-deploy from `main`
+
+### Verified
+- ✅ Frontend build + typecheck
+- ✅ Workers typecheck
+- ✅ Manual payment table created remotely
+- ✅ Customer and admin billing endpoints available in production
+
+---
+
 ## [2026-04-03] - Progressive Delivery (Protected Multi-Group)
 
 ### What Changed

@@ -4,9 +4,11 @@ import { ArrowUpRight, BarChart3, CreditCard, ShieldCheck, Users, Download } fro
 import { cn } from '@/lib/cn';
 import { formatDateTime, formatTokenLabel } from '@/lib/formatters';
 import { getWorkspaceUsageSeverityClasses, getWorkspaceUsageSeverityLabel } from '@/lib/workspace-billing';
-import { createCustomerCheckoutSession, getCustomerBillingOverview, updateCustomerSubscription } from '@/services/customer-billing';
+import { createCustomerManualPayment, getCustomerBillingOverview, submitCustomerManualPaymentProof } from '@/services/customer-billing';
 import type {
   CustomerBillingOverviewResponse,
+  ManualPaymentRecord,
+  ManualPaymentStatus,
   WorkspaceBillingCycle,
   WorkspacePlanCode,
   WorkspaceUsageDiagnostic,
@@ -121,11 +123,18 @@ const copy = {
 } as const;
 
 function formatCurrency(amount: number, currencyCode = 'USD') {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat(currencyCode === 'IDR' ? 'id-ID' : 'en-US', {
     style: 'currency',
     currency: currencyCode,
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+function statusBadgeTone(status: ManualPaymentStatus) {
+  if (status === 'paid') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (status === 'rejected') return 'border-rose-200 bg-rose-50 text-rose-700';
+  if (status === 'expired') return 'border-slate-200 bg-slate-100 text-slate-700';
+  return 'border-amber-200 bg-amber-50 text-amber-700';
 }
 
 function renderDiagnosticCard(diagnostic: WorkspaceUsageDiagnostic, isId: boolean) {
@@ -172,6 +181,12 @@ export function CustomerBillingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [activePayment, setActivePayment] = useState<ManualPaymentRecord | null>(null);
+  const [proofUrl, setProofUrl] = useState('');
+  const [senderName, setSenderName] = useState('');
+  const [senderBank, setSenderBank] = useState('');
+  const [transferNote, setTransferNote] = useState('');
+  const [isSubmittingProof, setIsSubmittingProof] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -182,6 +197,7 @@ export function CustomerBillingPage() {
         setOverview(payload);
         setSelectedPlan(payload.subscription.planCode);
         setBillingCycle(payload.subscription.billingCycle);
+        setActivePayment((payload.recentManualPayments ?? [])[0] ?? null);
       })
       .catch((error) => {
         if (mounted) setErrorMessage(error instanceof Error ? error.message : t.updateError);
@@ -200,7 +216,6 @@ export function CustomerBillingPage() {
     [overview, selectedPlan],
   );
   const recentInvoices = overview?.recentInvoices ?? [];
-  const recentCheckoutSessions = overview?.recentCheckoutSessions ?? [];
 
   async function handleSavePlan() {
     if (!overview) return;
@@ -210,26 +225,41 @@ export function CustomerBillingPage() {
     setSuccessMessage(null);
 
     try {
-      // 1. Create Checkout Session dummy
-      await createCustomerCheckoutSession({
+      const payload = await createCustomerManualPayment({
         selectedPlan,
         billingCycle,
       });
-
-      // Simple delay to represent the "frontend dummy payment window"
-      await new Promise(r => setTimeout(r, 600));
-
-      // 2. Patch subscription
-      const next = await updateCustomerSubscription({
-        selectedPlan,
-        billingCycle,
-      });
+      setActivePayment(payload.payment);
+      const next = await getCustomerBillingOverview();
       setOverview(next);
-      setSuccessMessage(t.updateSuccess);
+      setSuccessMessage(payload.reused ? 'Active pending payment reused.' : 'Manual payment created. Complete transfer and submit proof.');
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : t.updateError);
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleSubmitProof() {
+    if (!activePayment) return;
+    setIsSubmittingProof(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      const payload = await submitCustomerManualPaymentProof(activePayment.id, {
+        proofUrl: proofUrl.trim() || undefined,
+        senderName: senderName.trim() || undefined,
+        senderBank: senderBank.trim() || undefined,
+        note: transferNote.trim() || undefined,
+      });
+      setActivePayment(payload.payment);
+      setSuccessMessage('Payment proof submitted. Waiting for admin verification.');
+      const next = await getCustomerBillingOverview();
+      setOverview(next);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to submit proof.');
+    } finally {
+      setIsSubmittingProof(false);
     }
   }
 
@@ -398,9 +428,118 @@ export function CustomerBillingPage() {
                   ({cycleLabels[billingCycle].toLowerCase()})
                 </div>
                 <Button type="button" size="lg" onClick={handleSavePlan} disabled={isSubmitting}>
-                  {isSubmitting ? t.saving : t.savePlan}
+                  {isSubmitting ? t.saving : 'Continue to Payment'}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/84">
+            <CardHeader>
+              <CardTitle>Manual payment instructions</CardTitle>
+              <CardDescription>Transfer exact amount, then submit proof for admin verification.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {activePayment ? (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                      <p className="text-slate-500">Plan</p>
+                      <p className="mt-1 font-medium text-slate-900">{formatTokenLabel(activePayment.selectedPlan)} ({formatTokenLabel(activePayment.billingCycle)})</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                      <p className="text-slate-500">Status</p>
+                      <Badge className={`mt-2 ${statusBadgeTone(activePayment.status)}`}>{formatTokenLabel(activePayment.status)}</Badge>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                      <p className="text-slate-500">Exact transfer amount</p>
+                      <p className="mt-1 font-semibold text-slate-900">{formatCurrency(activePayment.totalAmount, activePayment.currency)}</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                      <p className="text-slate-500">Payment reference</p>
+                      <p className="mt-1 font-medium text-slate-900">{activePayment.paymentReference}</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                      <p className="text-slate-500">Bank</p>
+                      <p className="mt-1 font-medium text-slate-900">{activePayment.bankName}</p>
+                      <p className="mt-1 text-slate-700">{activePayment.bankAccountNumber}</p>
+                      <p className="text-slate-700">{activePayment.bankAccountHolder}</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                      <p className="text-slate-500">Expires</p>
+                      <p className="mt-1 font-medium text-slate-900">{activePayment.expiresAt ? formatDateTime(new Date(activePayment.expiresAt * 1000).toISOString()) : '-'}</p>
+                    </div>
+                  </div>
+
+                  {activePayment.instructionsText ? (
+                    <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800">{activePayment.instructionsText}</div>
+                  ) : null}
+
+                  <div className="space-y-3 border-t border-slate-200 pt-4">
+                    <p className="text-sm font-medium text-slate-900">Alternative payment channels</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium text-slate-900">DOKU</p>
+                          <Badge className="border-slate-200 bg-slate-100 text-slate-700">Coming Soon</Badge>
+                        </div>
+                        <p className="mt-2 text-xs text-slate-500">Gateway integration placeholder for future release.</p>
+                        <Button className="mt-3 w-full" variant="outline" disabled>
+                          Use DOKU (Coming Soon)
+                        </Button>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium text-slate-900">Midtrans</p>
+                          <Badge className="border-slate-200 bg-slate-100 text-slate-700">Coming Soon</Badge>
+                        </div>
+                        <p className="mt-2 text-xs text-slate-500">Gateway integration placeholder for future release.</p>
+                        <Button className="mt-3 w-full" variant="outline" disabled>
+                          Use Midtrans (Coming Soon)
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 border-t border-slate-200 pt-4">
+                    <p className="text-sm font-medium text-slate-900">Submit payment proof</p>
+                    <input
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      placeholder="Proof URL (optional)"
+                      value={proofUrl}
+                      onChange={(event) => setProofUrl(event.target.value)}
+                    />
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        placeholder="Sender name"
+                        value={senderName}
+                        onChange={(event) => setSenderName(event.target.value)}
+                      />
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        placeholder="Sender bank"
+                        value={senderBank}
+                        onChange={(event) => setSenderBank(event.target.value)}
+                      />
+                    </div>
+                    <textarea
+                      className="min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      placeholder="Transfer note"
+                      value={transferNote}
+                      onChange={(event) => setTransferNote(event.target.value)}
+                    />
+                    <Button onClick={handleSubmitProof} disabled={isSubmittingProof || activePayment.status !== 'pending'}>
+                      {isSubmittingProof ? 'Submitting proof...' : 'Submit proof'}
+                    </Button>
+                    {activePayment.rejectionReason ? (
+                      <p className="text-sm text-rose-700">Rejected: {activePayment.rejectionReason}</p>
+                    ) : null}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-slate-500">No manual payment yet. Choose plan and click Continue to Payment.</p>
+              )}
             </CardContent>
           </Card>
 
@@ -491,7 +630,7 @@ export function CustomerBillingPage() {
                 <p className="mt-2">
                   {subscription.currentPeriodStart && subscription.currentPeriodEnd
                     ? `${formatDateTime(subscription.currentPeriodStart)} to ${formatDateTime(subscription.currentPeriodEnd)}`
-                    : 'Akan muncul setelah aktivasi berlangganan'}
+                    : '-'}
                 </p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">

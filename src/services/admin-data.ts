@@ -19,6 +19,7 @@ import type {
   StoredResultDetailRecord,
   StoredResultRecord,
   TestTypeCode,
+  ManualPaymentRecord,
   UpdateTestSessionPayload,
 } from '@/types/assessment';
 
@@ -294,5 +295,27 @@ export async function updateAppSetting(key: string, payload: unknown) {
   return adminFetchJson(`/settings/app-settings/${key}`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
+  });
+}
+
+export interface AdminManualPaymentsResponse {
+  payments: ManualPaymentRecord[];
+}
+
+export async function fetchAdminManualPayments(status?: 'pending' | 'paid' | 'rejected' | 'expired') {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  return adminFetchJson<AdminManualPaymentsResponse>(`/admin-billing/manual-payments${query}`);
+}
+
+export async function approveAdminManualPayment(id: number) {
+  return adminFetchJson<{ payment: ManualPaymentRecord | null }>(`/admin-billing/manual-payments/${id}/approve`, {
+    method: 'POST',
+  });
+}
+
+export async function rejectAdminManualPayment(id: number, reason: string) {
+  return adminFetchJson<{ payment: ManualPaymentRecord | null }>(`/admin-billing/manual-payments/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
   });
 }
