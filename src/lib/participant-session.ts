@@ -16,6 +16,9 @@ export interface StoredParticipantSession {
   answerSequence: number;
   testType: TestTypeCode;
   participantResultMode: 'instant_summary' | 'review_required';
+  protectedDelivery?: boolean;
+  totalGroups?: number;
+  groupSize?: number;
   participant: ParticipantIdentityPayload;
   result: StoredResultRecord | null;
   compliance?: {
@@ -59,6 +62,9 @@ export function saveParticipantSession(
     answerSequence: start.answerSequence,
     testType: start.testType,
     participantResultMode: start.participantResultMode,
+    protectedDelivery: start.protectedDelivery,
+    totalGroups: start.totalGroups,
+    groupSize: start.groupSize,
     participant,
     result: null,
     compliance,

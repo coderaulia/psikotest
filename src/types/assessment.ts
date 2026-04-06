@@ -121,7 +121,10 @@ export interface ProgressiveQuestionWindow {
   status: 'in_progress';
   answerSequence: number;
   groupIndex: number;
+  currentGroup: number;
   totalGroups: number;
+  groupSize?: number;
+  isLastGroup: boolean;
   totalQuestions: number;
   answeredQuestionCount: number;
   groupKey: string;
@@ -139,6 +142,13 @@ export interface StartSubmissionResponse {
   status: 'in_progress';
   testType: TestTypeCode;
   participantResultMode: ParticipantResultMode;
+  protectedDelivery?: boolean;
+  totalGroups?: number;
+  groupSize?: number;
+}
+
+export interface NextSubmissionGroupResponse extends ProgressiveQuestionWindow {
+  complete?: boolean;
 }
 
 export interface SaveSubmissionAnswersResponse {
@@ -191,6 +201,21 @@ export interface CustomerAuthResponse {
   account: CustomerUser;
 }
 
+export type PasswordResetValidationReason = 'expired' | 'used' | 'invalid';
+
+export interface ForgotPasswordResponse {
+  success: true;
+}
+
+export interface ResetPasswordValidationResponse {
+  valid: boolean;
+  reason?: PasswordResetValidationReason;
+}
+
+export interface ResetPasswordResponse {
+  success: true;
+}
+
 export interface CustomerWorkspaceSettings {
   brandName: string;
   brandTagline: string;
@@ -203,11 +228,20 @@ export interface CustomerWorkspaceSettings {
   defaultTimeLimitMinutes: number | null;
   defaultConsentStatement: string;
   defaultPrivacyStatement: string;
+  completionPageMessage: string;
+  postSubmitRedirectUrl: string;
+  notifyOnSubmission: boolean;
+  notifyOnReportReleased: boolean;
+  notificationEmailAddress: string;
 }
 
 export interface CustomerWorkspaceSettingsResponse {
   account: CustomerUser;
   settings: CustomerWorkspaceSettings;
+  lockedSettings: {
+    completionPageMessage: boolean;
+    postSubmitRedirectUrl: boolean;
+  };
 }
 
 export interface CustomerWorkspaceMemberItem {
@@ -266,6 +300,7 @@ export interface CustomerWorkspaceActivityResponse {
 export type WorkspaceBillingProvider = 'dummy' | 'manual' | 'stripe';
 export type BillingCheckoutSessionStatus = 'open' | 'completed' | 'expired' | 'failed';
 export type BillingInvoiceStatus = 'draft' | 'open' | 'paid' | 'void' | 'uncollectible';
+export type ManualPaymentStatus = 'pending' | 'paid' | 'rejected' | 'expired';
 
 export interface WorkspaceSubscriptionRecord {
   id: number;
@@ -385,6 +420,7 @@ export interface CustomerBillingOverviewResponse {
   plans: WorkspacePlanDefinition[];
   recentCheckoutSessions?: BillingCheckoutSessionRecord[];
   recentInvoices?: BillingInvoiceRecord[];
+  recentManualPayments?: ManualPaymentRecord[];
 }
 
 export interface CustomerBillingInvoicesResponse {
@@ -407,6 +443,60 @@ export interface UpdateWorkspaceSubscriptionPayload {
   billingCycle: WorkspaceBillingCycle;
 }
 
+export interface CreateManualPaymentPayload {
+  selectedPlan: WorkspacePlanCode;
+  billingCycle: WorkspaceBillingCycle;
+}
+
+export interface SubmitManualPaymentProofPayload {
+  proofUrl?: string;
+  senderName?: string;
+  senderBank?: string;
+  note?: string;
+  transferAt?: number;
+}
+
+export interface ManualPaymentRecord {
+  id: number;
+  workspaceId: number;
+  customerId: number | null;
+  selectedPlan: WorkspacePlanCode;
+  billingCycle: WorkspaceBillingCycle;
+  currency: string;
+  baseAmount: number;
+  uniqueCode: number;
+  totalAmount: number;
+  paymentReference: string;
+  paymentMethod: string;
+  bankName: string;
+  bankAccountNumber: string;
+  bankAccountHolder: string;
+  instructionsText: string | null;
+  proofUrl: string | null;
+  proofFilename: string | null;
+  senderName: string | null;
+  senderBank: string | null;
+  note: string | null;
+  transferAt: number | null;
+  proofSubmittedAt: number | null;
+  status: ManualPaymentStatus;
+  expiresAt: number | null;
+  verifiedAt: number | null;
+  verifiedByAdminId: number | null;
+  rejectionReason: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CreateManualPaymentResponse {
+  payment: ManualPaymentRecord;
+  reused: boolean;
+}
+
+export interface CustomerManualPaymentsResponse {
+  payments: ManualPaymentRecord[];
+}
+
 export interface UpdateCustomerWorkspaceSettingsPayload {
   organizationName: string;
   brandName: string;
@@ -420,6 +510,11 @@ export interface UpdateCustomerWorkspaceSettingsPayload {
   defaultTimeLimitMinutes: number | null;
   defaultConsentStatement: string;
   defaultPrivacyStatement: string;
+  completionPageMessage: string;
+  postSubmitRedirectUrl: string;
+  notifyOnSubmission: boolean;
+  notifyOnReportReleased: boolean;
+  notificationEmailAddress: string;
 }
 
 export interface CreateCustomerWorkspaceMemberPayload {
@@ -853,7 +948,9 @@ export interface QuestionBankOptionPayload {
   optionText: string;
   dimensionKey?: string | null;
   valueNumber?: number | null;
+  scoreValue?: number | null;
   isCorrect?: boolean;
+  isActive?: boolean;
   optionOrder: number;
   scorePayload?: Record<string, unknown> | null;
 }
@@ -866,6 +963,10 @@ export interface QuestionBankQuestionListItem {
   instructionText: string | null;
   questionGroupKey: string | null;
   dimensionKey: string | null;
+  categoryKey?: string | null;
+  scoringKey?: string | null;
+  isReverseScored?: boolean;
+  weight?: number;
   questionType: QuestionType;
   questionOrder: number;
   isRequired: boolean;
@@ -886,6 +987,10 @@ export interface QuestionBankQuestionPayload {
   prompt?: string | null;
   questionGroupKey?: string | null;
   dimensionKey?: string | null;
+  categoryKey?: string | null;
+  scoringKey?: string | null;
+  isReverseScored?: boolean;
+  weight?: number;
   questionType: QuestionType;
   questionOrder: number;
   isRequired: boolean;
@@ -925,8 +1030,29 @@ export interface AuditFeedItem {
 export interface SettingsOverviewResponse {
   profile: AdminProfileSettings;
   sessionDefaults: SessionDefaultsSettings;
+  platformIdentity: {
+    platformDisplayName: string;
+    supportEmail: string;
+    publicContactUrl: string;
+  };
+  complianceDefaults: {
+    consentStatementTemplate: string;
+    privacyStatementTemplate: string;
+    reviewerAssignmentMode: 'auto_assign' | 'manual_claim';
+  };
+  securityDefaults: {
+    submissionTokenExpiryHours: number;
+    protectedDeliveryModeDefault: boolean;
+    answerSequenceStrictness: 'standard' | 'strict';
+  };
+  customerControls: {
+    defaultPlanCode: string;
+    trialDurationDays: number;
+    requireManualActivation: boolean;
+  };
   auditFeed: AuditFeedItem[];
 }
+
 
 
 

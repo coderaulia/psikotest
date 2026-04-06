@@ -39,9 +39,10 @@ export function MarketingLayout() {
   const t = copy[language];
 
   const footerLinks = [
+    { label: 'SaaS', to: '/saas' },
     { label: t.nav.manual, to: '/manual' },
     { label: t.nav.whiteLabel, to: '/white-label' },
-    { label: t.nav.tryDemo, to: '/t/disc-batch-a' },
+    { label: t.nav.tryDemo, to: '/t/disc-public-001' },
     { label: t.nav.signUp, to: '/signup' },
   ];
 
@@ -54,13 +55,13 @@ export function MarketingLayout() {
           </Link>
           <div className="hidden items-center gap-6 text-sm text-slate-500 md:flex">
             <nav className="flex items-center gap-6">
-              <a href="/#how-it-works">{t.nav.howItWorks}</a>
-              <a href="/#assessment-types">{t.nav.assessmentTypes}</a>
+              <a href="/saas#how-it-works">{t.nav.howItWorks}</a>
+              <a href="/saas#assessment-types">{t.nav.assessmentTypes}</a>
               <Link to="/manual" className="transition hover:text-slate-950">
                 {t.nav.manual}
               </Link>
-              <a href="/#faq">{t.nav.faq}</a>
-              <Link to="/t/disc-batch-a" className="rounded-full px-4 py-2 transition hover:bg-white/70 hover:text-slate-950">
+              <a href="/saas#faq">{t.nav.faq}</a>
+              <Link to="/t/disc-public-001" className="rounded-full px-4 py-2 transition hover:bg-white/70 hover:text-slate-950">
                 {t.nav.tryDemo}
               </Link>
               <Link

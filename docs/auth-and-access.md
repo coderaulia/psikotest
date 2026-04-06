@@ -116,12 +116,12 @@ Planned next roles:
 
 ## Planned auth evolution
 
-### SaaS phase
+### SaaS phase (Implemented)
 
-- workspace team members
-- invitation flow
-- workspace role management
-- feature access by plan
+- [x] workspace team members
+- [x] invitation flow
+- [x] workspace role management
+- [x] feature access by plan (plan-gating logic in workspace settings)
 
 ### White-label phase
 

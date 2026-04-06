@@ -9,10 +9,14 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import {
   createQuestionBankQuestion,
+  downloadQuestionBankCsv,
+  downloadQuestionBankImportTemplate,
   fetchQuestionBank,
   fetchQuestionBankQuestion,
+  importQuestionBankCsv,
   updateQuestionBankQuestion,
 } from '@/services/admin-data';
+import { AdminApiError } from '@/services/admin-api';
 import type {
   QuestionBankQuestionDetail,
   QuestionBankQuestionPayload,
@@ -86,6 +90,8 @@ function parseMetaJson(value: string) {
 }
 
 export function QuestionBankPage() {
+  type CsvImportIssue = { row: number; field: string; message: string };
+
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
   const [testTypeFilter, setTestTypeFilter] = useState<'all' | TestTypeCode>('all');
@@ -97,6 +103,17 @@ export function QuestionBankPage() {
   const [metaText, setMetaText] = useState('{}');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isDryRunningImport, setIsDryRunningImport] = useState(false);
+  const [isWritingImport, setIsWritingImport] = useState(false);
+  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
+  const [importFileName, setImportFileName] = useState<string | null>(null);
+  const [importCsvText, setImportCsvText] = useState('');
+  const [replaceAll, setReplaceAll] = useState(false);
+  const [importPreviewCount, setImportPreviewCount] = useState<number | null>(null);
+  const [importPreviewCategories, setImportPreviewCategories] = useState<string[]>([]);
+  const [importErrors, setImportErrors] = useState<CsvImportIssue[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -285,6 +302,165 @@ export function QuestionBankPage() {
     });
   }
 
+  async function handleExportCsv() {
+    setError(null);
+    setSuccessMessage(null);
+    setIsExporting(true);
+
+    try {
+      const blob = await downloadQuestionBankCsv();
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = 'questions-export.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+      setSuccessMessage('Question bank CSV exported.');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to export CSV');
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  function resetImportState() {
+    setImportFileName(null);
+    setImportCsvText('');
+    setReplaceAll(false);
+    setImportPreviewCount(null);
+    setImportPreviewCategories([]);
+    setImportErrors([]);
+    setIsDryRunningImport(false);
+    setIsWritingImport(false);
+  }
+
+  function extractImportErrors(requestError: unknown) {
+    if (requestError instanceof AdminApiError && requestError.details && typeof requestError.details === 'object') {
+      const details = requestError.details as {
+        errors?: Array<{ row?: number; field?: string; message?: string }>;
+      };
+
+      if (Array.isArray(details.errors)) {
+        return details.errors.map((item) => ({
+          row: Number(item.row ?? 0),
+          field: item.field ?? 'row',
+          message: item.message ?? 'Invalid value',
+        }));
+      }
+    }
+
+    return [] as CsvImportIssue[];
+  }
+
+  async function handleImportFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const csvText = await file.text();
+      setImportCsvText(csvText);
+      setImportFileName(file.name);
+      setImportPreviewCount(null);
+      setImportPreviewCategories([]);
+      setImportErrors([]);
+      setError(null);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to read selected CSV file');
+    }
+  }
+
+  async function handleImportDryRun() {
+    if (!importCsvText.trim()) {
+      setImportErrors([{ row: 1, field: 'csv', message: 'Please select a CSV file first' }]);
+      return;
+    }
+
+    setIsDryRunningImport(true);
+    setImportErrors([]);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const preview = await importQuestionBankCsv({
+        csv: importCsvText,
+        dryRun: true,
+        replaceAll,
+      });
+      setImportPreviewCount(preview.preview);
+      setImportPreviewCategories(preview.categories);
+    } catch (requestError) {
+      setImportPreviewCount(null);
+      setImportPreviewCategories([]);
+      const issues = extractImportErrors(requestError);
+      setImportErrors(issues);
+      if (issues.length === 0) {
+        setError(requestError instanceof Error ? requestError.message : 'Dry run failed');
+      }
+    } finally {
+      setIsDryRunningImport(false);
+    }
+  }
+
+  async function handleImportWrite() {
+    if (!importCsvText.trim()) {
+      setImportErrors([{ row: 1, field: 'csv', message: 'Please select a CSV file first' }]);
+      return;
+    }
+
+    if (importPreviewCount == null) {
+      setImportErrors([{ row: 1, field: 'dryRun', message: 'Run dry run preview before importing' }]);
+      return;
+    }
+
+    setIsWritingImport(true);
+    setImportErrors([]);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const result = await importQuestionBankCsv({
+        csv: importCsvText,
+        dryRun: false,
+        replaceAll,
+      });
+
+      setSuccessMessage(`CSV import complete. Imported ${result.imported ?? 0}, skipped ${result.skipped ?? 0}.`);
+      setIsImportOpen(false);
+      await loadQuestions(false);
+      resetImportState();
+    } catch (requestError) {
+      const issues = extractImportErrors(requestError);
+      setImportErrors(issues);
+      if (issues.length === 0) {
+        setError(requestError instanceof Error ? requestError.message : 'Import failed');
+      }
+    } finally {
+      setIsWritingImport(false);
+    }
+  }
+
+  async function handleDownloadTemplate() {
+    setError(null);
+    setIsDownloadingTemplate(true);
+    try {
+      const blob = await downloadQuestionBankImportTemplate();
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = 'question-bank-import-template.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to download CSV template');
+    } finally {
+      setIsDownloadingTemplate(false);
+    }
+  }
+
   if (isLoading && items.length === 0 && !isCreating) {
     return <StateCard title="Loading question bank" description="Pulling secured question content and option structures." />;
   }
@@ -295,7 +471,24 @@ export function QuestionBankPage() {
         eyebrow="Question Bank"
         title="Assessment item management"
         description="Create and maintain item content inside the protected admin workspace. Questions are never exposed through public admin-free endpoints."
-        actions={<Button onClick={handleCreateNew}>New question</Button>}
+        actions={(
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                resetImportState();
+                setIsImportOpen(true);
+              }}
+            >
+              Import CSV
+            </Button>
+            <Button type="button" variant="secondary" onClick={handleExportCsv} disabled={isExporting}>
+              {isExporting ? 'Exporting...' : 'Export CSV'}
+            </Button>
+            <Button type="button" onClick={handleCreateNew}>New question</Button>
+          </div>
+        )}
       />
 
       {error ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">{error}</div> : null}
@@ -457,6 +650,83 @@ export function QuestionBankPage() {
           </CardContent>
         </Card>
       </div>
+
+      {isImportOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+          <div className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">Question Bank Import</p>
+                <h3 className="text-xl font-semibold text-slate-950">Import Questions from CSV</h3>
+                <p className="mt-1 text-sm text-slate-600">Run a dry run first to validate rows before writing data.</p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setIsImportOpen(false);
+                  resetImportState();
+                }}
+              >
+                Close
+              </Button>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              <div className="flex justify-end">
+                <Button type="button" variant="secondary" onClick={handleDownloadTemplate} disabled={isDownloadingTemplate}>
+                  {isDownloadingTemplate ? 'Preparing template...' : 'Download Template'}
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">CSV file</label>
+                <Input type="file" accept=".csv,text/csv" onChange={handleImportFileChange} />
+                <p className="text-xs text-slate-500">{importFileName ? `Selected: ${importFileName}` : 'Choose a CSV file that matches the question bank template.'}</p>
+              </div>
+
+              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                <input type="checkbox" checked={replaceAll} onChange={(event) => setReplaceAll(event.target.checked)} />
+                Replace existing questions for categories present in this CSV
+              </label>
+
+              {importPreviewCount != null ? (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                  Found {importPreviewCount} valid question rows in categories: {importPreviewCategories.join(', ') || 'n/a'}.
+                </div>
+              ) : null}
+
+              {importErrors.length > 0 ? (
+                <div className="max-h-44 overflow-auto rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  {importErrors.map((issue, index) => (
+                    <p key={`${issue.row}-${issue.field}-${index}`}>
+                      Row {issue.row}, {issue.field}: {issue.message}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleImportDryRun}
+                  disabled={!importCsvText.trim() || isDryRunningImport || isWritingImport}
+                >
+                  {isDryRunningImport ? 'Validating...' : 'Dry Run Preview'}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleImportWrite}
+                  disabled={importPreviewCount == null || isDryRunningImport || isWritingImport}
+                >
+                  {isWritingImport ? 'Importing...' : 'Import CSV'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

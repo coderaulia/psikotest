@@ -1,151 +1,143 @@
 import { Hono } from 'hono';
-import { verify } from 'hono/jwt';
-import type { Env } from '../index';
+import { HTTPException } from 'hono/http-exception';
+import { query, queryOne, run } from '../lib/db';
+import { ensureWorkspaceSubscription, recordWorkspaceUsageEvent, requireActiveCustomer } from '../lib/customer-workspace';
+import { requireCustomer } from '../middleware/auth';
+import type { CustomerJwtPayload, Env } from '../types';
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Env; Variables: { customerPayload: CustomerJwtPayload } }>();
 
-// Helper to verify customer token
-async function verifyCustomerToken(c: typeof app extends Hono<{ Bindings: Env }> ? any : never): Promise<{ id: string; email: string } | null> {
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return null;
-  }
-  const token = authHeader.substring(7);
-  try {
-    const payload = await verify(token, c.env.JWT_SECRET, 'HS256');
-    if (payload.type !== 'customer') {
-      return null;
-    }
-    return {
-      id: payload.sub as string,
-      email: payload.email as string,
-    };
-  } catch {
-    return null;
-  }
+function escapeCsvValue(value: string | number | null) {
+  if (value === null || value === undefined) return '';
+  const normalized = String(value).replace(/"/g, '""');
+  return /[",\r\n]/.test(normalized) ? `"${normalized}"` : normalized;
 }
 
-// List customer results
-app.get('/', async (c) => {
-  const customer = await verifyCustomerToken(c);
-  if (!customer) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-  
-  const db = c.env.DB;
-  
-  const results = await db.prepare(`
-    SELECT r.id, r.submission_id, r.test_type_id, tt.code as test_type_code, tt.name as test_type_name,
-           r.primary_type, r.secondary_type, r.profile_code, r.score_total, r.score_band,
-           r.created_at,
-           p.full_name as participant_name, p.email as participant_email,
-           s.submitted_at, s.time_spent_seconds,
-           ts.title as session_title
-    FROM results r
-    JOIN submissions s ON r.submission_id = s.id
-    JOIN participants p ON s.participant_id = p.id
-    JOIN test_sessions ts ON s.test_session_id = ts.id
-    JOIN customer_assessments ca ON ts.id = ca.test_session_id
-    LEFT JOIN test_types tt ON r.test_type_id = tt.id
-    WHERE ca.customer_account_id = ?
-    ORDER BY r.created_at DESC
-    LIMIT 100
-  `).bind(customer.id).all();
-  
-  return c.json({ items: results.results || [] });
+async function fetchWorkspaceResults(db: D1Database, accountId: number) {
+  const result = await query(
+    db,
+    `SELECT r.id AS result_id, ca.id AS assessment_id, ts.title AS assessment_title,
+            p.full_name AS participant_name, p.email AS participant_email,
+            COALESCE(ts.test_type, r.test_type) AS test_type,
+            s.submitted_at, r.score_total, r.score_band, r.profile_code,
+            r.review_status, r.professional_summary, r.recommendation, r.limitations,
+            r.result_payload_json, ts.settings_json, ts.status AS session_status
+     FROM results r
+     INNER JOIN submissions s ON s.id = r.submission_id
+     INNER JOIN participants p ON p.id = s.participant_id
+     INNER JOIN test_sessions ts ON ts.id = s.session_id
+     INNER JOIN customer_assessments ca ON ca.test_session_id = ts.id
+     WHERE ca.customer_account_id = ?
+     ORDER BY s.submitted_at DESC, r.id DESC`,
+    [accountId],
+  );
+
+  return (result.results ?? []).map((row) => {
+    const item = row as Record<string, unknown>;
+    const settings = item.settings_json ? JSON.parse(String(item.settings_json)) : {};
+    const payload = item.result_payload_json ? JSON.parse(String(item.result_payload_json)) : {};
+    const isReleased = item.review_status === 'released';
+    return {
+      resultId: Number(item.result_id),
+      assessmentId: Number(item.assessment_id),
+      assessmentTitle: item.assessment_title,
+      participantName: item.participant_name,
+      participantEmail: item.participant_email,
+      testType: item.test_type,
+      submittedAt: item.submitted_at,
+      scoreTotal: item.score_total != null ? Number(item.score_total) : null,
+      scoreBand: item.score_band ?? null,
+      profileCode: item.profile_code ?? null,
+      reviewStatus: item.review_status ?? 'scored_preliminary',
+      distributionPolicy: settings.distributionPolicy ?? 'participant_summary',
+      participantResultAccess: settings.participantResultAccess ?? 'summary',
+      hrResultAccess: settings.hrResultAccess ?? 'full',
+      protectedDeliveryMode: Boolean(settings.protectedDeliveryMode),
+      releasedSummary: isReleased ? item.professional_summary ?? payload.professionalSummary ?? null : null,
+      releasedRecommendation: isReleased ? item.recommendation ?? payload.recommendation ?? null : null,
+      releasedLimitations: isReleased ? item.limitations ?? payload.limitations ?? null : null,
+      visibilityNote: isReleased ? 'Released customer-safe report view.' : 'Reviewer draft remains hidden until release.',
+      metrics: Array.isArray(payload.metrics) ? payload.metrics : Array.isArray(payload.summaries) ? payload.summaries : [],
+    };
+  });
+}
+
+app.use('*', requireCustomer);
+
+app.get('/export.csv', async (c) => {
+  const payload = c.get('customerPayload');
+  await requireActiveCustomer(c.env.DB, payload.accountId);
+  const items = await fetchWorkspaceResults(c.env.DB, payload.accountId);
+  const rows = [
+    ['assessment_title', 'participant_name', 'participant_email', 'test_type', 'submitted_at', 'review_status', 'distribution_policy', 'participant_access', 'hr_access', 'score_total', 'score_band', 'profile_code', 'released_summary', 'visibility_note'],
+    ...items.map((item) => [item.assessmentTitle, item.participantName, item.participantEmail, item.testType, item.submittedAt, item.reviewStatus, item.distributionPolicy, item.participantResultAccess, item.hrResultAccess, item.scoreTotal, item.scoreBand, item.profileCode, item.releasedSummary, item.visibilityNote]),
+  ].map((row) => row.map((value) => escapeCsvValue(value as string | number | null)).join(',')).join('\n');
+
+  const account = await requireActiveCustomer(c.env.DB, payload.accountId);
+  const subscription = await ensureWorkspaceSubscription(c.env.DB, account);
+  await recordWorkspaceUsageEvent(c.env.DB, {
+    customerAccountId: payload.accountId,
+    workspaceSubscriptionId: subscription.id,
+    metricKey: 'result_exported',
+    referenceType: 'customer_workspace_results',
+    referenceId: null,
+    metadata: { exportedCount: items.length, format: 'csv' },
+  });
+
+  c.header('Content-Type', 'text/csv; charset=utf-8');
+  c.header('Content-Disposition', 'attachment; filename="workspace-results.csv"');
+  return c.body(rows);
 });
 
-// Get result detail
 app.get('/:id', async (c) => {
-  const customer = await verifyCustomerToken(c);
-  if (!customer) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-  
-  const db = c.env.DB;
-  const id = c.req.param('id');
-  
-  const result = await db.prepare(`
-    SELECT r.*, tt.code as test_type_code, tt.name as test_type_name,
-           p.full_name as participant_name, p.email as participant_email, 
-           p.employee_code, p.department, p.position_title,
-           s.submitted_at, s.time_spent_seconds, s.identity_snapshot_json,
-           ts.title as session_title
-    FROM results r
-    JOIN submissions s ON r.submission_id = s.id
-    JOIN participants p ON s.participant_id = p.id
-    JOIN test_sessions ts ON s.test_session_id = ts.id
-    JOIN customer_assessments ca ON ts.id = ca.test_session_id
-    LEFT JOIN test_types tt ON r.test_type_id = tt.id
-    WHERE r.id = ? AND ca.customer_account_id = ?
-  `).bind(id, customer.id).first();
-  
-  if (!result) {
-    return c.json({ error: 'Result not found' }, 404);
-  }
-  
-  // Get result summaries
-  const summaries = await db.prepare(`
-    SELECT id, metric_key, metric_label, metric_type, score, band, sort_order, summary_text, chart_payload_json
-    FROM result_summaries
-    WHERE result_id = ?
-    ORDER BY sort_order
-  `).bind(id).all();
-  
+  const payload = c.get('customerPayload');
+  await requireActiveCustomer(c.env.DB, payload.accountId);
+  const resultId = Number(c.req.param('id'));
+  const items = await fetchWorkspaceResults(c.env.DB, payload.accountId);
+  const detail = items.find((item) => item.resultId === resultId);
+  if (!detail) throw new HTTPException(404, { message: 'Workspace result not found' });
+  return c.json(detail);
+});
+
+app.get('/', async (c) => {
+  const payload = c.get('customerPayload');
+  await requireActiveCustomer(c.env.DB, payload.accountId);
+  const items = await fetchWorkspaceResults(c.env.DB, payload.accountId);
   return c.json({
-    ...result,
-    summaries: summaries.results || [],
+    summary: {
+      total: items.length,
+      released: items.filter((item) => item.reviewStatus === 'released').length,
+      awaitingReview: items.filter((item) => item.reviewStatus === 'reviewed' || item.reviewStatus === 'in_review').length,
+      hiddenDrafts: items.filter((item) => item.reviewStatus !== 'released').length,
+    },
+    items: items.map(({ metrics, ...item }) => item),
   });
 });
 
-// Export results to CSV
-app.get('/export.csv', async (c) => {
-  const customer = await verifyCustomerToken(c);
-  if (!customer) {
-    return c.json({ error: 'Unauthorized' }, 401);
+app.get('/:id/pdf', async (c) => {
+  const payload = c.get('customerPayload');
+  await requireActiveCustomer(c.env.DB, payload.accountId);
+  const resultId = Number(c.req.param('id'));
+  
+  const items = await fetchWorkspaceResults(c.env.DB, payload.accountId);
+  const detail = items.find((item) => item.resultId === resultId);
+  
+  if (!detail) {
+    throw new HTTPException(404, { message: 'Workspace result not found' });
   }
-  
-  const db = c.env.DB;
-  
-  const results = await db.prepare(`
-    SELECT r.id, r.score_total, r.score_band, r.primary_type, r.secondary_type, r.profile_code, r.created_at,
-           p.full_name as participant_name, p.email as participant_email, p.employee_code, p.department,
-           tt.name as test_type_name, s.submitted_at, s.time_spent_seconds,
-           ts.title as session_title
-    FROM results r
-    JOIN submissions s ON r.submission_id = s.id
-    JOIN participants p ON s.participant_id = p.id
-    JOIN test_sessions ts ON s.test_session_id = ts.id
-    JOIN customer_assessments ca ON ts.id = ca.test_session_id
-    LEFT JOIN test_types tt ON r.test_type_id = tt.id
-    WHERE ca.customer_account_id = ?
-    ORDER BY r.created_at DESC
-  `).bind(customer.id).all();
-  
-  // Generate CSV
-  const headers = ['ID', 'Participant Name', 'Email', 'Employee Code', 'Department', 'Test Type', 'Session', 'Score', 'Band', 'Primary Type', 'Secondary Type', 'Profile Code', 'Submitted At', 'Time Spent (sec)'];
-  const rows = (results.results || []).map((r: any) => [
-    r.id,
-    r.participant_name,
-    r.participant_email,
-    r.employee_code || '',
-    r.department || '',
-    r.test_type_name,
-    r.session_title,
-    r.score_total || '',
-    r.score_band || '',
-    r.primary_type || '',
-    r.secondary_type || '',
-    r.profile_code || '',
-    r.submitted_at || '',
-    r.time_spent_seconds || '',
-  ]);
-  
-  const csv = [headers.join(','), ...rows.map((r: any[]) => r.map((field: any) => `"${String(field).replace(/"/g, '""')}"`).join(','))].join('\n');
-  
-  c.header('Content-Type', 'text/csv');
-  c.header('Content-Disposition', 'attachment; filename="results-export.csv"');
-  return c.body(csv);
+
+  if (detail.reviewStatus !== 'released') {
+    return c.json({ 
+      error: 'Result not released',
+      message: 'PDF export is only available for released results.',
+    }, 403);
+  }
+
+  return c.json({
+    method: 'browser_print',
+    printUrl: `/workspace/results/${resultId}/export`,
+    message: 'PDF generation via external service not yet configured. Use browser print instead.',
+  });
 });
 
 export default app;

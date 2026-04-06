@@ -1,0 +1,20 @@
+-- Migration 004: Admin API support - Add missing columns
+-- This migration was applied manually via wrangler d1 execute commands
+-- Columns added to results table:
+--   - participant_id, test_type, review_status, professional_summary
+--   - recommendation, limitations, reviewer_notes, reviewer_admin_id
+--   - review_started_at, reviewed_at, released_at, released_by_admin_id
+--   - distribution_policy, participant_result_access, hr_result_access
+--   - protected_delivery_mode
+-- Columns added to test_sessions table:
+--   - test_type
+-- Columns added to submissions table:
+--   - session_id
+-- Indexes created:
+--   - idx_results_test_type, idx_results_review_status, idx_test_sessions_status
+
+-- For reference, run these commands manually:
+-- wrangler d1 execute psikotest-db --command="ALTER TABLE results ADD COLUMN participant_id INTEGER;" --remote
+-- wrangler d1 execute psikotest-db --command="ALTER TABLE results ADD COLUMN test_type TEXT;" --remote
+-- wrangler d1 execute psikotest-db --command="ALTER TABLE results ADD COLUMN review_status TEXT DEFAULT 'scored_preliminary';" --remote
+-- etc... (all columns applied)

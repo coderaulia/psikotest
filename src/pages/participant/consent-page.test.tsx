@@ -41,7 +41,7 @@ describe('ParticipantConsentPage', () => {
     });
 
     renderWithRoute(<ParticipantConsentPage />, {
-      route: '/t/disc-batch-a',
+      route: '/t/disc-public-001',
       path: '/t/:token',
       nextPath: '/t/:token/identity',
       nextElement: <div>Identity form</div>,
@@ -59,7 +59,7 @@ describe('ParticipantConsentPage', () => {
 
     await screen.findByText('Identity form');
     await waitFor(() => {
-      expect(loadParticipantConsent('disc-batch-a')).not.toBeNull();
+      expect(loadParticipantConsent('disc-public-001')).not.toBeNull();
     });
   });
 });

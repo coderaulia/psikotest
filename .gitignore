@@ -8,11 +8,8 @@ public_html/
 coverage/
 .DS_Store
 *.log
-apps/*/dist/
-apps/*/.turbo/
-deploy/
-
 *.tsbuildinfo
-workers/node_modules
-workers/dist
-workers/.wrangler
+
+# Workers local dev
+workers/.wrangler/
+workers/.dev.vars

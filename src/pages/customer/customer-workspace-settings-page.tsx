@@ -1,8 +1,14 @@
 import { type FormEvent, useEffect, useState } from 'react';
+import { Lock } from 'lucide-react';
 
 import { useLanguage } from '@/lib/language';
 import { getCustomerWorkspaceSettings, updateCustomerWorkspaceSettings } from '@/services/customer-workspace';
-import type { AdministrationMode, AssessmentPurpose, CustomerAssessmentResultVisibility, UpdateCustomerWorkspaceSettingsPayload } from '@/types/assessment';
+import type {
+  AdministrationMode,
+  AssessmentPurpose,
+  CustomerAssessmentResultVisibility,
+  UpdateCustomerWorkspaceSettingsPayload,
+} from '@/types/assessment';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -34,13 +40,18 @@ const copy = {
     loadError: 'Unable to load workspace settings',
     saveError: 'Unable to save workspace settings',
     saveSuccess: 'Workspace settings updated.',
+    upgradeNote: 'Upgrade to Growth to unlock this feature.',
     sections: {
       profile: 'Organization profile',
       profileDescription: 'These values shape the workspace identity and customer-facing branding.',
       defaults: 'Assessment defaults',
       defaultsDescription: 'Use these values as the default operational baseline for new assessments.',
       participantCopy: 'Participant communication defaults',
-      participantCopyDescription: 'These templates are embedded into future assessment drafts. You can use tokens like {{organizationName}} and {{supportEmail}}.',
+      participantCopyDescription: 'These templates are embedded into future assessment drafts.',
+      participantExperience: 'Participant experience',
+      participantExperienceDescription: 'Customize what participants see after submitting an assessment. Growth plan required for redirect.',
+      notifications: 'Notification preferences',
+      notificationsDescription: 'Control email alerts for workspace activity. Notifications are stored and will be wired to email delivery in a future release.',
     },
     fields: {
       organizationName: 'Organization name',
@@ -55,12 +66,19 @@ const copy = {
       defaultTimeLimitMinutes: 'Default time limit (minutes)',
       defaultConsentStatement: 'Default consent statement',
       defaultPrivacyStatement: 'Default privacy statement',
+      completionPageMessage: 'Completion page message',
+      postSubmitRedirectUrl: 'Post-submit redirect URL',
+      notifyOnSubmission: 'Notify on participant submission',
+      notifyOnReportReleased: 'Notify when report is released',
+      notificationEmailAddress: 'Notification email address',
     },
     placeholders: {
       brandTagline: 'Calm, structured psychological assessments',
       contactPerson: 'Assessment coordinator',
       participantLimit: 'Leave empty for flexible',
       timeLimitMinutes: 'Leave empty for flexible',
+      completionPageMessage: 'Thank you for completing the assessment.',
+      redirectUrl: 'https://yoursite.com/thank-you',
     },
     actions: {
       saving: 'Saving settings...',
@@ -74,13 +92,18 @@ const copy = {
     loadError: 'Tidak dapat memuat pengaturan workspace',
     saveError: 'Tidak dapat menyimpan pengaturan workspace',
     saveSuccess: 'Pengaturan workspace berhasil diperbarui.',
+    upgradeNote: 'Upgrade ke paket Growth untuk membuka fitur ini.',
     sections: {
       profile: 'Profil organisasi',
       profileDescription: 'Nilai ini membentuk identitas workspace dan branding yang terlihat oleh pelanggan.',
       defaults: 'Default asesmen',
       defaultsDescription: 'Gunakan nilai ini sebagai baseline operasional untuk asesmen baru.',
       participantCopy: 'Default komunikasi peserta',
-      participantCopyDescription: 'Template ini akan masuk ke draft asesmen baru. Anda dapat memakai token seperti {{organizationName}} dan {{supportEmail}}.',
+      participantCopyDescription: 'Template ini akan masuk ke draft asesmen baru.',
+      participantExperience: 'Pengalaman peserta',
+      participantExperienceDescription: 'Sesuaikan tampilan yang dilihat peserta setelah submit. Redirect membutuhkan paket Growth.',
+      notifications: 'Preferensi notifikasi',
+      notificationsDescription: 'Atur peringatan email untuk aktivitas workspace. Notifikasi akan dikirim via email pada rilis berikutnya.',
     },
     fields: {
       organizationName: 'Nama organisasi',
@@ -95,12 +118,19 @@ const copy = {
       defaultTimeLimitMinutes: 'Batas waktu default (menit)',
       defaultConsentStatement: 'Pernyataan persetujuan default',
       defaultPrivacyStatement: 'Pernyataan privasi default',
+      completionPageMessage: 'Pesan halaman penyelesaian',
+      postSubmitRedirectUrl: 'URL redirect pasca-submit',
+      notifyOnSubmission: 'Notifikasi saat peserta submit',
+      notifyOnReportReleased: 'Notifikasi saat laporan dirilis',
+      notificationEmailAddress: 'Email notifikasi',
     },
     placeholders: {
       brandTagline: 'Asesmen psikologis yang tenang dan terstruktur',
       contactPerson: 'Koordinator asesmen',
       participantLimit: 'Kosongkan jika fleksibel',
       timeLimitMinutes: 'Kosongkan jika fleksibel',
+      completionPageMessage: 'Terima kasih telah menyelesaikan asesmen.',
+      redirectUrl: 'https://situs-anda.com/selesai',
     },
     actions: {
       saving: 'Menyimpan pengaturan...',
@@ -108,6 +138,9 @@ const copy = {
     },
   },
 } as const;
+
+const textAreaClassName =
+  'min-h-[140px] w-full rounded-[24px] border border-border bg-white/80 px-4 py-3 text-sm text-foreground shadow-sm outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200';
 
 const initialForm: UpdateCustomerWorkspaceSettingsPayload = {
   organizationName: '',
@@ -122,7 +155,21 @@ const initialForm: UpdateCustomerWorkspaceSettingsPayload = {
   defaultTimeLimitMinutes: null,
   defaultConsentStatement: '',
   defaultPrivacyStatement: '',
+  completionPageMessage: '',
+  postSubmitRedirectUrl: '',
+  notifyOnSubmission: false,
+  notifyOnReportReleased: false,
+  notificationEmailAddress: '',
 };
+
+function LockedOverlay({ message }: { message: string }) {
+  return (
+    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-[24px] bg-slate-50/90 backdrop-blur-[2px]">
+      <Lock className="h-5 w-5 text-slate-400" />
+      <span className="text-xs font-medium text-slate-500">{message}</span>
+    </div>
+  );
+}
 
 export function CustomerWorkspaceSettingsPage() {
   const { language } = useLanguage();
@@ -132,16 +179,17 @@ export function CustomerWorkspaceSettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [lockedSettings, setLockedSettings] = useState({
+    completionPageMessage: false,
+    postSubmitRedirectUrl: false,
+  });
 
   useEffect(() => {
     let mounted = true;
 
     void getCustomerWorkspaceSettings()
       .then((payload) => {
-        if (!mounted) {
-          return;
-        }
-
+        if (!mounted) return;
         setForm({
           organizationName: payload.account.organizationName,
           brandName: payload.settings.brandName,
@@ -155,17 +203,23 @@ export function CustomerWorkspaceSettingsPage() {
           defaultTimeLimitMinutes: payload.settings.defaultTimeLimitMinutes,
           defaultConsentStatement: payload.settings.defaultConsentStatement,
           defaultPrivacyStatement: payload.settings.defaultPrivacyStatement,
+          completionPageMessage: payload.settings.completionPageMessage ?? '',
+          postSubmitRedirectUrl: payload.settings.postSubmitRedirectUrl ?? '',
+          notifyOnSubmission: payload.settings.notifyOnSubmission ?? false,
+          notifyOnReportReleased: payload.settings.notifyOnReportReleased ?? false,
+          notificationEmailAddress: payload.settings.notificationEmailAddress ?? '',
         });
+        if (payload.lockedSettings) {
+          setLockedSettings(payload.lockedSettings);
+        }
       })
-      .catch((error) => {
+      .catch((error: unknown) => {
         if (mounted) {
           setErrorMessage(error instanceof Error ? error.message : t.loadError);
         }
       })
       .finally(() => {
-        if (mounted) {
-          setIsLoading(false);
-        }
+        if (mounted) setIsLoading(false);
       });
 
     return () => {
@@ -173,11 +227,11 @@ export function CustomerWorkspaceSettingsPage() {
     };
   }, [t.loadError]);
 
-  function updateField<Key extends keyof UpdateCustomerWorkspaceSettingsPayload>(key: Key, value: UpdateCustomerWorkspaceSettingsPayload[Key]) {
-    setForm((current) => ({
-      ...current,
-      [key]: value,
-    }));
+  function updateField<Key extends keyof UpdateCustomerWorkspaceSettingsPayload>(
+    key: Key,
+    value: UpdateCustomerWorkspaceSettingsPayload[Key],
+  ) {
+    setForm((current) => ({ ...current, [key]: value }));
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -201,9 +255,17 @@ export function CustomerWorkspaceSettingsPage() {
         defaultTimeLimitMinutes: payload.settings.defaultTimeLimitMinutes,
         defaultConsentStatement: payload.settings.defaultConsentStatement,
         defaultPrivacyStatement: payload.settings.defaultPrivacyStatement,
+        completionPageMessage: payload.settings.completionPageMessage ?? '',
+        postSubmitRedirectUrl: payload.settings.postSubmitRedirectUrl ?? '',
+        notifyOnSubmission: payload.settings.notifyOnSubmission ?? false,
+        notifyOnReportReleased: payload.settings.notifyOnReportReleased ?? false,
+        notificationEmailAddress: payload.settings.notificationEmailAddress ?? '',
       });
+      if (payload.lockedSettings) {
+        setLockedSettings(payload.lockedSettings);
+      }
       setSuccessMessage(t.saveSuccess);
-    } catch (error) {
+    } catch (error: unknown) {
       setErrorMessage(error instanceof Error ? error.message : t.saveError);
     } finally {
       setIsSaving(false);
@@ -225,9 +287,14 @@ export function CustomerWorkspaceSettingsPage() {
         <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-500">{t.description}</p>
       </div>
 
-      {errorMessage ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">{errorMessage}</div> : null}
-      {successMessage ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{successMessage}</div> : null}
+      {errorMessage ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">{errorMessage}</div>
+      ) : null}
+      {successMessage ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{successMessage}</div>
+      ) : null}
 
+      {/* ── Organization profile ── */}
       <Card className="bg-white/84">
         <CardHeader>
           <CardTitle>{t.sections.profile}</CardTitle>
@@ -236,27 +303,28 @@ export function CustomerWorkspaceSettingsPage() {
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-600">{t.fields.organizationName}</label>
-            <Input value={form.organizationName} onChange={(event) => updateField('organizationName', event.target.value)} />
+            <Input value={form.organizationName} onChange={(e) => updateField('organizationName', e.target.value)} />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-600">{t.fields.brandName}</label>
-            <Input value={form.brandName} onChange={(event) => updateField('brandName', event.target.value)} />
+            <Input value={form.brandName} onChange={(e) => updateField('brandName', e.target.value)} />
           </div>
           <div className="space-y-2 md:col-span-2">
             <label className="text-sm font-medium text-slate-600">{t.fields.brandTagline}</label>
-            <Input value={form.brandTagline} onChange={(event) => updateField('brandTagline', event.target.value)} placeholder={t.placeholders.brandTagline} />
+            <Input value={form.brandTagline} onChange={(e) => updateField('brandTagline', e.target.value)} placeholder={t.placeholders.brandTagline} />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-600">{t.fields.supportEmail}</label>
-            <Input type="email" value={form.supportEmail} onChange={(event) => updateField('supportEmail', event.target.value)} />
+            <Input type="email" value={form.supportEmail} onChange={(e) => updateField('supportEmail', e.target.value)} />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-600">{t.fields.contactPerson}</label>
-            <Input value={form.contactPerson} onChange={(event) => updateField('contactPerson', event.target.value)} placeholder={t.placeholders.contactPerson} />
+            <Input value={form.contactPerson} onChange={(e) => updateField('contactPerson', e.target.value)} placeholder={t.placeholders.contactPerson} />
           </div>
         </CardContent>
       </Card>
 
+      {/* ── Assessment defaults ── */}
       <Card className="bg-white/84">
         <CardHeader>
           <CardTitle>{t.sections.defaults}</CardTitle>
@@ -265,39 +333,69 @@ export function CustomerWorkspaceSettingsPage() {
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-600">{t.fields.defaultAssessmentPurpose}</label>
-            <Select value={form.defaultAssessmentPurpose} onChange={(event) => updateField('defaultAssessmentPurpose', event.target.value as AssessmentPurpose)}>
-              {purposeOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label[language]}</option>
+            <Select
+              value={form.defaultAssessmentPurpose}
+              onChange={(e) => updateField('defaultAssessmentPurpose', e.target.value as AssessmentPurpose)}
+            >
+              {purposeOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label[language]}
+                </option>
               ))}
             </Select>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-600">{t.fields.defaultAdministrationMode}</label>
-            <Select value={form.defaultAdministrationMode} onChange={(event) => updateField('defaultAdministrationMode', event.target.value as AdministrationMode)}>
-              {administrationOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label[language]}</option>
+            <Select
+              value={form.defaultAdministrationMode}
+              onChange={(e) => updateField('defaultAdministrationMode', e.target.value as AdministrationMode)}
+            >
+              {administrationOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label[language]}
+                </option>
               ))}
             </Select>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-600">{t.fields.defaultResultVisibility}</label>
-            <Select value={form.defaultResultVisibility} onChange={(event) => updateField('defaultResultVisibility', event.target.value as CustomerAssessmentResultVisibility)}>
-              {visibilityOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label[language]}</option>
+            <Select
+              value={form.defaultResultVisibility}
+              onChange={(e) => updateField('defaultResultVisibility', e.target.value as CustomerAssessmentResultVisibility)}
+            >
+              {visibilityOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label[language]}
+                </option>
               ))}
             </Select>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-600">{t.fields.defaultParticipantLimit}</label>
-            <Input type="number" min={1} max={50000} value={form.defaultParticipantLimit ?? ''} onChange={(event) => updateField('defaultParticipantLimit', event.target.value ? Number(event.target.value) : null)} placeholder={t.placeholders.participantLimit} />
+            <Input
+              type="number"
+              min={1}
+              max={50000}
+              value={form.defaultParticipantLimit ?? ''}
+              onChange={(e) => updateField('defaultParticipantLimit', e.target.value ? Number(e.target.value) : null)}
+              placeholder={t.placeholders.participantLimit}
+            />
           </div>
           <div className="space-y-2 md:col-span-2">
             <label className="text-sm font-medium text-slate-600">{t.fields.defaultTimeLimitMinutes}</label>
-            <Input type="number" min={1} max={180} value={form.defaultTimeLimitMinutes ?? ''} onChange={(event) => updateField('defaultTimeLimitMinutes', event.target.value ? Number(event.target.value) : null)} placeholder={t.placeholders.timeLimitMinutes} />
+            <Input
+              type="number"
+              min={1}
+              max={180}
+              value={form.defaultTimeLimitMinutes ?? ''}
+              onChange={(e) => updateField('defaultTimeLimitMinutes', e.target.value ? Number(e.target.value) : null)}
+              placeholder={t.placeholders.timeLimitMinutes}
+            />
           </div>
         </CardContent>
       </Card>
 
+      {/* ── Participant communication defaults ── */}
       <Card className="bg-white/84">
         <CardHeader>
           <CardTitle>{t.sections.participantCopy}</CardTitle>
@@ -306,11 +404,85 @@ export function CustomerWorkspaceSettingsPage() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-600">{t.fields.defaultConsentStatement}</label>
-            <textarea className="min-h-[140px] w-full rounded-[24px] border border-border bg-white/80 px-4 py-3 text-sm text-foreground shadow-sm outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200" value={form.defaultConsentStatement} onChange={(event) => updateField('defaultConsentStatement', event.target.value)} />
+            <textarea
+              className={textAreaClassName}
+              value={form.defaultConsentStatement}
+              onChange={(e) => updateField('defaultConsentStatement', e.target.value)}
+            />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-600">{t.fields.defaultPrivacyStatement}</label>
-            <textarea className="min-h-[160px] w-full rounded-[24px] border border-border bg-white/80 px-4 py-3 text-sm text-foreground shadow-sm outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200" value={form.defaultPrivacyStatement} onChange={(event) => updateField('defaultPrivacyStatement', event.target.value)} />
+            <textarea
+              className={textAreaClassName}
+              value={form.defaultPrivacyStatement}
+              onChange={(e) => updateField('defaultPrivacyStatement', e.target.value)}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Participant experience (plan-gated) ── */}
+      <Card className="bg-white/84">
+        <CardHeader>
+          <CardTitle>{t.sections.participantExperience}</CardTitle>
+          <CardDescription>{t.sections.participantExperienceDescription}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-600">{t.fields.completionPageMessage}</label>
+            <textarea
+              className={textAreaClassName}
+              value={form.completionPageMessage}
+              onChange={(e) => updateField('completionPageMessage', e.target.value)}
+              placeholder={t.placeholders.completionPageMessage}
+            />
+          </div>
+          <div className="relative space-y-2">
+            {lockedSettings.postSubmitRedirectUrl && <LockedOverlay message={t.upgradeNote} />}
+            <label className="text-sm font-medium text-slate-600">{t.fields.postSubmitRedirectUrl}</label>
+            <Input
+              type="url"
+              disabled={lockedSettings.postSubmitRedirectUrl}
+              value={form.postSubmitRedirectUrl}
+              onChange={(e) => updateField('postSubmitRedirectUrl', e.target.value)}
+              placeholder={t.placeholders.redirectUrl}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Notification preferences ── */}
+      <Card className="bg-white/84">
+        <CardHeader>
+          <CardTitle>{t.sections.notifications}</CardTitle>
+          <CardDescription>{t.sections.notificationsDescription}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <label className="flex cursor-pointer items-center gap-3">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 accent-slate-800"
+              checked={form.notifyOnSubmission}
+              onChange={(e) => updateField('notifyOnSubmission', e.target.checked)}
+            />
+            <span className="text-sm font-medium text-slate-700">{t.fields.notifyOnSubmission}</span>
+          </label>
+          <label className="flex cursor-pointer items-center gap-3">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 accent-slate-800"
+              checked={form.notifyOnReportReleased}
+              onChange={(e) => updateField('notifyOnReportReleased', e.target.checked)}
+            />
+            <span className="text-sm font-medium text-slate-700">{t.fields.notifyOnReportReleased}</span>
+          </label>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-600">{t.fields.notificationEmailAddress}</label>
+            <Input
+              type="email"
+              value={form.notificationEmailAddress}
+              onChange={(e) => updateField('notificationEmailAddress', e.target.value)}
+            />
           </div>
         </CardContent>
       </Card>

@@ -323,7 +323,7 @@ export function LandingPage() {
                 </Link>
               </Button>
               <Button variant="secondary" size="lg" asChild>
-                <Link to="/t/disc-batch-a">{t.hero.ctaDemo}</Link>
+                <Link to="/t/disc-public-001">{t.hero.ctaDemo}</Link>
               </Button>
               <Button variant="outline" size="lg" className="border-slate-200 bg-white/80 text-slate-700 hover:bg-white" asChild>
                 <Link to="/white-label">{t.hero.ctaWhiteLabel}</Link>

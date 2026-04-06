@@ -1,9 +1,10 @@
 import type {
-  CreateWorkspaceCheckoutSessionPayload,
-  CreateWorkspaceCheckoutSessionResponse,
+  CreateManualPaymentPayload,
+  CreateManualPaymentResponse,
   CustomerBillingInvoicesResponse,
   CustomerBillingOverviewResponse,
-  UpdateWorkspaceSubscriptionPayload,
+  CustomerManualPaymentsResponse,
+  SubmitManualPaymentProofPayload,
 } from '@/types/assessment';
 
 import { customerFetchJson } from './customer-api';
@@ -16,16 +17,33 @@ export async function getCustomerBillingInvoices() {
   return customerFetchJson<CustomerBillingInvoicesResponse>('/site-billing/invoices');
 }
 
-export async function createCustomerCheckoutSession(payload: CreateWorkspaceCheckoutSessionPayload) {
-  return customerFetchJson<CreateWorkspaceCheckoutSessionResponse>('/site-billing/checkout-session', {
+export async function createCustomerManualPayment(payload: CreateManualPaymentPayload) {
+  return customerFetchJson<CreateManualPaymentResponse>('/site-billing/manual-payment', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 }
 
-export async function updateCustomerSubscription(payload: UpdateWorkspaceSubscriptionPayload) {
+export async function getCustomerManualPayments() {
+  return customerFetchJson<CustomerManualPaymentsResponse>('/site-billing/manual-payments');
+}
+
+export async function submitCustomerManualPaymentProof(paymentId: number, payload: SubmitManualPaymentProofPayload) {
+  return customerFetchJson<{ payment: CreateManualPaymentResponse['payment'] }>(`/site-billing/manual-payments/${paymentId}/proof`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+// Backward compatibility for old callers.
+export async function createCustomerCheckoutSession(payload: CreateManualPaymentPayload) {
+  return createCustomerManualPayment(payload);
+}
+
+// Manual verification required now; endpoint returns 403.
+export async function updateCustomerSubscription() {
   return customerFetchJson<CustomerBillingOverviewResponse>('/site-billing/subscription', {
     method: 'PATCH',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({}),
   });
 }

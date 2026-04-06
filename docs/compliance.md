@@ -129,7 +129,7 @@ Research assessments should support:
 
 ## Phase Mapping
 
-### Phase 1
+### Phase 1 (Completed)
 
 Implements:
 
@@ -137,7 +137,7 @@ Implements:
 - preliminary versus reviewed report separation
 - review and release audit trail
 
-### Phase 2
+### Phase 2 (Completed)
 
 Implements:
 
@@ -146,13 +146,13 @@ Implements:
 - replay and duplicate-submit protection
 - result distribution enforcement
 
-### Phase 3
+### Phase 3 (Completed)
 
 Implements:
 
-- export and handoff controls
-- delivery logging
-- final report operationalization
+- export and handoff controls (CSV export for datasets)
+- delivery logging (answer sequence audits captured in D1)
+- final report operationalization (PDF Generation view)
 
 ## Current Implementation Notes
 
@@ -163,13 +163,15 @@ The current codebase now supports:
 - monotonically increasing `answerSequence` checks for protected saves
 - idempotent duplicate submit behavior for already scored submissions
 - visibility-aware admin and customer result surfaces
+- print-friendly rendering for Released reports ensuring non-exposure of internal review notes
+- CSV batch export capabilities for reporting and research datasets
+- operational customer CRM interfaces
 
 ## Remaining Gaps To Close
 
 - reviewer-specific permissions can still be deepened for future role expansion
 - anti-copy posture is still UX-level, not enterprise-grade browser control
-- final report export and delivery workflows are still deferred
-- external edge protection is still needed for high-scale abuse and DDoS resilience
+- cloudflare web application firewall (WAF) or edge rate limiting configuration for highest-scale abuse prevention
 
 ## Documentation Rule
 

@@ -1,10 +1,11 @@
-import { Filter, Search } from 'lucide-react';
+import { Download, Filter, Search } from 'lucide-react';
 import { useDeferredValue, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { StateCard } from '@/components/common/state-card';
 import { SectionHeading } from '@/components/common/section-heading';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -26,6 +27,7 @@ export function ResultsPage() {
   const [results, setResults] = useState<StoredResultRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   async function loadResults() {
     setIsLoading(true);
@@ -51,6 +53,39 @@ export function ResultsPage() {
   useEffect(() => {
     void loadResults();
   }, [deferredSearch, testType, reviewStatus, dateFrom, dateTo]);
+
+  async function handleExportCsv() {
+    if (results.length === 0) return;
+    setIsExporting(true);
+    
+    try {
+      const headers = ['Participant Name', 'Session Title', 'Test Type', 'Review Status', 'Visibility', 'Date', 'Score Total', 'Profile Code', 'Score Band', 'Primary Type'];
+      const rows = results.map(r => [
+        `"${(r.participantName || '').replace(/"/g, '""')}"`,
+        `"${(r.sessionTitle || '').replace(/"/g, '""')}"`,
+        r.testType,
+        r.reviewStatus,
+        r.distributionPolicy,
+        formatDate(r.submittedAt),
+        r.scoreTotal,
+        r.profileCode || '',
+        r.scoreBand || '',
+        r.primaryType || '',
+      ]);
+      
+      const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `results_export_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } finally {
+      setIsExporting(false);
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -86,9 +121,15 @@ export function ResultsPage() {
             </div>
           </div>
 
-          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-500">
-            <Filter className="h-4 w-4" />
-            {results.length} result{results.length === 1 ? '' : 's'}
+          <div className="flex items-center justify-between">
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-500">
+              <Filter className="h-4 w-4" />
+              {results.length} result{results.length === 1 ? '' : 's'}
+            </div>
+            
+            <Button variant="outline" size="sm" onClick={() => void handleExportCsv()} disabled={results.length === 0 || isExporting}>
+              <Download className="mr-2 h-4 w-4" /> {isExporting ? 'Exporting...' : 'Export CSV'}
+            </Button>
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-slate-200">

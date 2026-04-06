@@ -88,16 +88,20 @@ const CustomerLayout = lazyNamed(() => import('@/layouts/customer-layout'), 'Cus
 const AdminLayout = lazyNamed(() => import('@/layouts/admin-layout'), 'AdminLayout');
 const ParticipantLayout = lazyNamed(() => import('@/layouts/participant-layout'), 'ParticipantLayout');
 
-const LandingPage = lazyNamed(() => import('@/pages/landing-page'), 'LandingPage');
+const LandingPage = lazyNamed(() => import('@/pages/public/landing-page'), 'LandingPage');
+const SaasLandingPage = lazyNamed(() => import('@/pages/saas-landing-page'), 'SaasLandingPage');
 const ManualPage = lazyNamed(() => import('@/pages/manual-page'), 'ManualPage');
 const WhiteLabelPage = lazyNamed(() => import('@/pages/white-label-page'), 'WhiteLabelPage');
 const CustomerSignupPage = lazyNamed(() => import('@/pages/customer/customer-signup-page'), 'CustomerSignupPage');
 const CustomerLoginPage = lazyNamed(() => import('@/pages/customer/customer-login-page'), 'CustomerLoginPage');
+const CustomerForgotPasswordPage = lazyNamed(() => import('@/pages/customer/customer-forgot-password-page'), 'CustomerForgotPasswordPage');
+const CustomerResetPasswordPage = lazyNamed(() => import('@/pages/customer/customer-reset-password-page'), 'CustomerResetPasswordPage');
 const CustomerWorkspacePage = lazyNamed(() => import('@/pages/customer/customer-workspace-page'), 'CustomerWorkspacePage');
 const CustomerCompanyPage = lazyNamed(() => import('@/pages/customer/customer-company-page'), 'CustomerCompanyPage');
 const CustomerBillingPage = lazyNamed(() => import('@/pages/customer/customer-billing-page'), 'CustomerBillingPage');
 const CustomerResultsPage = lazyNamed(() => import('@/pages/customer/customer-results-page'), 'CustomerResultsPage');
 const CustomerResultDetailPage = lazyNamed(() => import('@/pages/customer/customer-result-detail-page'), 'CustomerResultDetailPage');
+const CustomerReportExportPage = lazyNamed(() => import('@/pages/customer/customer-report-export-page'), 'CustomerReportExportPage');
 const CustomerActivityPage = lazyNamed(() => import('@/pages/customer/customer-activity-page'), 'CustomerActivityPage');
 const CustomerTeamPage = lazyNamed(() => import('@/pages/customer/customer-team-page'), 'CustomerTeamPage');
 const CustomerOnboardingPage = lazyNamed(() => import('@/pages/customer/customer-onboarding-page'), 'CustomerOnboardingPage');
@@ -114,6 +118,7 @@ const TestSessionDetailPage = lazyNamed(() => import('@/pages/admin/test-session
 const QuestionBankPage = lazyNamed(() => import('@/pages/admin/question-bank-page'), 'QuestionBankPage');
 const ResultsPage = lazyNamed(() => import('@/pages/admin/results-page'), 'ResultsPage');
 const ResultDetailPage = lazyNamed(() => import('@/pages/admin/result-detail-page'), 'ResultDetailPage');
+const ReportExportPage = lazyNamed(() => import('@/pages/admin/report-export-page'), 'ReportExportPage');
 const ReviewerQueuePage = lazyNamed(() => import('@/pages/admin/reviewer-queue-page'), 'ReviewerQueuePage');
 const ReportsPage = lazyNamed(() => import('@/pages/admin/reports-page'), 'ReportsPage');
 const SettingsPage = lazyNamed(() => import('@/pages/admin/settings-page'), 'SettingsPage');
@@ -134,6 +139,7 @@ export const router = createBrowserRouter([
     errorElement: routeErrorElement,
     children: [
       { index: true, element: withSuspense(<LandingPage />), errorElement: routeErrorElement },
+      { path: 'saas', element: withSuspense(<SaasLandingPage />), errorElement: routeErrorElement },
       { path: 'manual', element: withSuspense(<ManualPage />), errorElement: routeErrorElement },
       { path: 'white-label', element: withSuspense(<WhiteLabelPage />), errorElement: routeErrorElement },
     ],
@@ -163,6 +169,7 @@ export const router = createBrowserRouter([
       { path: 'billing', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner']}><CustomerBillingPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
       { path: 'results', element: withSuspense(<CustomerResultsPage />), errorElement: routeErrorElement },
       { path: 'results/:resultId', element: withSuspense(<CustomerResultDetailPage />), errorElement: routeErrorElement },
+      { path: 'results/:resultId/export', element: withSuspense(<CustomerReportExportPage />), errorElement: routeErrorElement },
       { path: 'activity', element: withSuspense(<CustomerActivityPage />), errorElement: routeErrorElement },
       { path: 'team', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner', 'admin']}><CustomerTeamPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
       { path: 'create', element: withSuspense(<CustomerRoleGuard allowedRoles={['owner', 'admin', 'operator']}><CustomerOnboardingPage /></CustomerRoleGuard>), errorElement: routeErrorElement },
@@ -193,6 +200,11 @@ export const router = createBrowserRouter([
     ],
   },
   {
+    path: '/admin/results/:id/export',
+    element: withSuspense(<ReportExportPage />),
+    errorElement: routeErrorElement,
+  },
+  {
     path: '/t/:token',
     element: withSuspense(<ParticipantLayout />),
     errorElement: routeErrorElement,
@@ -210,6 +222,10 @@ export const router = createBrowserRouter([
     errorElement: routeErrorElement,
   },
 ]);
+
+
+
+
 
 
 

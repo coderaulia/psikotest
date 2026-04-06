@@ -5,15 +5,15 @@ export class AdminApiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
+    public readonly details?: unknown,
   ) {
     super(message);
     this.name = 'AdminApiError';
   }
 }
 
-async function readErrorMessage(response: Response) {
-  const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-  return payload?.error ?? 'Request failed';
+async function readErrorPayload(response: Response) {
+  return (await response.json().catch(() => null)) as { error?: string; message?: string } | null;
 }
 
 export async function adminFetch(path: string, init: RequestInit = {}) {
@@ -36,7 +36,8 @@ export async function adminFetch(path: string, init: RequestInit = {}) {
   });
 
   if (!response.ok) {
-    const message = await readErrorMessage(response);
+    const payload = await readErrorPayload(response);
+    const message = payload?.error ?? payload?.message ?? 'Request failed';
 
     if (response.status === 401) {
       clearAdminSession();
@@ -45,7 +46,7 @@ export async function adminFetch(path: string, init: RequestInit = {}) {
       }
     }
 
-    throw new AdminApiError(message, response.status);
+    throw new AdminApiError(message, response.status, payload);
   }
 
   return response;

@@ -1,14 +1,21 @@
 {
   "name": "psikotest-api-workers",
-  "version": "0.1.0",
+  "version": "2.2.0",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "migrate:local": "for file in ./migrations/*.sql; do wrangler d1 execute psikotest-db --local --file=\"$file\"; done",
+    "migrate:remote": "for file in ./migrations/*.sql; do wrangler d1 execute psikotest-db --file=\"$file\"; done"
   },
   "dependencies": {
-    "@noble/hashes": "^2.0.1",
     "hono": "^4.4.0",
-    "zod": "^4.3.6"
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240529.0",
+    "typescript": "^5.4.0",
+    "wrangler": "^3.57.0"
   }
 }
