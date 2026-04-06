@@ -13,3 +13,6 @@ apps/*/.turbo/
 deploy/
 
 *.tsbuildinfo
+workers/node_modules
+workers/dist
+workers/.wrangler

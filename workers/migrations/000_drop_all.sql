@@ -1,0 +1,24 @@
+-- Drop all tables to start fresh
+DROP TABLE IF EXISTS answers;
+DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS billing_checkout_sessions;
+DROP TABLE IF EXISTS billing_invoices;
+DROP TABLE IF EXISTS billing_webhook_events;
+DROP TABLE IF EXISTS customer_accounts;
+DROP TABLE IF EXISTS customer_assessment_participants;
+DROP TABLE IF EXISTS customer_assessments;
+DROP TABLE IF EXISTS customer_workspace_members;
+DROP TABLE IF EXISTS participants;
+DROP TABLE IF EXISTS question_options;
+DROP TABLE IF EXISTS questions;
+DROP TABLE IF EXISTS report_access_logs;
+DROP TABLE IF EXISTS result_summaries;
+DROP TABLE IF EXISTS results;
+DROP TABLE IF EXISTS submissions;
+DROP TABLE IF EXISTS test_sessions;
+DROP TABLE IF EXISTS test_types;
+DROP TABLE IF EXISTS workspace_subscriptions;
+DROP TABLE IF EXISTS workspace_usage_events;
+DROP TABLE IF EXISTS workspace_usage_snapshots;
+DROP TABLE IF EXISTS admins;
+DROP TABLE IF EXISTS app_settings;

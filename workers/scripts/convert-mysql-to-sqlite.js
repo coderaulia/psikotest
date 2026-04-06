@@ -1,51 +1,130 @@
-const fs = require('fs');
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-// Read the MySQL dump
-const mysqlDump = fs.readFileSync(process.argv[2] || 'psikotest_data.sql', 'utf8');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-// Convert to SQLite-compatible syntax
-let sqlite = mysqlDump
-  // Remove MySQL-specific syntax
-  .replace(/ENGINE=InnoDB[^;]*;/g, ';')
-  .replace(/DEFAULT CHARSET=utf8mb4[^;]*;/g, ';')
-  .replace(/COLLATE=utf8mb4[^;]*;/g, ';')
-  .replace(/AUTO_INCREMENT=\d+/g, '')
-  .replace(/AUTO_INCREMENT/g, 'AUTOINCREMENT')
+const inputFile = process.argv[2] || join(__dirname, 'psikotest_data.sql');
+const mysqlDump = fs.readFileSync(inputFile, 'utf8');
+
+console.log('Converting MySQL to SQLite...');
+console.log('Input:', inputFile);
+
+let sqlite = mysqlDump;
+
+// Remove comments
+sqlite = sqlite
+  .replace(/-- MySQL dump[\s\S]*?(?=\n)/gi, '')
+  .replace(/-- PHP Version[^\n]*/gi, '')
+  .replace(/-- Host:[^\n]*/gi, '')
+  .replace(/-- Server version[^\n]*/gi, '')
+  .replace(/-- Dump completed[^\n]*/gi, '')
+  .replace(/\/\*![\s\S]*?\*\//g, '');
+
+// Remove MySQL SET statements
+sqlite = sqlite
+  .replace(/SET NAMES[^;]*;/gi, '')
+  .replace(/SET time_zone[^;]*;/gi, '')
+  .replace(/SET FOREIGN_KEY_CHECKS[^;]*;/gi, '')
+  .replace(/SET SQL_MODE[^;]*;/gi, '')
+  .replace(/SET @[A-Za-z_]+ =[^;]*;/gi, '');
+
+// Remove LOCK/UNLOCK
+sqlite = sqlite
+  .replace(/LOCK TABLES[^;]*;/gi, '')
+  .replace(/UNLOCK TABLES[^;]*;/gi, '');
+
+// Remove CREATE, ALTER, DROP statements
+sqlite = sqlite
+  .replace(/CREATE TABLE[\s\S]*?;/gi, '')
+  .replace(/CREATE INDEX[\s\S]*?;/gi, '')
+  .replace(/CREATE UNIQUE INDEX[\s\S]*?;/gi, '')
+  .replace(/ALTER TABLE[\s\S]*?;/gi, '')
+  .replace(/DROP TABLE[^;]*;/gi, '')
+  .replace(/DROP INDEX[^;]*;/gi, '')
+  .replace(/DROP VIEW[^;]*;/gi, '')
+  .replace(/DROP DATABASE[^;]*;/gi, '');
+
+// Remove MySQL table options
+sqlite = sqlite
+  .replace(/\) ENGINE=InnoDB[\s\S]*?;/gi, ');')
+  .replace(/\) ENGINE=MyISAM[\s\S]*?;/gi, ');')
+  .replace(/\)[^;]*ENGINE[^;]*;/gi, ');')
+  .replace(/DEFAULT CHARSET=[^\s,)]*/gi, '')
+  .replace(/COLLATE[= ]+[^\s,)]*/gi, '')
+  .replace(/AUTO_INCREMENT[= ]*\d*/gi, '')
+  .replace(/ROW_FORMAT[= ]*[^\s,)]*/gi, '');
+
+// Quote reserved keywords in column names
+const reservedKeywords = ['START', 'END', 'INDEX', 'KEY', 'ORDER', 'GROUP', 'BY', 'SELECT', 
+  'WHERE', 'FROM', 'INTO', 'VALUES', 'UPDATE', 'DELETE', 'INSERT', 'TABLE', 'COLUMN',
+  'DATABASE', 'SCHEMA', 'VIEW', 'TRIGGER', 'INDEXED', 'NOT', 'NULL', 'PRIMARY', 
+  'FOREIGN', 'REFERENCES', 'UNIQUE', 'CHECK', 'DEFAULT', 'CONSTRAINT', 'CASE'];
   
-  // Convert backticks to nothing or double quotes
-  .replace(/`/g, '"')
-  
-  // Convert INT to INTEGER
+// Quote column names in INSERT statements
+sqlite = sqlite.replace(/INSERT INTO (\w+)\s*\(([^)]+)\)/gi, (match, table, columns) => {
+  const quotedColumns = columns.split(',').map(col => {
+    col = col.trim().replace(/"/g, '');
+    const lowerCol = col.toLowerCase();
+    if (reservedKeywords.some(kw => kw.toLowerCase() === lowerCol)) {
+      return `"${col}"`;
+    }
+    return col;
+  }).join(', ');
+  return `INSERT INTO "${table}" (${quotedColumns})`;
+});
+
+// Quote table names in INSERT statements
+sqlite = sqlite.replace(/INSERT INTO\s+(\w+)\s*\(/gi, 'INSERT INTO "$1" (');
+
+// Fix VALUES - ensure proper formatting
+sqlite = sqlite.replace(/VALUES\s*\(/gi, 'VALUES (');
+sqlite = sqlite.replace(/\)\s*,\s*\(/g, '),(');
+
+// Convert data types
+sqlite = sqlite
   .replace(/\bINT\b/gi, 'INTEGER')
-  .replace(/\bTINYINT\([0-9]+\)/gi, 'INTEGER')
-  .replace(/\bSMALLINT\([0-9]+\)/gi, 'INTEGER')
-  .replace(/\bMEDIUMINT\([0-9]+\)/gi, 'INTEGER')
-  .replace(/\bBIGINT\([0-9]+\)/gi, 'INTEGER')
-  
-  // Convert VARCHAR to TEXT
-  .replace(/\bVARCHAR\([0-9]+\)/gi, 'TEXT')
-  .replace(/\bCHAR\([0-9]+\)/gi, 'TEXT')
-  
-  // Convert DATETIME
+  .replace(/\bTINYINT\b/gi, 'INTEGER')
+  .replace(/\bSMALLINT\b/gi, 'INTEGER')
+  .replace(/\bMEDIUMINT\b/gi, 'INTEGER')
+  .replace(/\bBIGINT\b/gi, 'INTEGER')
+  .replace(/\bVARCHAR\b/gi, 'TEXT')
+  .replace(/\bCHAR\b/gi, 'TEXT')
+  .replace(/\bLONGTEXT\b/gi, 'TEXT')
+  .replace(/\bMEDIUMTEXT\b/gi, 'TEXT')
+  .replace(/\bTEXT\b/gi, 'TEXT')
   .replace(/\bDATETIME\b/gi, 'TEXT')
-  
-  // Convert BOOLEAN
-  .replace(/\bTINYINT\(1\)/gi, 'INTEGER')
-  
-  // Remove CREATE TABLE IF NOT EXISTS (we have our schema)
-  .replace(/CREATE TABLE IF NOT EXISTS[^;]*;/gi, '')
-  
-  // Fix INSERT statements - ensure proper format
-  .replace(/INSERT INTO "([^"]+)"\s+/gi, 'INSERT INTO $1 ')
-  .replace(/INSERT INTO\s+"([^"]+)"/g, 'INSERT INTO $1');
+  .replace(/\bTIMESTAMP\b/gi, 'TEXT')
+  .replace(/\bDATE\b/gi, 'TEXT')
+  .replace(/\bBOOLEAN\b/gi, 'INTEGER')
+  .replace(/\bDECIMAL\b/gi, 'REAL')
+  .replace(/\bFLOAT\b/gi, 'REAL')
+  .replace(/\bDOUBLE\b/gi, 'REAL');
 
-// Clean up multiple newlines
-sqlite = sqlite.replace(/\n\s*\n/g, '\n\n');
+// Remove backticks and replace with double quotes
+sqlite = sqlite.replace(/`/g, '"');
+
+// Clean up
+sqlite = sqlite
+  .replace(/\n\s*\n\s*\n/g, '\n\n')
+  .replace(/^\s+$/gm, '')
+  .trim();
+
+// Only keep INSERT statements
+const lines = sqlite.split('\n');
+const insertLines = lines.filter(line => {
+  const trimmed = line.trim();
+  return trimmed === '' || trimmed.startsWith('INSERT INTO') || trimmed.startsWith('VALUES');
+});
+sqlite = insertLines.join('\n');
 
 // Write output
-fs.writeFileSync('psikotest_data_sqlite.sql', sqlite);
+const outputFile = join(__dirname, 'psikotest_data_sqlite.sql');
+fs.writeFileSync(outputFile, sqlite);
 
-console.log('✅ Conversion complete!');
-console.log('Output: psikotest_data_sqlite.sql');
-console.log('\nNext step:');
-console.log('  wrangler d1 execute psikotest-db --file=./psikotest_data_sqlite.sql --remote');
+const insertCount = (sqlite.match(/INSERT INTO/gi) || []).length;
+console.log('✅ Converted', insertCount, 'INSERT statements');
+console.log('Output:', outputFile);
+console.log('\nNow run:');
+console.log('  wrangler d1 execute psikotest-db --file=./scripts/psikotest_data_sqlite.sql --remote');

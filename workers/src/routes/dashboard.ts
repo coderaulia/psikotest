@@ -1,34 +1,27 @@
 import { Hono } from 'hono';
-import { verify } from 'hono/jwt';
 import type { Env } from '../index';
+import { verifyAdminToken } from './admin-middleware';
 
 const app = new Hono<{ Bindings: Env }>();
 
-// Middleware to check admin auth
-app.use('*', async (c, next) => {
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
+app.get('/summary', async (c) => {
+  const admin = await verifyAdminToken(c);
+  if (!admin) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
   
-  const token = authHeader.substring(7);
-  
-  try {
-    const payload = await verify(token, c.env.JWT_SECRET);
-    c.set('jwtPayload', payload);
-    await next();
-  } catch {
-    return c.json({ error: 'Invalid token' }, 401);
-  }
-});
+  const db = c.env.DB;
+  const [sessionsResult, participantsResult, submissionsResult] = await Promise.all([
+    db.prepare('SELECT COUNT(*) as count FROM test_sessions WHERE status = ?').bind('active').first(),
+    db.prepare('SELECT COUNT(*) as count FROM participants').first(),
+    db.prepare('SELECT COUNT(*) as count FROM submissions WHERE status = ?').bind('completed').first(),
+  ]);
 
-// Get dashboard summary
-app.get('/', (c) => {
   return c.json({
     summaryCards: [
-      { label: 'Total Sessions', value: '0', delta: '+0%' },
-      { label: 'Active Participants', value: '0', delta: '+0%' },
-      { label: 'Completed Tests', value: '0', delta: '+0%' },
+      { label: 'Active Sessions', value: String((sessionsResult as any)?.count || 0), delta: '+0%' },
+      { label: 'Total Participants', value: String((participantsResult as any)?.count || 0), delta: '+0%' },
+      { label: 'Completed Tests', value: String((submissionsResult as any)?.count || 0), delta: '+0%' },
     ],
     distributions: {
       disc: [],
