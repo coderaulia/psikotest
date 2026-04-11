@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-04-08
+Updated: 2026-04-11
 
 ## Done
 - Core auth flow (admin/customer login, JWT session checks).
@@ -9,21 +9,18 @@ Updated: 2026-04-08
 - Question bank CRUD endpoints and admin page foundation.
 - Scoring pipeline connected to submission flow (IQ, DISC, Workload).
 - Manual payment MVP foundation with admin verification path.
-
-## In Progress
-- Question content integrity hardening for production imports.
-- CSV validation quality gates (row-level errors, strict contract behavior).
-- Scoring metadata consistency (`reverse`, `weight`, dimension mapping).
-- Documentation cleanup for lean handoff-focused operations.
+- Workspace settings fully wired (all 5 new fields, Growth-plan gating).
+- Completed page: custom `completionPageMessage` and 5s countdown redirect via `postSubmitRedirectUrl`.
+- TypeScript clean — 0 errors across all frontend modules.
 
 ## Next
-- Finalize validated question import UX feedback states in admin UI.
-- Add safe CSV export/import guidance for non-technical operators.
-- Expand automated tests for participant scoring regressions.
-- Add email delivery integration for invite/reminder workflow.
-- Prepare payment gateway transition plan (from manual verification).
+- Customer-facing report export page (`/workspace/results/:id/export`).
+- Reviewer queue UI: assignment dropdown + scope filter.
+- Admin billing: manual payment approve/reject workflow.
+- Stricter `distributionPolicy` enforcement on result delivery endpoints.
+- Email delivery integration for invite/reminder workflow.
+- Server-generated PDF reports.
 
 ## Risks / Watchlist
 - Real validated psychometric item sets are still content-dependent.
 - Local migration history does not fully mirror current remote schema lineage.
-- Some docs still reference legacy milestones and need consolidation.
