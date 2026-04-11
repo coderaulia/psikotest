@@ -1,3 +1,4 @@
+﻿import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { formatTokenLabel } from '@/lib/formatters';
@@ -12,13 +13,11 @@ function getReviewStatusMessage(reviewStatus: string | null | undefined, languag
       ? 'Hasilmu sudah direview dan lagi menunggu rilis resmi.'
       : 'Your result has been reviewed and is awaiting authorized release.';
   }
-
   if (reviewStatus === 'in_review') {
     return language === 'id'
       ? 'Jawabanmu lagi direview oleh psikolog atau reviewer yang berwenang.'
       : 'Your responses are currently being reviewed by an authorized psychologist or reviewer.';
   }
-
   return language === 'id'
     ? 'Jawabanmu sudah terekam. Interpretasi final akan tersedia setelah reviewer berwenang menyelesaikan review dan merilis hasil.'
     : 'Your responses have been recorded. Final interpretation will be available after an authorized reviewer completes the assessment review and release.';
@@ -39,6 +38,7 @@ const copy = {
     recommendation: 'Recommendation',
     limitations: 'Limitations',
     returnHome: 'Return to home',
+    redirectingIn: (n: number) => `Redirecting in ${n}s\u2026`,
   },
   id: {
     title: 'Asesmen selesai',
@@ -54,8 +54,11 @@ const copy = {
     recommendation: 'Rekomendasi',
     limitations: 'Batasan interpretasi',
     returnHome: 'Kembali ke beranda',
+    redirectingIn: (n: number) => `Mengalihkan dalam ${n}d\u2026`,
   },
 } as const;
+
+const REDIRECT_SECONDS = 5;
 
 export function ParticipantCompletedPage() {
   const { token = 'assessment-token' } = useParams();
@@ -72,6 +75,31 @@ export function ParticipantCompletedPage() {
   const isFullReleasedPending = participantResultAccess === 'full_released' && result?.reviewStatus !== 'released';
   const shouldHideResult = isNoAccess || isReviewRequired || isFullReleasedPending;
 
+  const completionPageMessage = storedSession?.completionPageMessage ?? null;
+  const postSubmitRedirectUrl = storedSession?.postSubmitRedirectUrl ?? null;
+
+  const [countdown, setCountdown] = useState(REDIRECT_SECONDS);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!postSubmitRedirectUrl) return;
+
+    countdownRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownRef.current!);
+          window.location.replace(postSubmitRedirectUrl);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [postSubmitRedirectUrl]);
+
   return (
     <Card className="mx-auto w-full max-w-3xl bg-white/82 text-center">
       <CardHeader>
@@ -85,13 +113,13 @@ export function ParticipantCompletedPage() {
           {isNoAccess ? (
             <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
               <p className="text-xs uppercase tracking-[0.2em] text-emerald-500">{t.responseRecordedTag}</p>
-              <p className="mt-2 text-sm text-slate-600">{t.responseRecordedBody}</p>
+              <p className="mt-2 text-sm text-slate-600">{completionPageMessage || t.responseRecordedBody}</p>
             </div>
           ) : isReviewRequired || isFullReleasedPending ? (
             <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{t.reviewStatusTag}</p>
               <p className="mt-2 text-base font-medium text-slate-950">{t.reviewRequired}</p>
-              <p className="mt-2 text-sm text-slate-500">{getReviewStatusMessage(result?.reviewStatus, language)}</p>
+              <p className="mt-2 text-sm text-slate-500">{completionPageMessage || getReviewStatusMessage(result?.reviewStatus, language)}</p>
             </div>
           ) : result ? (
             <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -107,7 +135,7 @@ export function ParticipantCompletedPage() {
               </div>
             </div>
           ) : (
-            <p className="mt-4">{t.noSummary}</p>
+            <p className="mt-4">{completionPageMessage || t.noSummary}</p>
           )}
         </div>
 
@@ -146,9 +174,15 @@ export function ParticipantCompletedPage() {
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-700">{note}</div>
         ) : null}
 
-        <Button variant="secondary" asChild>
-          <Link to="/">{t.returnHome}</Link>
-        </Button>
+        {postSubmitRedirectUrl ? (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-500">
+            {t.redirectingIn(countdown)}
+          </div>
+        ) : (
+          <Button variant="secondary" asChild>
+            <Link to="/">{t.returnHome}</Link>
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

@@ -88,6 +88,8 @@ function normalizePublicSession(payload: unknown): PublicSessionResponse {
       estimatedMinutes: Number(rawSession.estimatedMinutes ?? 10),
       status: 'active',
       compliance,
+      completionPageMessage: typeof rawSession.completionPageMessage === 'string' && rawSession.completionPageMessage ? rawSession.completionPageMessage : null,
+      postSubmitRedirectUrl: typeof rawSession.postSubmitRedirectUrl === 'string' && rawSession.postSubmitRedirectUrl ? rawSession.postSubmitRedirectUrl : null,
       delivery: {
         mode: rawDelivery.mode === 'progressive' ? 'progressive' : 'full',
         totalQuestions: Number(rawDelivery.totalQuestions ?? rawQuestions.length),

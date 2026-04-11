@@ -82,6 +82,8 @@ export interface PublicSessionResponse {
     estimatedMinutes: number;
     status: 'active';
     compliance: TestSessionComplianceSettings;
+    completionPageMessage: string | null;
+    postSubmitRedirectUrl: string | null;
     delivery: {
       mode: PublicDeliveryMode;
       totalQuestions: number;

@@ -191,6 +191,7 @@ export function CustomerWorkspaceSettingsPage() {
       .then((payload) => {
         if (!mounted) return;
         setForm({
+          ...initialForm,
           organizationName: payload.account.organizationName,
           brandName: payload.settings.brandName,
           brandTagline: payload.settings.brandTagline,
@@ -243,6 +244,7 @@ export function CustomerWorkspaceSettingsPage() {
     try {
       const payload = await updateCustomerWorkspaceSettings(form);
       setForm({
+        ...initialForm,
         organizationName: payload.account.organizationName,
         brandName: payload.settings.brandName,
         brandTagline: payload.settings.brandTagline,

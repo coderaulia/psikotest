@@ -135,7 +135,7 @@ export function ResultsPage() {
           <div className="overflow-hidden rounded-2xl border border-slate-200">
             {isLoading ? (
               <div className="p-6">
-                <StateCard title="Loading results" description="Pulling scored assessments and visibility policies from MySQL." />
+                <StateCard title="Loading results" description="Pulling scored assessments and visibility policies from the database." />
               </div>
             ) : error ? (
               <div className="p-6">

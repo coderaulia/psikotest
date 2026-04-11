@@ -47,6 +47,7 @@ describe('ParticipantTestPage', () => {
         consentAccepted: true,
         consentAcceptedAt: new Date().toISOString(),
       },
+      { completionPageMessage: null, postSubmitRedirectUrl: null },
       { participantResultAccess: 'full_released' },
     );
   });

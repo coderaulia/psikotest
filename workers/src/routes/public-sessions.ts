@@ -73,6 +73,8 @@ function getDefaultSettings() {
     protectedDeliveryMode: false,
     participantResultAccess: 'summary' as const,
     hrResultAccess: 'full' as const,
+    completionPageMessage: '' as string,
+    postSubmitRedirectUrl: '' as string,
   };
 }
 
@@ -96,6 +98,8 @@ function parseSettings(settingsJson: string | null): SessionSettings {
       participantResultAccess:
         (parsed.participantResultAccess as SessionSettings['participantResultAccess']) ?? defaults.participantResultAccess,
       hrResultAccess: (parsed.hrResultAccess as SessionSettings['hrResultAccess']) ?? defaults.hrResultAccess,
+      completionPageMessage: typeof parsed.completionPageMessage === 'string' ? parsed.completionPageMessage : defaults.completionPageMessage,
+      postSubmitRedirectUrl: typeof parsed.postSubmitRedirectUrl === 'string' ? parsed.postSubmitRedirectUrl : defaults.postSubmitRedirectUrl,
     };
   } catch {
     return defaults;
@@ -825,6 +829,8 @@ async function handleGetSession(c: { req: { param: (name: string) => string }; e
         startsAt: session.starts_at,
         endsAt: session.ends_at,
         compliance: settings,
+        completionPageMessage: settings.completionPageMessage || null,
+        postSubmitRedirectUrl: settings.postSubmitRedirectUrl || null,
         delivery: {
           mode: deliveryMode,
           totalQuestions,

@@ -87,17 +87,25 @@ export function ParticipantIdentityPage() {
 
       const start = await startPublicSubmission(token, payload);
 
+      let sessionDef: { completionPageMessage: string | null; postSubmitRedirectUrl: string | null } = {
+        completionPageMessage: null,
+        postSubmitRedirectUrl: null,
+      };
       let complianceData: { participantResultAccess: 'none' | 'summary' | 'full_released' } | undefined;
       try {
-        const sessionDef = await fetchPublicSession(token);
+        const fetchedSession = await fetchPublicSession(token);
+        sessionDef = {
+          completionPageMessage: fetchedSession.session.completionPageMessage,
+          postSubmitRedirectUrl: fetchedSession.session.postSubmitRedirectUrl,
+        };
         complianceData = {
-          participantResultAccess: sessionDef.session.compliance.participantResultAccess ?? 'summary',
+          participantResultAccess: fetchedSession.session.compliance.participantResultAccess ?? 'summary',
         };
       } catch {
         // Best-effort; compliance defaults will be used on completed page
       }
 
-      saveParticipantSession(token, start, payload, complianceData);
+      saveParticipantSession(token, start, payload, sessionDef, complianceData);
       navigate(`/t/${token}/instructions`);
     } catch (submissionError) {
       setError(submissionError instanceof Error ? submissionError.message : 'Unable to start the session');

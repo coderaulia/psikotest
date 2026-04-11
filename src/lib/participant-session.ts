@@ -2,6 +2,7 @@ import type {
   ParticipantConsentState,
   ParticipantIdentityPayload,
   ParticipantResultAccess,
+  PublicSessionResponse,
   StartSubmissionResponse,
   StoredResultRecord,
   TestTypeCode,
@@ -19,6 +20,8 @@ export interface StoredParticipantSession {
   protectedDelivery?: boolean;
   totalGroups?: number;
   groupSize?: number;
+  completionPageMessage: string | null;
+  postSubmitRedirectUrl: string | null;
   participant: ParticipantIdentityPayload;
   result: StoredResultRecord | null;
   compliance?: {
@@ -47,6 +50,7 @@ export function saveParticipantSession(
   token: string,
   start: StartSubmissionResponse,
   participant: ParticipantIdentityPayload,
+  session: Pick<PublicSessionResponse['session'], 'completionPageMessage' | 'postSubmitRedirectUrl'>,
   compliance?: { participantResultAccess: ParticipantResultAccess },
 ) {
   if (typeof window === 'undefined') {
@@ -65,6 +69,8 @@ export function saveParticipantSession(
     protectedDelivery: start.protectedDelivery,
     totalGroups: start.totalGroups,
     groupSize: start.groupSize,
+    completionPageMessage: session.completionPageMessage,
+    postSubmitRedirectUrl: session.postSubmitRedirectUrl,
     participant,
     result: null,
     compliance,
